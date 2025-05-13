@@ -1,3 +1,9 @@
+"""Scheduler module for managing the display and power states.
+
+Handles timing of display refreshes, weather updates, and sleep cycles based on
+battery status, quiet hours, and configured intervals to optimize power usage.
+"""
+
 import logging
 import time
 from collections.abc import Callable
