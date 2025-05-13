@@ -2,6 +2,12 @@
 # pyright: reportMissingImports=false, reportUnknownVariableType=false
 # pyright: reportUnknownParameterType=false
 
+"""Server application for the Raspberry Pi weather display.
+
+Implements a FastAPI web server that processes requests from display clients,
+fetches weather data, renders images, and provides preview capabilities.
+"""
+
 import argparse
 import tempfile
 from pathlib import Path
