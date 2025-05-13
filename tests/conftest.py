@@ -1,9 +1,13 @@
 """Common fixtures for testing the weather display application."""
 
 import os
+from collections.abc import Generator
 from pathlib import Path
+from typing import Any
+from unittest.mock import MagicMock, patch
 
 import pytest
+import yaml
 from fastapi.testclient import TestClient
 
 from rpi_weather_display.models.config import AppConfig
@@ -11,65 +15,54 @@ from rpi_weather_display.models.system import BatteryState, BatteryStatus
 
 
 @pytest.fixture()
-def test_config_path() -> Path:
-    """Path to test configuration file."""
-    return Path(os.path.dirname(__file__)) / "data" / "test_config.yaml"
+def mock_subprocess_run() -> Generator[MagicMock, None, None]:
+    """Mock subprocess.run to prevent actual command execution during tests."""
+    with patch("subprocess.run") as mock_run:
+        mock_process = MagicMock()
+        mock_process.returncode = 0
+        mock_process.stdout = ""
+        mock_run.return_value = mock_process
+        yield mock_run
 
 
 @pytest.fixture()
-def app_config(test_config_path: Path) -> AppConfig:
-    """Create test application configuration."""
-    # If the test config doesn't exist yet, create a minimal one
-    if not test_config_path.exists():
-        test_config_path.parent.mkdir(exist_ok=True)
-        minimal_config = {
-            "weather": {
-                "api_key": "test_api_key",
-                "city_name": "Test City",
-                "units": "metric",
-                "language": "en",
-                "update_interval_minutes": 30,
-                "forecast_days": 5,
-            },
-            "display": {
-                "width": 800,
-                "height": 600,
-                "rotate": 0,
-                "refresh_interval_minutes": 30,
-                "partial_refresh": True,
-                "timestamp_format": "%Y-%m-%d %H:%M",
-            },
-            "power": {
-                "quiet_hours_start": "23:00",
-                "quiet_hours_end": "06:00",
-                "low_battery_threshold": 20,
-                "critical_battery_threshold": 10,
-                "wake_up_interval_minutes": 60,
-                "wifi_timeout_seconds": 30,
-            },
-            "server": {
-                "url": "http://localhost",
-                "port": 8000,
-                "timeout_seconds": 5,
-                "retry_attempts": 2,
-                "retry_delay_seconds": 1,
-            },
-            "logging": {
-                "level": "INFO",
-                "format": "json",
-                "max_size_mb": 1,
-                "backup_count": 1,
-            },
-            "debug": True,
-            "development_mode": True,
-        }
+def mock_paths_exist() -> Generator[MagicMock, None, None]:
+    """Mock Path.exists to prevent filesystem checks during tests."""
+    with patch("pathlib.Path.exists", return_value=True) as mock_exists:
+        yield mock_exists
 
-        import yaml
 
-        with open(test_config_path, "w") as f:
-            yaml.dump(minimal_config, f)
+@pytest.fixture(autouse=True)
+def mock_command_execution(
+    mock_subprocess_run: MagicMock, mock_paths_exist: MagicMock
+) -> tuple[MagicMock, MagicMock]:
+    """Automatically mock command execution for all tests."""
+    return mock_subprocess_run, mock_paths_exist
 
-    return AppConfig.from_yaml(test_config_path)
+
+@pytest.fixture()
+def test_config_path() -> str:
+    """Get the path to the test config file."""
+    return os.path.join(os.path.dirname(__file__), "data", "test_config.yaml")
+
+
+@pytest.fixture()
+def test_config_data(test_config_path: str) -> dict[str, Any]:
+    """Load test configuration data from YAML."""
+    with open(test_config_path) as f:
+        return yaml.safe_load(f)
+
+
+@pytest.fixture()
+def test_config(test_config_data: dict[str, Any]) -> AppConfig:
+    """Create a test application configuration."""
+    return AppConfig.model_validate(test_config_data)
+
+
+@pytest.fixture()
+def app_config(test_config_data: dict[str, Any]) -> AppConfig:
+    """Create a test application configuration."""
+    return AppConfig.model_validate(test_config_data)
 
 
 @pytest.fixture()
