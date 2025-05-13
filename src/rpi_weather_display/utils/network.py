@@ -1,6 +1,12 @@
 # pyright: reportGeneralTypeIssues=false
 # security: ignore=subprocess
 
+"""Network management utilities for the Raspberry Pi weather display.
+
+Provides functionality for checking network connectivity, managing WiFi power
+states, and retrieving network information for power-efficient operation.
+"""
+
 import logging
 import socket
 import subprocess
