@@ -1,3 +1,9 @@
+"""Weather API client for interacting with OpenWeatherMap services.
+
+Provides functionality to fetch weather data, forecasts, and air quality information
+from OpenWeatherMap APIs with appropriate caching mechanisms.
+"""
+
 import logging
 from datetime import datetime, timedelta
 
@@ -197,3 +203,15 @@ class WeatherAPIClient:
         }
 
         return icon_map.get(icon_code, "cloud-bold")  # Default to cloud if icon not found
+
+    def set_forecast_for_testing(
+        self, forecast: WeatherData, update_time: datetime | None = None
+    ) -> None:
+        """Set forecast data for testing purposes.
+
+        Args:
+            forecast: Weather forecast data
+            update_time: Time of the update, defaults to current time
+        """
+        self._last_forecast = forecast
+        self._last_update = update_time or datetime.now()
