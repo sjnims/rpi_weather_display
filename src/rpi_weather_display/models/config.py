@@ -1,3 +1,9 @@
+"""Configuration models for the Raspberry Pi weather display.
+
+Defines Pydantic models for application configuration including weather API settings,
+display parameters, power management options, and server configuration.
+"""
+
 import os
 from pathlib import Path
 from tempfile import gettempdir
