@@ -1,3 +1,9 @@
+"""E-paper display interface for the Raspberry Pi weather display.
+
+Provides abstraction for interacting with the Waveshare e-paper display,
+handling image rendering, partial refreshes, and power management.
+"""
+
 from pathlib import Path
 from typing import Any, TypeVar
 
@@ -38,11 +44,11 @@ class EPaperDisplay:
 
             # Initialize the display
             self._display = AutoEPDDisplay(vcom=-2.06)
-            self._display.clear()  # type: ignore
+            self._display.clear()
 
             # Set rotation
             if self.config.rotate in [0, 90, 180, 270]:
-                self._display.epd.set_rotation(self.config.rotate // 90)  # type: ignore
+                self._display.epd.set_rotation(self.config.rotate // 90)
 
             self._initialized = True
         except ImportError:
@@ -62,7 +68,7 @@ class EPaperDisplay:
     def clear(self) -> None:
         """Clear the display."""
         if self._initialized and self._display:
-            self._display.clear()  # type: ignore
+            self._display.clear()
             self._last_image = None
 
     def display_image(self, image_path: str | Path) -> None:
@@ -106,14 +112,14 @@ class EPaperDisplay:
                 if bbox:
                     # Display the image with partial refresh
                     if self._display:
-                        self._display.display_partial(image, bbox)  # type: ignore
+                        self._display.display_partial(image, bbox)
                 else:
                     # No significant difference, no need to update
                     return
             else:
                 # Full refresh
                 if self._display:
-                    self._display.display(image)  # type: ignore
+                    self._display.display(image)
 
             # Save the current image for future partial refreshes
             self._last_image = image
@@ -172,7 +178,7 @@ class EPaperDisplay:
         if self._initialized and self._display:
             # Some e-paper displays have a sleep command
             try:
-                self._display.epd.sleep()  # type: ignore
+                self._display.epd.sleep()
             except AttributeError:
                 # If sleep not available, we'll just leave it as is
                 pass
