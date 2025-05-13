@@ -2,6 +2,12 @@
 # pyright: reportUnknownMemberType=false, reportUnknownArgumentType=false
 # pyright: reportUnusedImport=false
 
+"""Weather data rendering module for creating display images.
+
+Provides functionality to render weather data into HTML and convert it to
+images suitable for display on the e-paper screen using Playwright.
+"""
+
 import logging
 from datetime import datetime
 from pathlib import Path
