@@ -201,41 +201,42 @@ class Scheduler:
 
         # If in quiet hours, sleep for the wake_up_interval
         if self.is_quiet_hours():
-            sleep_time = self.config.power.wake_up_interval_minutes * 60
-        else:
-            # Calculate time until next refresh
-            if self._last_refresh is not None:
-                refresh_interval = self.config.display.refresh_interval_minutes
+            return self.config.power.wake_up_interval_minutes * 60
 
-                # If battery is low, double the refresh interval unless charging
-                if (
-                    battery_status.level < self.config.power.low_battery_threshold
-                    and battery_status.state != "charging"
-                ):
-                    refresh_interval *= 2
+        # Not in quiet hours, calculate based on refresh/update times
+        # Calculate time until next refresh
+        if self._last_refresh is not None:
+            refresh_interval = self.config.display.refresh_interval_minutes
 
-                next_refresh = self._last_refresh + timedelta(minutes=refresh_interval)
-                time_until_refresh = (next_refresh - datetime.now()).total_seconds()
+            # If battery is low, double the refresh interval unless charging
+            if (
+                battery_status.level < self.config.power.low_battery_threshold
+                and battery_status.state != "charging"
+            ):
+                refresh_interval *= 2
 
-                if time_until_refresh > 0:
-                    sleep_time = min(sleep_time, int(time_until_refresh))
+            next_refresh = self._last_refresh + timedelta(minutes=refresh_interval)
+            time_until_refresh = (next_refresh - datetime.now()).total_seconds()
 
-            # Calculate time until next update
-            if self._last_update is not None:
-                update_interval = self.config.weather.update_interval_minutes
+            if time_until_refresh > 0:
+                sleep_time = min(sleep_time, int(time_until_refresh))
 
-                # If battery is low, double the update interval unless charging
-                if (
-                    battery_status.level < self.config.power.low_battery_threshold
-                    and battery_status.state != "charging"
-                ):
-                    update_interval *= 2
+        # Calculate time until next update
+        if self._last_update is not None:
+            update_interval = self.config.weather.update_interval_minutes
 
-                next_update = self._last_update + timedelta(minutes=update_interval)
-                time_until_update = (next_update - datetime.now()).total_seconds()
+            # If battery is low, double the update interval unless charging
+            if (
+                battery_status.level < self.config.power.low_battery_threshold
+                and battery_status.state != "charging"
+            ):
+                update_interval *= 2
 
-                if time_until_update > 0:
-                    sleep_time = min(sleep_time, int(time_until_update))
+            next_update = self._last_update + timedelta(minutes=update_interval)
+            time_until_update = (next_update - datetime.now()).total_seconds()
+
+            if time_until_update > 0:
+                sleep_time = min(sleep_time, int(time_until_update))
 
         # Calculate time until quiet hours start/end
         time_until_quiet_change = self._time_until_quiet_change()
