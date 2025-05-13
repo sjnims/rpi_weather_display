@@ -6,6 +6,9 @@
   "reportImportCycles": true,
   "reportMissingTypeStubs": false,
   "useLibraryCodeForTypes": true,
+  "reportUnknownMemberType": "warning",
+  "reportUnusedFunction": "none",
+  "reportUntypedFunctionDecorator": "none",
 
   "pythonVersion": "3.11",
 

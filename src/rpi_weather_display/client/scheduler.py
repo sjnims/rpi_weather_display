@@ -10,7 +10,7 @@ from rpi_weather_display.models.system import BatteryStatus
 class Scheduler:
     """Scheduler for managing display refreshes and sleep cycles."""
 
-    def __init__(self, config: AppConfig):
+    def __init__(self, config: AppConfig) -> None:
         """Initialize the scheduler.
 
         Args:
@@ -32,18 +32,14 @@ class Scheduler:
             True if the display should be refreshed, False otherwise.
         """
         # Don't refresh if this is during quiet hours and battery is not charging
-        if (
-            self.is_quiet_hours() and
-            battery_status.state != "charging" and
-            not self.config.debug
-        ):
+        if self.is_quiet_hours() and battery_status.state != "charging" and not self.config.debug:
             self.logger.info("Quiet hours and not charging, skipping refresh")
             return False
 
         # Check if battery is too low
         if (
-            battery_status.level < self.config.power.critical_battery_threshold and
-            battery_status.state != "charging"
+            battery_status.level < self.config.power.critical_battery_threshold
+            and battery_status.state != "charging"
         ):
             self.logger.warning("Battery critically low, skipping refresh to conserve power")
             return False
@@ -57,8 +53,8 @@ class Scheduler:
 
         # If battery is low, double the refresh interval unless charging
         if (
-            battery_status.level < self.config.power.low_battery_threshold and
-            battery_status.state != "charging"
+            battery_status.level < self.config.power.low_battery_threshold
+            and battery_status.state != "charging"
         ):
             min_refresh_interval *= 2
             self.logger.info("Battery low, doubling refresh interval")
@@ -83,9 +79,9 @@ class Scheduler:
 
         # If battery is low, double the update interval unless charging
         if (
-            battery_status.level < self.config.power.low_battery_threshold and
-            battery_status.state != "charging" and
-            not self.is_quiet_hours()  # During quiet hours, we'll use the normal interval
+            battery_status.level < self.config.power.low_battery_threshold
+            and battery_status.state != "charging"
+            and not self.is_quiet_hours()  # During quiet hours, we'll use the normal interval
         ):
             min_update_interval *= 2
             self.logger.info("Battery low, doubling update interval")
@@ -100,10 +96,11 @@ class Scheduler:
         """
         # Parse quiet hours from config
         try:
-            start_hour, start_minute = map(int, self.config.power.quiet_hours_start.split(':'))
-            end_hour, end_minute = map(int, self.config.power.quiet_hours_end.split(':'))
+            start_hour, start_minute = map(int, self.config.power.quiet_hours_start.split(":"))
+            end_hour, end_minute = map(int, self.config.power.quiet_hours_end.split(":"))
 
             from datetime import time as dt_time
+
             start_time = dt_time(start_hour, start_minute)
             end_time = dt_time(end_hour, end_minute)
 
@@ -129,7 +126,7 @@ class Scheduler:
         refresh_callback: Callable[[], None],
         update_callback: Callable[[], None],
         battery_callback: Callable[[], BatteryStatus],
-        sleep_callback: Callable[[int], bool]
+        sleep_callback: Callable[[int], bool],
     ) -> None:
         """Run the scheduler main loop.
 
@@ -166,7 +163,8 @@ class Scheduler:
                     self.logger.info(f"Entering deep sleep for {sleep_time // 60} minutes")
                     # Convert seconds to minutes for the sleep callback
                     if sleep_callback(sleep_time // 60):
-                        # If sleep_callback returns True, it means the system will wake up automatically
+                        # If sleep_callback returns True, it means the system will wake up
+                        # automatically
                         # So we can break out of the loop
                         break
                     # If sleep_callback returns False, it means we should continue running
@@ -174,7 +172,7 @@ class Scheduler:
                     time.sleep(10)
                 else:
                     # Short sleep
-                    self.logger.debug(f"Sleeping for {sleep_time} seconds")
+                    self.logger.info(f"Sleeping for {sleep_time} seconds")
                     time.sleep(sleep_time)
         except KeyboardInterrupt:
             self.logger.info("Scheduler interrupted by user")
@@ -205,8 +203,8 @@ class Scheduler:
 
                 # If battery is low, double the refresh interval unless charging
                 if (
-                    battery_status.level < self.config.power.low_battery_threshold and
-                    battery_status.state != "charging"
+                    battery_status.level < self.config.power.low_battery_threshold
+                    and battery_status.state != "charging"
                 ):
                     refresh_interval *= 2
 
@@ -222,8 +220,8 @@ class Scheduler:
 
                 # If battery is low, double the update interval unless charging
                 if (
-                    battery_status.level < self.config.power.low_battery_threshold and
-                    battery_status.state != "charging"
+                    battery_status.level < self.config.power.low_battery_threshold
+                    and battery_status.state != "charging"
                 ):
                     update_interval *= 2
 
@@ -248,10 +246,11 @@ class Scheduler:
             Time in seconds until quiet hours start or end, or -1 if error.
         """
         try:
-            start_hour, start_minute = map(int, self.config.power.quiet_hours_start.split(':'))
-            end_hour, end_minute = map(int, self.config.power.quiet_hours_end.split(':'))
+            start_hour, start_minute = map(int, self.config.power.quiet_hours_start.split(":"))
+            end_hour, end_minute = map(int, self.config.power.quiet_hours_end.split(":"))
 
             from datetime import time as dt_time
+
             start_time = dt_time(start_hour, start_minute)
             end_time = dt_time(end_hour, end_minute)
 

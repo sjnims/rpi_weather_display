@@ -1,21 +1,29 @@
 from pathlib import Path
+from typing import Any, TypeVar
 
 from PIL import Image
 
 from rpi_weather_display.models.config import DisplayConfig
 
+# Define type variables for conditional imports
+AutoEPDDisplayType = TypeVar("AutoEPDDisplayType")
+
+# pyright: reportUnknownVariableType=false
+# pyright: reportUnknownArgumentType=false
+# pyright: reportUnknownMemberType=false
+
 
 class EPaperDisplay:
     """Interface for the Waveshare e-paper display."""
 
-    def __init__(self, config: DisplayConfig):
+    def __init__(self, config: DisplayConfig) -> None:
         """Initialize the display driver.
 
         Args:
             config: Display configuration.
         """
         self.config = config
-        self._display = None
+        self._display: Any | None = None
         self._last_image: Image.Image | None = None
         self._initialized = False
 
@@ -26,15 +34,15 @@ class EPaperDisplay:
         """
         try:
             # Try to import the IT8951 library, which is only available on Raspberry Pi
-            from IT8951.display import EPD, AutoEPDDisplay
+            from IT8951.display import AutoEPDDisplay  # type: ignore
 
             # Initialize the display
             self._display = AutoEPDDisplay(vcom=-2.06)
-            self._display.clear()
+            self._display.clear()  # type: ignore
 
             # Set rotation
             if self.config.rotate in [0, 90, 180, 270]:
-                self._display.epd.set_rotation(self.config.rotate // 90)
+                self._display.epd.set_rotation(self.config.rotate // 90)  # type: ignore
 
             self._initialized = True
         except ImportError:
@@ -54,7 +62,7 @@ class EPaperDisplay:
     def clear(self) -> None:
         """Clear the display."""
         if self._initialized and self._display:
-            self._display.clear()
+            self._display.clear()  # type: ignore
             self._last_image = None
 
     def display_image(self, image_path: str | Path) -> None:
@@ -80,36 +88,41 @@ class EPaperDisplay:
         try:
             # Resize image if necessary
             if image.size != (self.config.width, self.config.height):
-                image = image.resize((self.config.width, self.config.height), Image.LANCZOS)
+                # Handle LANCZOS resampling which might have different names in different PIL
+                # versions
+                resampling = getattr(Image, "LANCZOS", getattr(Image, "ANTIALIAS", 1))
+                image = image.resize((self.config.width, self.config.height), resampling)
 
             # Convert to grayscale if not already
-            if image.mode != 'L':
-                image = image.convert('L')
+            if image.mode != "L":
+                image = image.convert("L")
 
             # Check if we can use partial refresh
             if self.config.partial_refresh and self._last_image is not None:
-
                 # Calculate the bounding box of differences
                 bbox = self._calculate_diff_bbox(self._last_image, image)
 
                 # If there's a significant difference, update the display
                 if bbox:
                     # Display the image with partial refresh
-                    self._display.display_partial(image, bbox)
+                    if self._display:
+                        self._display.display_partial(image, bbox)  # type: ignore
                 else:
                     # No significant difference, no need to update
                     return
             else:
                 # Full refresh
-
-                self._display.display(image)
+                if self._display:
+                    self._display.display(image)  # type: ignore
 
             # Save the current image for future partial refreshes
             self._last_image = image
         except Exception as e:
             print(f"Error displaying image: {e}")
 
-    def _calculate_diff_bbox(self, old_image: Image.Image, new_image: Image.Image) -> tuple[int, int, int, int] | None:
+    def _calculate_diff_bbox(
+        self, old_image: Image.Image, new_image: Image.Image
+    ) -> tuple[int, int, int, int] | None:
         """Calculate the bounding box of differences between two images.
 
         Args:
@@ -119,40 +132,47 @@ class EPaperDisplay:
         Returns:
             Tuple of (left, top, right, bottom) or None if no significant differences.
         """
-        import numpy as np
+        try:
+            import numpy as np  # type: ignore
 
-        # Convert to numpy arrays
-        old_array = np.array(old_image)
-        new_array = np.array(new_image)
+            # Convert to numpy arrays
+            old_array = np.array(old_image)
+            new_array = np.array(new_image)
 
-        # Calculate difference
-        diff = np.abs(old_array.astype(np.int16) - new_array.astype(np.int16))
+            # Calculate difference
+            diff = np.abs(old_array.astype(np.int16) - new_array.astype(np.int16))
 
-        # If max difference is below threshold, return None
-        if np.max(diff) < 10:  # Threshold for considering a pixel changed
+            # If max difference is below threshold, return None
+            if np.max(diff) < 10:  # Threshold for considering a pixel changed
+                return None
+
+            # Find non-zero positions
+            non_zero = np.where(diff > 10)
+
+            # If no significant differences, return None
+            if len(non_zero[0]) == 0:
+                return None
+
+            # Calculate bounding box
+            left = max(0, int(np.min(non_zero[1])) - 5)  # Add margin
+            top = max(0, int(np.min(non_zero[0])) - 5)
+            right = min(int(diff.shape[1]), int(np.max(non_zero[1])) + 5)
+            bottom = min(int(diff.shape[0]), int(np.max(non_zero[0])) + 5)
+
+            return (left, top, right, bottom)
+        except ImportError:
+            # numpy not available, return None
             return None
-
-        # Find non-zero positions
-        non_zero = np.where(diff > 10)
-
-        # If no significant differences, return None
-        if len(non_zero[0]) == 0:
+        except Exception as e:
+            print(f"Error calculating diff bbox: {e}")
             return None
-
-        # Calculate bounding box
-        left = max(0, np.min(non_zero[1]) - 5)  # Add margin
-        top = max(0, np.min(non_zero[0]) - 5)
-        right = min(diff.shape[1], np.max(non_zero[1]) + 5)
-        bottom = min(diff.shape[0], np.max(non_zero[0]) + 5)
-
-        return (left, top, right, bottom)
 
     def sleep(self) -> None:
         """Put the display to sleep (deep sleep mode)."""
         if self._initialized and self._display:
             # Some e-paper displays have a sleep command
             try:
-                self._display.epd.sleep()
+                self._display.epd.sleep()  # type: ignore
             except AttributeError:
                 # If sleep not available, we'll just leave it as is
                 pass

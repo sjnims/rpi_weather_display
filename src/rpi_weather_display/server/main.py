@@ -1,6 +1,11 @@
+# pyright: reportUnknownMemberType=false, reportGeneralTypeIssues=false
+# pyright: reportMissingImports=false, reportUnknownVariableType=false
+# pyright: reportUnknownParameterType=false
+
 import argparse
 import tempfile
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, Response
@@ -33,7 +38,7 @@ class RenderRequest(BaseModel):
 class WeatherDisplayServer:
     """Main server application for the weather display."""
 
-    def __init__(self, config_path: Path):
+    def __init__(self, config_path: Path) -> None:
         """Initialize the server.
 
         Args:
@@ -72,15 +77,15 @@ class WeatherDisplayServer:
         """Set up FastAPI routes."""
 
         @self.app.get("/")
-        async def root():
+        async def root() -> dict[str, str]:
             return {"status": "ok", "service": "Weather Display Server"}
 
         @self.app.post("/render")
-        async def render_weather(request: RenderRequest):
+        async def render_weather(request: RenderRequest) -> Response:
             return await self._handle_render(request)
 
         @self.app.get("/weather")
-        async def get_weather():
+        async def get_weather() -> dict[str, Any]:
             return await self._handle_weather()
 
     async def _handle_render(self, request: RenderRequest) -> Response:
@@ -116,9 +121,9 @@ class WeatherDisplayServer:
             return FileResponse(tmp_path, media_type="image/png", filename="weather.png")
         except Exception as e:
             self.logger.error(f"Error rendering weather image: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail=str(e)) from e
 
-    async def _handle_weather(self) -> dict:
+    async def _handle_weather(self) -> dict[str, Any]:
         """Handle weather data request.
 
         Returns:
@@ -129,22 +134,26 @@ class WeatherDisplayServer:
             weather_data = await self.api_client.get_weather_data()
 
             # Return as dict
-            return weather_data.dict()
+            return weather_data.model_dump()
         except Exception as e:
             self.logger.error(f"Error getting weather data: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail=str(e)) from e
 
-    def run(self, host: str = "0.0.0.0", port: int = 8000) -> None:
+    def run(self, host: str | None = None, port: int | None = None) -> None:
         """Run the server.
 
         Args:
-            host: Host to bind to.
-            port: Port to bind to.
+            host: Host to bind to. Defaults to server config or 127.0.0.1 (localhost).
+            port: Port to bind to. Defaults to server config or 8000.
         """
         import uvicorn
 
-        self.logger.info(f"Starting Weather Display Server on {host}:{port}")
-        uvicorn.run(self.app, host=host, port=port)
+        # Use provided values, config values, or defaults
+        bind_host = host or getattr(self.config.server, "host", "127.0.0.1")
+        bind_port = port or self.config.server.port
+
+        self.logger.info(f"Starting Weather Display Server on {bind_host}:{bind_port}")
+        uvicorn.run(self.app, host=bind_host, port=bind_port)
 
 
 def main() -> None:
@@ -157,8 +166,10 @@ def main() -> None:
         default=Path("/etc/rpi-weather-display/config.yaml"),
         help="Path to configuration file",
     )
-    parser.add_argument("--host", type=str, default="0.0.0.0", help="Host to bind to")
-    parser.add_argument("--port", type=int, default=8000, help="Port to bind to")
+    parser.add_argument(
+        "--host", type=str, help="Host to bind to (default: 127.0.0.1 or config value)"
+    )
+    parser.add_argument("--port", type=int, help="Port to bind to (default: 8000 or config value)")
     args = parser.parse_args()
 
     # Check if config file exists

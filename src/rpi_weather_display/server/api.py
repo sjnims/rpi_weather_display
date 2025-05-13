@@ -20,7 +20,7 @@ class WeatherAPIClient:
     AIR_POLLUTION_URL = "https://api.openweathermap.org/data/2.5/air_pollution"
     GEOCODING_URL = "https://api.openweathermap.org/geo/1.0/direct"
 
-    def __init__(self, config: WeatherConfig):
+    def __init__(self, config: WeatherConfig) -> None:
         """Initialize the API client.
 
         Args:

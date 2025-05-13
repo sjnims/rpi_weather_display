@@ -30,8 +30,11 @@ from __future__ import annotations
 
 import argparse
 import sys
-import xml.etree.ElementTree as ET
+
+# Using ElementTree to parse our own trusted SVG files
+import xml.etree.ElementTree as ElementTree  # noqa: N817, S314
 from pathlib import Path
+from typing import Any
 
 
 def _strip_ns(tag: str) -> str:
@@ -51,10 +54,10 @@ def build_sprite(src_dir: Path, out_path: Path, *, prefix: str = "") -> None:
     if not src_dir.is_dir():
         sys.exit(f"[sprite] ✖ Source directory not found: {src_dir}")
 
-    symbols: list[ET.Element] = []
+    symbols: list[Any] = []
 
     for svg_file in sorted(src_dir.glob("*.svg")):
-        tree = ET.parse(svg_file)
+        tree = ElementTree.parse(svg_file)  # noqa: S314
         root = tree.getroot()
 
         # Remove namespaces from *all* tags & attributes
@@ -63,7 +66,7 @@ def build_sprite(src_dir: Path, out_path: Path, *, prefix: str = "") -> None:
             el.attrib = {_strip_ns(k): v for k, v in el.attrib.items()}
 
         # Build <symbol>
-        symbol = ET.Element(
+        symbol = ElementTree.Element(
             "symbol",
             {
                 "id": f"{prefix}{svg_file.stem}",
@@ -77,7 +80,7 @@ def build_sprite(src_dir: Path, out_path: Path, *, prefix: str = "") -> None:
     if not symbols:
         sys.exit(f"[sprite] ✖ No SVG files found in {src_dir}")
 
-    sprite = ET.Element(
+    sprite = ElementTree.Element(
         "svg",
         {
             "xmlns": "http://www.w3.org/2000/svg",
@@ -87,7 +90,7 @@ def build_sprite(src_dir: Path, out_path: Path, *, prefix: str = "") -> None:
     sprite.extend(symbols)
 
     out_path.write_text(
-        ET.tostring(sprite, encoding="unicode", short_empty_elements=False),
+        ElementTree.tostring(sprite, encoding="unicode", short_empty_elements=False),
         encoding="utf-8",
     )
     try:

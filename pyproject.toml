@@ -60,10 +60,12 @@ typeCheckingMode = "strict"
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-select = ["E", "F", "B", "I", "N", "UP", "ANN", "S", "A", "C4"]
-ignore = ["ANN101", "ANN102"]
 
-[tool.ruff.isort]
+[tool.ruff.lint]
+ignore = ["ANN101", "ANN102"]
+select = ["E", "F", "B", "I", "N", "UP", "ANN", "S", "A", "C4"]
+
+[tool.ruff.lint.isort]
 known-first-party = ["rpi_weather_display"]
 
 [tool.pytest.ini_options]

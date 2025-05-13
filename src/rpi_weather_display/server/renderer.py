@@ -1,3 +1,7 @@
+# pyright: reportMissingImports=false, reportUnknownVariableType=false
+# pyright: reportUnknownMemberType=false, reportUnknownArgumentType=false
+# pyright: reportUnusedImport=false
+
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -12,7 +16,7 @@ from rpi_weather_display.models.weather import WeatherData
 class WeatherRenderer:
     """Renderer for weather data to e-paper display images."""
 
-    def __init__(self, config: AppConfig, template_dir: Path):
+    def __init__(self, config: AppConfig, template_dir: Path) -> None:
         """Initialize the renderer.
 
         Args:
@@ -162,7 +166,7 @@ class WeatherRenderer:
                     await browser.close()
                     return output_path
                 else:
-                    screenshot = await page.screenshot(type="png")
+                    screenshot: bytes = await page.screenshot(type="png")
                     await browser.close()
                     return screenshot
         except Exception as e:

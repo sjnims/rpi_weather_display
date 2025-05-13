@@ -1,10 +1,13 @@
+import os
 from pathlib import Path
+from tempfile import gettempdir
 
 from pydantic import BaseModel, Field, field_validator
 
 
 class WeatherConfig(BaseModel):
     """Weather API configuration."""
+
     api_key: str
     location: dict[str, float] = Field(default_factory=lambda: {"lat": 0.0, "lon": 0.0})
     city_name: str | None = None
@@ -24,6 +27,7 @@ class WeatherConfig(BaseModel):
 
 class DisplayConfig(BaseModel):
     """E-paper display configuration."""
+
     width: int = 1872
     height: int = 1404
     rotate: int = 0  # 0, 90, 180, 270
@@ -33,7 +37,13 @@ class DisplayConfig(BaseModel):
 
 
 class PowerConfig(BaseModel):
-    """Power management configuration."""
+    """Power management configuration.
+
+    Note: Power optimizations are applied by deploy/scripts/optimize-power.sh script
+    rather than in code. The settings here are primarily used for reference and
+    by the power management features that adjust behavior based on battery status.
+    """
+
     quiet_hours_start: str = "23:00"
     quiet_hours_end: str = "06:00"
     low_battery_threshold: int = 20
@@ -50,18 +60,22 @@ class PowerConfig(BaseModel):
 
 class ServerConfig(BaseModel):
     """Server configuration."""
+
     url: str
     port: int = 8000
     timeout_seconds: int = 10
     retry_attempts: int = 3
     retry_delay_seconds: int = 5
-    cache_dir: str = "/tmp/weather-cache"
+    cache_dir: str = Field(
+        default_factory=lambda: os.path.join(gettempdir(), f"weather-cache-{os.getuid()}")
+    )
     log_level: str = "INFO"
     image_format: str = "PNG"
 
 
 class LoggingConfig(BaseModel):
     """Logging configuration."""
+
     level: str = "INFO"
     file: str | None = None
     format: str = "json"
@@ -71,6 +85,7 @@ class LoggingConfig(BaseModel):
 
 class AppConfig(BaseModel):
     """Main application configuration."""
+
     weather: WeatherConfig
     display: DisplayConfig
     power: PowerConfig

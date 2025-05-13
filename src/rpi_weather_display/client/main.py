@@ -14,7 +14,7 @@ from rpi_weather_display.utils.logging import setup_logging
 class WeatherDisplayClient:
     """Main client application for the weather display."""
 
-    def __init__(self, config_path: Path):
+    def __init__(self, config_path: Path) -> None:
         """Initialize the client.
 
         Args:
@@ -124,6 +124,10 @@ class WeatherDisplayClient:
         except Exception as e:
             self.logger.error(f"Error refreshing display: {e}")
 
+    def _update_weather_wrapper(self) -> None:
+        """Wrapper for update_weather that doesn't return a value."""
+        self.update_weather()
+
     def run(self) -> None:
         """Run the client main loop."""
         self.logger.info("Starting Weather Display Client")
@@ -141,7 +145,7 @@ class WeatherDisplayClient:
             # Run the scheduler
             self.scheduler.run(
                 refresh_callback=self.refresh_display,
-                update_callback=self.update_weather,
+                update_callback=self._update_weather_wrapper,
                 battery_callback=self.power_manager.get_battery_status,
                 sleep_callback=self._handle_sleep,
             )
