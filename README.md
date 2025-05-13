@@ -1,5 +1,11 @@
 # Ultra-Low-Power Weather Display
 
+[![CI/CD](https://github.com/sjnims/rpi_weather_display/actions/workflows/ci.yml/badge.svg)](https://github.com/sjnims/rpi_weather_display/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/sjnims/rpi_weather_display/graph/badge.svg?token=QWXSWWC1HP)](https://codecov.io/gh/sjnims/rpi_weather_display)
+[![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/release/python-3112/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
+
 A power-optimized weather display solution for Raspberry Pi Zero 2 W with e-paper display, designed to achieve 60-90 days of battery life on a single charge.
 
 ## Features
@@ -23,7 +29,7 @@ A power-optimized weather display solution for Raspberry Pi Zero 2 W with e-pape
 
 - **Server**:
   - Docker container running on Unraid server (or any Linux server)
-  - 12th Gen Intel® Core™ i9-12900K and 32GB RAM (recommended)
+  - 12th Gen Intel® Core™ i9-12900K and 32GB RAM (overkill...I know)
 
 ## Architecture
 
