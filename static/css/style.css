@@ -1,0 +1,322 @@
+/*———————————————————————————————
+  Browser Specific Font Smoothing
+———————————————————————————————*/
+
+html {
+  /* macOS Firefox & Safari */
+  -moz-osx-font-smoothing: grayscale;
+  /* WebKit browsers (Chrome, Safari) */
+  -webkit-font-smoothing: antialiased;
+  /* Enables ligatures & kerning for smoother text */
+  text-rendering: optimizeLegibility;
+}
+
+/*———————————————————————————————
+  Font Face Definitions
+———————————————————————————————*/
+
+@font-face {
+  font-family: "hyperlegible-next";
+  src: url("../fonts/AtkinsonHyperlegibleNext-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "hyperlegible-next";
+  src: url("../fonts/AtkinsonHyperlegibleNext-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "hyperlegible-next";
+  src: url("../fonts/AtkinsonHyperlegibleNext-RegularItalic.woff2") format("woff2");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "hyperlegible-next";
+  src: url("../fonts/AtkinsonHyperlegibleNext-BoldItalic.woff2") format("woff2");
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "hyperlegible-next";
+  src: url("../fonts/AtkinsonHyperlegibleNext-Light.woff2") format("woff2");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "hyperlegible-next";
+  src: url("../fonts/AtkinsonHyperlegibleNext-LightItalic.woff2") format("woff2");
+  font-weight: 300;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "hyperlegible-next";
+  src: url("../fonts/AtkinsonHyperlegibleNext-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "hyperlegible-next";
+  src: url("../fonts/AtkinsonHyperlegibleNext-MediumItalic.woff2") format("woff2");
+  font-weight: 500;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "hyperlegible-next";
+  src: url("../fonts/AtkinsonHyperlegibleNext-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "hyperlegible-next";
+  src: url("../fonts/AtkinsonHyperlegibleNext-SemiBoldItalic.woff2") format("woff2");
+  font-weight: 600;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "hyperlegible-next";
+  src: url("../fonts/AtkinsonHyperlegibleNext-ExtraLight.woff2") format("woff2");
+  font-weight: 200;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "hyperlegible-next";
+  src: url("../fonts/AtkinsonHyperlegibleNext-ExtraLightItalic.woff2") format("woff2");
+  font-weight: 200;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "hyperlegible-next";
+  src: url("../fonts/AtkinsonHyperlegibleNext-ExtraBold.woff2") format("woff2");
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "hyperlegible-next";
+  src: url("../fonts/AtkinsonHyperlegibleNext-ExtraBoldItalic.woff2") format("woff2");
+  font-weight: 800;
+  font-style: italic;
+  font-display: swap;
+}
+
+/*———————————————————————————————
+  Minimal Reset
+———————————————————————————————*/
+
+/* Box-sizing everywhere makes width/height behave intuitively */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+/* Remove default body margins */
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
+/* Allow images and SVGs to scale down if container is narrower */
+img, svg {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* Preserve a sensible line-height for text */
+body {
+  line-height: 1.5;
+}
+
+/*———————————————————————————————
+  Base & Utilities
+———————————————————————————————*/
+
+html {
+  font-family: "hyperlegible-next", sans-serif;
+  font-size: 16px;
+
+}
+
+body {
+  width: 100%;
+}
+
+.weather-display {
+  width: 100%;
+  max-width: 1872px;
+  margin: 0 auto;
+  padding: 0 1.25rem; /* 0 20px */
+}
+
+/*———————————————————————————————
+  Header
+———————————————————————————————*/
+
+.weather-display__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.weather-display__header-date {
+  font-weight: bold;
+}
+
+.weather-display__header-meta {
+  display: flex;
+  gap: 1rem; /* 16px */
+}
+
+.weather-display__header-meta-item {
+  display: flex;
+  align-items: center;
+  font-size: 0.9rem; /* 14px */
+}
+.weather-display__header-icon {
+  width: 1.25rem;   /* 20 px */
+  height: 1.25rem;
+  fill: currentColor;
+  margin-right: 0.5rem;   /* keeps spacing before text */
+  flex-shrink: 0;
+}
+
+.weather-display__header-meta-item span {
+  font-weight: bold;
+}
+
+/*———————————————————————————————
+  Location & Summary
+———————————————————————————————*/
+
+.weather-display__location {
+  text-align: center;
+  margin-top: 2rem; /* 32px */
+}
+
+.weather-display__main {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 1rem 0; /* 16px 0 */
+}
+.weather-display__main-icon {
+  width: 6rem; /* 96px */
+  height: auto;
+  margin-right: 1.25rem; /* 20px */
+  /*color: #5d5d5d; */
+}
+.weather-display__main-temp {
+  font-size: 5rem; /* 80px */
+  font-weight: bold;
+}
+.weather-display__main-temp span {
+  font-size: 2rem; /* 32px */
+  margin-left: 0.5rem; /* 8px */
+}
+
+.weather-display__description {
+  text-align: center;
+  font-size: 1.5rem; /* 24px */
+  font-weight: bold;
+  margin-bottom: 2rem; /* 32px */
+}
+
+/*———————————————————————————————
+  Detail Metrics
+———————————————————————————————*/
+
+.weather-display__details {
+  display: flex;
+  justify-content: center;
+  gap: 2rem; /* 32px */
+  flex-wrap: wrap;
+  margin-bottom: 2rem; /* 32px */
+}
+.weather-display__detail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 0.9rem; /* 14px */
+  line-height: 1.6;
+}
+.weather-display__detail-icon {
+  margin-bottom: 0.5rem; /* 8px */
+  width: 1.6rem; /* 25px */
+  height: 1.6rem; /* 25px */
+}
+
+/*———————————————————————————————
+  Forecast
+———————————————————————————————*/
+
+.forecast {
+  display: flex;
+  overflow-x: auto;
+  gap: 1.25rem; /* 20px */
+  padding: 0.5rem 0; /* 8px 0 */
+  justify-content: center;
+  align-items: center;
+}
+
+.forecast__card {
+  background: #f0f0f0;
+  border-radius: 0.625rem; /* 10px */
+  padding: 0.625rem; /* 10px */
+  text-align: center;
+  min-width: 5rem; /* 80px */
+  flex-shrink: 0;
+}
+
+.forecast__card-icon,
+.forecast__wind-icon {
+  width: 2rem;     /* 32px */
+  height: 2rem;
+  fill: currentColor;
+  flex-shrink: 0;
+  margin-bottom: 0.3125rem; /* 5px */
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.forecast__card-name {
+  font-size: 0.9rem; /* 14px */
+  font-weight: bold;
+  margin-bottom: 0.25rem; /* 4px */
+}
+
+.forecast__card-temp {
+  font-weight: bold;
+  margin-bottom: 0.25rem; /* 4px */
+}
+
+.forecast__card-meta {
+  font-size: 0.8rem; /* 13px */
+  line-height: 1.4;
+}

@@ -1,0 +1,56 @@
+# Byte‑compiled / cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+.env
+*.env
+
+# OS & editor cruft
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+.cursor
+
+# Logs / temp artifacts
+*.log
+*.png
+*.html
+*.pid
+logs/
+
+# Secrets (use config-sample.yaml in repo)
+config.yaml
+
+# Local caches
+.pytest_cache/
+.ruff_cache/
+__pypackages__/
+node_modules/
+cache/
+.tox/
+
+# Preview files
+preview/
+
+# Coverage reports
+.coverage
+.coverage.*
+htmlcov/
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Docker
+.dockerignore

@@ -1,0 +1,74 @@
+[tool.poetry]
+name = "rpi_weather_display"
+version = "0.1.0"
+description = "Ultra-Low-Power Weather Display for Raspberry Pi"
+authors = ["Steve Nims <sjnims@gmail.com>"]
+readme = "README.md"
+license = "MIT"
+packages = [{include = "rpi_weather_display", from = "src"}]
+
+[tool.poetry.dependencies]
+python = "~3.11.12"
+pydantic = "^2.5.0"
+pyyaml = "^6.0.1"
+requests = "^2.31.0"
+pillow = "^10.1.0"
+jinja2 = "^3.1.2"
+httpx = "^0.25.1"
+structlog = "^23.2.0"
+
+# Server dependencies
+fastapi = {version = "^0.104.1", optional = true}
+uvicorn = {version = "^0.23.2", optional = true}
+playwright = {version = "^1.40.0", optional = true}
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.3"
+pytest-cov = "^4.1.0"
+pytest-mock = "^3.12.0"
+pytest-asyncio = "^0.21.1"
+pytest-benchmark = "^4.0.0"
+pytest-xdist = "^3.3.1"
+pytest-html = "^4.1.1"
+hypothesis = "^6.87.1"
+ruff = "^0.1.5"
+pyright = "^1.1.334"
+pre-commit = "^3.5.0"
+
+# No Raspberry Pi specific dependencies in the Poetry configuration
+
+[tool.poetry.extras]
+server = ["fastapi", "uvicorn", "playwright"]
+
+[tool.poetry.scripts]
+client = "rpi_weather_display.client.main:main"
+server = "rpi_weather_display.server.main:main"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pyright]
+include = ["src"]
+exclude = ["**/node_modules", "**/__pycache__"]
+reportMissingImports = true
+reportMissingTypeStubs = false
+pythonVersion = "3.11"
+pythonPlatform = "Linux"
+typeCheckingMode = "strict"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+select = ["E", "F", "B", "I", "N", "UP", "ANN", "S", "A", "C4"]
+ignore = ["ANN101", "ANN102"]
+
+[tool.ruff.isort]
+known-first-party = ["rpi_weather_display"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+addopts = "--cov=src/rpi_weather_display --cov-report=html --cov-report=term"

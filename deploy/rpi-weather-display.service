@@ -1,0 +1,16 @@
+[Unit]
+Description=Ultra-Low-Power Weather Display
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi
+ExecStart=/home/pi/.local/bin/poetry run client
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
