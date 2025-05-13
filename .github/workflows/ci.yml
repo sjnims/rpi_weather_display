@@ -28,7 +28,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          poetry install --no-interaction
+          poetry install --no-interaction --all-extras
 
       - name: Lint with ruff
         run: |
@@ -69,7 +69,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          poetry install --no-interaction
+          poetry install --no-interaction --all-extras
 
       - name: Run tests
         run: |
