@@ -3,6 +3,8 @@
 Provides abstraction for interacting with the Waveshare e-paper display,
 handling image rendering, partial refreshes, and power management.
 """
+# ruff: noqa: S101
+# ^ Ignores "Use of assert detected" - assertions are used for type checking only
 
 from pathlib import Path
 from typing import Any, TypeVar
@@ -44,6 +46,8 @@ class EPaperDisplay:
 
             # Initialize the display
             self._display = AutoEPDDisplay(vcom=-2.06)
+            # PyRight doesn't know that self._display is now not None, so we need an assertion
+            assert self._display is not None
             self._display.clear()
 
             # Set rotation
@@ -178,6 +182,8 @@ class EPaperDisplay:
         if self._initialized and self._display:
             # Some e-paper displays have a sleep command
             try:
+                # PyRight doesn't know that self._display is not None, so we need an assertion
+                assert self._display is not None
                 self._display.epd.sleep()
             except AttributeError:
                 # If sleep not available, we'll just leave it as is
