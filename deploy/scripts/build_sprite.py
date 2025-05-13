@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-build_sprite.py - Combine individual SVG icons into a single <symbol> sprite.
+"""build_sprite.py - Combine individual SVG icons into a single <symbol> sprite.
 
 This replaces the Node-based `svg-sprite` tool so we can drop the entire
 npm / Node dependency chain.
@@ -32,7 +31,7 @@ import argparse
 import sys
 
 # Using ElementTree to parse our own trusted SVG files
-import xml.etree.ElementTree as ElementTree  # noqa: N817, S314
+import xml.etree.ElementTree as ElementTree
 from pathlib import Path
 from typing import Any
 
@@ -43,8 +42,7 @@ def _strip_ns(tag: str) -> str:
 
 
 def build_sprite(src_dir: Path, out_path: Path, *, prefix: str = "") -> None:
-    """
-    Build a <symbol> sprite from all SVGs found in *src_dir*.
+    """Build a <symbol> sprite from all SVGs found in *src_dir*.
 
     Args:
         src_dir: Directory containing individual SVG files.
@@ -101,6 +99,11 @@ def build_sprite(src_dir: Path, out_path: Path, *, prefix: str = "") -> None:
 
 
 def main() -> None:
+    """Parse command-line arguments and build the SVG sprite.
+
+    Reads arguments for source directory, output path, and ID prefix,
+    then invokes the build_sprite function.
+    """
     parser = argparse.ArgumentParser(description="Build SVG sprite from icons directory")
     parser.add_argument(
         "--src",
