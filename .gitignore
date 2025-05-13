@@ -1,57 +1,59 @@
-# Byte‑compiled / cache
+# Python cache files
 __pycache__/
 *.py[cod]
 *$py.class
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Build artifacts
 *.so
 .Python
+build/
+dist/
+*.egg-info/
 
 # Virtual environments
 .venv/
 venv/
 env/
-.env
-*.env
 
-# OS & editor cruft
-.DS_Store
-Thumbs.db
-.vscode/
-.idea/
-*.swp
-*.swo
-.cursor
+# Configuration (use config.example.yaml as template)
+config.yaml
 
-# Logs / temp artifacts
+# Temporary files
 *.log
-*.png
-*.html
 *.pid
 logs/
 .benchmarks/
-
-# Secrets (use config-sample.yaml in repo)
-config.yaml
-
-# Local caches
-.pytest_cache/
-.ruff_cache/
-__pypackages__/
-node_modules/
-cache/
-.tox/
-
-# Preview files
 preview/
+cache/
+tmp/
 
-# Coverage reports
+# Generated content
+*.png
+*.html
+
+# Test and coverage
 .coverage
 .coverage.*
 htmlcov/
+.tox/
 
-# Distribution / packaging
-dist/
-build/
-*.egg-info/
+# OS and editor files
+.DS_Store
+Thumbs.db
+*~
+.idea/
+
+# VS Code - keep settings but ignore other files
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+
+# Cursor - keep settings but ignore other files
+**/.cursor/*
+!**/.cursor/settings.json
 
 # Docker
 .dockerignore
