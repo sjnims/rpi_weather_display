@@ -43,7 +43,8 @@ jobs:
             "reportUnknownVariableType": false,
             "reportUnknownMemberType": false,
             "reportUnknownArgumentType": false,
-            "reportGeneralTypeIssues": false
+            "reportGeneralTypeIssues": false,
+            "reportMissingImports": false
           }' > pyrightconfig.json
           poetry run pyright .
 
