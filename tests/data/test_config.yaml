@@ -1,0 +1,34 @@
+debug: true
+development_mode: true
+display:
+  height: 600
+  partial_refresh: true
+  refresh_interval_minutes: 30
+  rotate: 0
+  timestamp_format: '%Y-%m-%d %H:%M'
+  width: 800
+logging:
+  backup_count: 1
+  format: json
+  level: INFO
+  max_size_mb: 1
+power:
+  critical_battery_threshold: 10
+  low_battery_threshold: 20
+  quiet_hours_end: 06:00
+  quiet_hours_start: '23:00'
+  wake_up_interval_minutes: 60
+  wifi_timeout_seconds: 30
+server:
+  port: 8000
+  retry_attempts: 2
+  retry_delay_seconds: 1
+  timeout_seconds: 5
+  url: http://localhost
+weather:
+  api_key: test_api_key
+  city_name: Test City
+  forecast_days: 5
+  language: en
+  units: metric
+  update_interval_minutes: 30
