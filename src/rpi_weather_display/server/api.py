@@ -133,7 +133,11 @@ class WeatherAPIClient:
                         DailyWeather(**day)
                         for day in weather_data["daily"][: self.config.forecast_days]
                     ],
-                    air_pollution=AirPollutionData(**weather_data["air_pollution"])
+                    air_pollution=AirPollutionData(
+                        dt=weather_data["air_pollution"]["dt"],
+                        main=weather_data["air_pollution"]["main"],
+                        components=weather_data["air_pollution"]["components"],
+                    )
                     if weather_data["air_pollution"]
                     else None,
                     last_updated=datetime.now(),

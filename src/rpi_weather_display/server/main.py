@@ -9,6 +9,7 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, Response
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from rpi_weather_display.models.config import AppConfig
@@ -71,6 +72,19 @@ class WeatherDisplayServer:
         # Set up routes
         self._setup_routes()
 
+        # Set up static files handling
+        static_dir = Path(__file__).parent.parent.parent.parent / "static"
+        if static_dir.exists():
+            self.app.mount("/static", StaticFiles(directory=static_dir), name="static")
+        else:
+            alt_static_dir = Path("/etc/rpi-weather-display/static")
+            if alt_static_dir.exists():
+                self.app.mount("/static", StaticFiles(directory=alt_static_dir), name="static")
+            else:
+                self.logger.warning(
+                    "Static files directory not found. Some resources may not load correctly."
+                )
+
         self.logger.info("Weather Display Server initialized")
 
     def _setup_routes(self) -> None:
@@ -87,6 +101,31 @@ class WeatherDisplayServer:
         @self.app.get("/weather")
         async def get_weather() -> dict[str, Any]:
             return await self._handle_weather()
+
+        @self.app.get("/preview")
+        async def preview_weather() -> Response:
+            """Preview the weather dashboard in a browser."""
+            try:
+                # Get default battery status for preview
+                battery_status = BatteryStatus(
+                    level=85,
+                    voltage=3.9,
+                    current=0.5,
+                    temperature=25.0,
+                    state=BatteryState.FULL,
+                )
+
+                # Get weather data
+                weather_data = await self.api_client.get_weather_data()
+
+                # Generate HTML
+                html = await self.renderer.generate_html(weather_data, battery_status)
+
+                # Return HTML content
+                return Response(content=html, media_type="text/html")
+            except Exception as e:
+                self.logger.error(f"Error generating preview: {e}")
+                raise HTTPException(status_code=500, detail=str(e)) from e
 
     async def _handle_render(self, request: RenderRequest) -> Response:
         """Handle render request.

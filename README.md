@@ -11,6 +11,7 @@ A power-optimized weather display solution for Raspberry Pi Zero 2 W with e-pape
 - Quiet hours support to conserve battery during night time
 - Weather data from OpenWeatherMap API
 - Automatic deep sleep between updates
+- Browser-based preview for easier development
 
 ## Hardware Requirements
 
@@ -109,6 +110,9 @@ poetry install
 # For server components
 poetry install --extras server
 
+# Install Playwright browsers (required for rendering images)
+poetry run playwright install
+
 # Run tests
 poetry run pytest
 
@@ -118,6 +122,26 @@ poetry run ruff check .
 # Check types with pyright
 poetry run pyright
 ```
+
+### Running the Application in Development Mode
+
+1. Start the server with a local config file:
+   ```bash
+   poetry run server --config config.yaml
+   ```
+
+2. In a separate terminal, run the client with the same config file:
+   ```bash
+   poetry run client --config config.yaml
+   ```
+
+3. Preview the dashboard in your browser:
+   ```
+   http://localhost:8000/preview
+   ```
+   This provides a live view of the dashboard for easier development and iteration.
+
+4. Modify the HTML template in `templates/weather.html.j2` and refresh the browser to see changes immediately.
 
 ## Configuration
 
@@ -164,7 +188,7 @@ power:
   cpu_max_freq_mhz: 700
 
 server:
-  url: "http://your-unraid-server-ip"
+  url: "http://localhost"  # Use localhost for development, your server IP for production
   port: 8000
   timeout_seconds: 10
   retry_attempts: 3
@@ -214,8 +238,16 @@ rpi-weather-display/
 │       ├── install.sh         # Installation script
 │       └── optimize-power.sh  # Power optimization script
 ├── templates/             # HTML templates for weather display
-└── static/                # Static assets including icons
+└── static/                # Static assets including icons and CSS
 ```
+
+## API Endpoints
+
+The server provides the following endpoints:
+
+- `POST /render` - Used by the client to get a rendered image for e-paper display
+- `GET /weather` - Returns weather data as JSON
+- `GET /preview` - Renders the dashboard in a browser for development
 
 ## Contributing
 

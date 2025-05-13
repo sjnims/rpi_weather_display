@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 class WeatherCondition(BaseModel):
     """Weather condition information."""
+
     id: int
     main: str
     description: str
@@ -13,6 +14,7 @@ class WeatherCondition(BaseModel):
 
 class CurrentWeather(BaseModel):
     """Current weather data."""
+
     dt: int
     sunrise: int
     sunset: int
@@ -47,6 +49,7 @@ class CurrentWeather(BaseModel):
 
 class DailyTemp(BaseModel):
     """Daily temperature forecast."""
+
     day: float
     min: float
     max: float
@@ -57,6 +60,7 @@ class DailyTemp(BaseModel):
 
 class DailyFeelsLike(BaseModel):
     """Daily 'feels like' temperatures."""
+
     day: float
     night: float
     eve: float
@@ -65,6 +69,7 @@ class DailyFeelsLike(BaseModel):
 
 class DailyWeather(BaseModel):
     """Daily weather forecast data."""
+
     dt: int
     sunrise: int
     sunset: int
@@ -93,6 +98,7 @@ class DailyWeather(BaseModel):
 
 class HourlyWeather(BaseModel):
     """Hourly weather forecast data."""
+
     dt: int
     temp: float
     feels_like: float
@@ -116,7 +122,8 @@ class HourlyWeather(BaseModel):
 
 class AirPollution(BaseModel):
     """Air pollution data."""
-    aqi: int  # Air Quality Index: 1-5
+
+    aqi: int | None = None  # Air Quality Index: 1-5 (might be missing in some responses)
     co: float  # Carbon monoxide, μg/m3
     no: float  # Nitrogen monoxide, μg/m3
     no2: float  # Nitrogen dioxide, μg/m3
@@ -129,6 +136,7 @@ class AirPollution(BaseModel):
 
 class AirPollutionData(BaseModel):
     """Air pollution data with timestamp."""
+
     dt: int
     main: dict[str, int] = Field(..., alias="main")
     components: AirPollution
@@ -146,6 +154,7 @@ class AirPollutionData(BaseModel):
 
 class WeatherData(BaseModel):
     """Complete weather data."""
+
     lat: float
     lon: float
     timezone: str

@@ -34,6 +34,7 @@ class WeatherRenderer:
         # Add custom filters
         self.jinja_env.filters["format_datetime"] = self._format_datetime
         self.jinja_env.filters["format_temp"] = self._format_temp
+        self.jinja_env.filters["get_icon"] = self._get_weather_icon
 
     def _format_datetime(self, dt: datetime | int, format_str: str | None = None) -> str:
         """Format a datetime object or Unix timestamp.
@@ -130,6 +131,39 @@ class WeatherRenderer:
             return "battery-high-bold"
         else:
             return "battery-low-bold"
+
+    def _get_weather_icon(self, icon_code: str) -> str:
+        """Convert OpenWeatherMap icon code to our sprite icon ID.
+
+        Args:
+            icon_code: OpenWeatherMap icon code (e.g., "01d").
+
+        Returns:
+            Icon ID from the sprite file.
+        """
+        # Map of OpenWeatherMap icon codes to sprite icon IDs
+        icon_map = {
+            "01d": "sun-bold",  # Clear sky (day)
+            "01n": "moon-bold",  # Clear sky (night)
+            "02d": "sun-cloud-bold",  # Few clouds (day)
+            "02n": "moon-cloud-bold",  # Few clouds (night)
+            "03d": "cloud-bold",  # Scattered clouds
+            "03n": "cloud-bold",
+            "04d": "clouds-bold",  # Broken clouds
+            "04n": "clouds-bold",
+            "09d": "cloud-drizzle-bold",  # Shower rain
+            "09n": "cloud-drizzle-bold",
+            "10d": "sun-cloud-rain-bold",  # Rain (day)
+            "10n": "moon-cloud-rain-bold",  # Rain (night)
+            "11d": "cloud-lightning-bold",  # Thunderstorm
+            "11n": "cloud-lightning-bold",
+            "13d": "cloud-snow-bold",  # Snow
+            "13n": "cloud-snow-bold",
+            "50d": "cloud-fog-bold",  # Mist
+            "50n": "cloud-fog-bold",
+        }
+
+        return icon_map.get(icon_code, "cloud-bold")  # Default to cloud if icon not found
 
     async def render_image(
         self, html: str, width: int, height: int, output_path: Path | None = None
