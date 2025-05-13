@@ -47,6 +47,7 @@ hypothesis = "^6.87.1"
 ruff = "^0.5.3"
 pyright = "^1.1.334"
 pre-commit = "^3.5.0"
+freezegun = "^1.2.0"
 
 [tool.poetry.group.docs.dependencies]
 sphinx = "^7.2.6"
