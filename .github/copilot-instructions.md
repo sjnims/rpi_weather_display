@@ -126,9 +126,10 @@
 
 ## Application Configuration
 
-- Use environment variables or configuration files (I prefer config.yaml over .env)
+- Use configuration files with config.yaml as the standard format
   - Use YAML for configuration files
   - Use a separate config.yaml file for each environment (development, production)
+  - Use config.example.yaml as the template with default values
   - Consider Pydantic Settings for config validation
   - Implement a hierarchical configuration system
 - Use Jinja2 for templating
@@ -185,8 +186,8 @@
 
 ## Security Practices
 
-- Store API keys and secrets in environment variables, not in code
-- Use a .env file for local development for secrets not added to config.yaml (added to .gitignore)
+- Store API keys and secrets in config.yaml (ensure it's added to .gitignore)
+- For local development, copy config.example.yaml to config.yaml and add your API keys
 - Implement rate limiting for API requests to avoid quota issues
 - Regularly update dependencies to patch security vulnerabilities
 
