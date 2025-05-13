@@ -145,67 +145,43 @@ poetry run pyright
 
 ## Configuration
 
-Edit the `config.yaml` file to customize:
+Edit the `config.yaml` file to customize your setup. You should copy `config.example.yaml` to `config.yaml` and modify it with your settings:
 
-- OpenWeatherMap API key
-- Location settings
-- Display preferences
-- Power management settings
-- Server connection details
-- Logging options
+```bash
+cp config.example.yaml config.yaml
+nano config.yaml  # or use your preferred editor
+```
 
-### Example Configuration
+### Configuration Options
 
 ```yaml
-weather:
-  api_key: "your_openweathermap_api_key_here"
-  city_name: "Atlanta"
-  units: "metric"
-  language: "en"
-  update_interval_minutes: 30
-  forecast_days: 5
+# Example configuration
+api:
+  openweathermap:
+    api_key: "your_api_key_here"  # Required: Your OpenWeatherMap API key
+    lat: 37.7749                  # Required: Latitude of location
+    lon: -122.4194                # Required: Longitude of location
 
 display:
-  width: 1872
-  height: 1404
-  rotate: 0
-  refresh_interval_minutes: 30
-  partial_refresh: true
-  timestamp_format: "%Y-%m-%d %H:%M"
+  refresh_interval_minutes: 30    # How often to refresh the screen
+  brightness: 50                  # Display brightness (0-100)
+  orientation: 0                  # Display rotation (0, 90, 180, 270)
 
 power:
-  quiet_hours_start: "23:00"
-  quiet_hours_end: "06:00"
-  low_battery_threshold: 20
-  critical_battery_threshold: 10
-  wake_up_interval_minutes: 60
-  wifi_timeout_seconds: 30
-  disable_hdmi: true
-  disable_bluetooth: true
-  disable_leds: true
-  enable_temp_fs: true
-  cpu_governor: "powersave"
-  cpu_max_freq_mhz: 700
+  wake_up_interval_minutes: 30    # How often to wake from sleep
+  quiet_hours_start: "22:00"      # Start of quiet hours (reduced updates)
+  quiet_hours_end: "06:00"        # End of quiet hours
+  low_battery_threshold: 20       # % level to enter power saving mode
+  critical_battery_threshold: 10  # % level to enter critical power saving
 
 server:
-  url: "http://localhost"  # Use localhost for development, your server IP for production
-  port: 8000
-  timeout_seconds: 10
-  retry_attempts: 3
-  retry_delay_seconds: 5
-  cache_dir: "/tmp/weather-cache"
-  log_level: "INFO"
-  image_format: "PNG"
-
-logging:
-  level: "INFO"
-  format: "json"
-  max_size_mb: 5
-  backup_count: 3
-
-debug: false
-development_mode: true
+  url: "http://your-server-ip:8000"  # URL of the server
+  port: 8000                         # Port for the server to listen on
 ```
+
+All configuration is managed through this YAML file - the project does not use environment variables or .env files.
+
+Make sure to keep your `config.yaml` file secure as it contains your API keys. It's already added to the `.gitignore` file to prevent accidental commits.
 
 ## Power Optimization
 
