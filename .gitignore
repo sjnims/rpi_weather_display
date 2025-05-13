@@ -27,6 +27,7 @@ Thumbs.db
 *.html
 *.pid
 logs/
+.benchmarks/
 
 # Secrets (use config-sample.yaml in repo)
 config.yaml
