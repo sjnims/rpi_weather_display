@@ -1,3 +1,9 @@
+"""Power management module for Raspberry Pi weather display.
+
+Provides battery monitoring, power state management, and system metrics
+for optimizing power consumption of the Raspberry Pi Zero.
+"""
+
 import logging
 import subprocess
 from datetime import datetime, timedelta
@@ -258,7 +264,7 @@ class PowerManager:
                 self.logger.warning("Commands not found for shutdown")
                 return
 
-            subprocess.run(  # nosec # noqa: S603, S607
+            subprocess.run(  # nosec # noqa: S603
                 [str(sudo_path), str(shutdown_path), "-h", "now"],
                 check=True,
                 shell=False,  # Explicitly disable shell
@@ -331,7 +337,7 @@ class PowerManager:
                 if not top_path.exists():
                     self.logger.warning(f"Command not found: {TOP_PATH}")
                 else:
-                    cpu_usage = subprocess.check_output(  # nosec # noqa: S603, S607
+                    cpu_usage = subprocess.check_output(  # nosec # noqa: S603
                         [str(top_path), "-bn1"],
                         shell=False,  # Explicitly disable shell
                     ).decode()
@@ -362,7 +368,7 @@ class PowerManager:
                 if not df_path.exists():
                     self.logger.warning(f"Command not found: {DF_PATH}")
                 else:
-                    disk_usage = subprocess.check_output(  # nosec # noqa: S603, S607
+                    disk_usage = subprocess.check_output(  # nosec # noqa: S603
                         [str(df_path), "-h", "/"],
                         shell=False,  # Explicitly disable shell
                     ).decode()
