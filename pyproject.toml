@@ -6,10 +6,20 @@ authors = ["Steve Nims <sjnims@gmail.com>"]
 readme = "README.md"
 license = "MIT"
 packages = [{include = "rpi_weather_display", from = "src"}]
+keywords = ["raspberry-pi", "weather", "e-ink", "display", "low-power"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Programming Language :: Python :: 3.11",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
 
 [tool.poetry.dependencies]
 python = "~3.11.12"
 pydantic = "^2.5.0"
+typing-extensions = "^4.8.0"
 pyyaml = "^6.0.1"
 requests = "^2.31.0"
 pillow = "^10.1.0"
@@ -30,10 +40,19 @@ pytest-asyncio = "^0.21.1"
 pytest-benchmark = "^4.0.0"
 pytest-xdist = "^3.3.1"
 pytest-html = "^4.1.1"
+pytest-env = "^1.0.1"
+pytest-timeout = "^2.2.0"
+httpx = "^0.25.1"
 hypothesis = "^6.87.1"
 ruff = "^0.5.3"
 pyright = "^1.1.334"
 pre-commit = "^3.5.0"
+
+[tool.poetry.group.docs.dependencies]
+sphinx = "^7.2.6"
+sphinx-rtd-theme = "^2.0.0"
+sphinx-autodoc-typehints = "^1.24.0"
+myst-parser = "^2.0.0"
 
 # No Raspberry Pi specific dependencies in the Poetry configuration
 
@@ -43,19 +62,56 @@ server = ["fastapi", "uvicorn", "playwright"]
 [tool.poetry.scripts]
 client = "rpi_weather_display.client.main:main"
 server = "rpi_weather_display.server.main:main"
+pre-commit-hooks = "pre_commit_hooks.main:main"
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.pyright]
-include = ["src"]
-exclude = ["**/node_modules", "**/__pycache__"]
+include = ["src", "tests"]
+exclude = ["**/node_modules", "**/__pycache__", ".venv", ".git", ".ruff_cache"]
 reportMissingImports = true
+reportImportCycles = true
 reportMissingTypeStubs = false
+useLibraryCodeForTypes = true
+reportUnknownMemberType = "warning"
+reportUnnecessaryTypeIgnoreComment = "warning"
+reportPrivateUsage = "warning"
+reportUnusedFunction = "none"
+reportUntypedFunctionDecorator = "none"
 pythonVersion = "3.11"
 pythonPlatform = "Linux"
 typeCheckingMode = "strict"
+venvPath = "/Users/stevenims/Library/Caches/pypoetry/virtualenvs"
+venv = "rpi-weather-display-FNim5dBq-py3.11"
+
+# Execution environments need to be in proper TOML format
+[[tool.pyright.executionEnvironments]]
+root = "src"
+extraPaths = ["src"]
+
+[[tool.pyright.executionEnvironments]]
+root = "tests"
+extraPaths = ["src", "tests"]
+reportMissingImports = false
+reportUnknownParameterType = "none"
+reportMissingParameterType = "none"
+reportUnknownLambdaType = "none"
+reportUnknownMemberType = "none"
+reportUnknownArgumentType = "none"
+reportIncompatibleMethodOverride = "warning"
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = false
+no_implicit_optional = true
+strict_optional = true
 
 [tool.ruff]
 line-length = 100
@@ -63,7 +119,10 @@ target-version = "py311"
 
 [tool.ruff.lint]
 ignore = ["ANN101", "ANN102"]
-select = ["E", "F", "B", "I", "N", "UP", "ANN", "S", "A", "C4"]
+select = ["E", "F", "B", "I", "N", "UP", "ANN", "S", "A", "C4", "PT", "RUF", "D"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
 
 [tool.ruff.lint.isort]
 known-first-party = ["rpi_weather_display"]
@@ -73,4 +132,14 @@ testpaths = ["tests"]
 python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
-addopts = "--cov=src/rpi_weather_display --cov-report=html --cov-report=term"
+addopts = "--cov=src/rpi_weather_display --cov-report=html --cov-report=term -v"
+timeout = 300
+env = [
+    "DEVELOPMENT_MODE=1",
+    "TESTING=1"
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "e2e: marks tests as end-to-end tests"
+]
