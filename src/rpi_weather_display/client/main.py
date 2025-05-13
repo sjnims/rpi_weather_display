@@ -1,3 +1,9 @@
+"""Main entry point for the Raspberry Pi weather display client.
+
+Manages the client lifecycle including hardware initialization, display updates,
+power management, and scheduled operations for the e-paper weather display.
+"""
+
 import argparse
 import tempfile
 from pathlib import Path
