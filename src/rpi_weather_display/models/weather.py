@@ -1,3 +1,9 @@
+"""Weather data models used throughout the application.
+
+Defines Pydantic models for weather information, including current conditions,
+forecasts, and air quality data from weather service APIs.
+"""
+
 from datetime import datetime
 
 from pydantic import BaseModel, Field
