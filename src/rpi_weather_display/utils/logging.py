@@ -1,3 +1,12 @@
+# pyright: reportUnknownVariableType=false, reportUnknownMemberType=false
+# pyright: reportUnknownArgumentType=false
+
+"""Logging configuration module for the weather display application.
+
+Provides structured logging setup with support for console and file output
+in both JSON and human-readable formats.
+"""
+
 import logging
 import sys
 from logging.handlers import RotatingFileHandler
