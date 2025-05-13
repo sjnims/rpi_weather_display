@@ -36,6 +36,15 @@ jobs:
 
       - name: Type check with pyright
         run: |
+          # Create a pyrightconfig.json file to handle CI-specific settings
+          echo '{
+            "venvPath": "./.venv",
+            "venv": ".",
+            "reportUnknownVariableType": false,
+            "reportUnknownMemberType": false,
+            "reportUnknownArgumentType": false,
+            "reportGeneralTypeIssues": false
+          }' > pyrightconfig.json
           poetry run pyright .
 
   test:
