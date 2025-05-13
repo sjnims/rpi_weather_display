@@ -1,3 +1,9 @@
+"""System status models for hardware components and system metrics.
+
+Defines Pydantic models for battery status, network conditions, and overall
+system information used for monitoring the Raspberry Pi's state.
+"""
+
 from datetime import datetime
 from enum import Enum
 
@@ -6,6 +12,7 @@ from pydantic import BaseModel, Field
 
 class BatteryState(str, Enum):
     """Battery state enum."""
+
     CHARGING = "charging"
     DISCHARGING = "discharging"
     FULL = "full"
@@ -14,6 +21,7 @@ class BatteryState(str, Enum):
 
 class BatteryStatus(BaseModel):
     """Battery status information."""
+
     level: int  # Percentage
     voltage: float  # Volts
     current: float  # mA
@@ -34,6 +42,7 @@ class BatteryStatus(BaseModel):
 
 class NetworkState(str, Enum):
     """Network state enum."""
+
     CONNECTED = "connected"
     DISCONNECTED = "disconnected"
     CONNECTING = "connecting"
@@ -42,6 +51,7 @@ class NetworkState(str, Enum):
 
 class NetworkStatus(BaseModel):
     """Network status information."""
+
     state: NetworkState = NetworkState.DISCONNECTED
     ssid: str | None = None
     ip_address: str | None = None
@@ -51,6 +61,7 @@ class NetworkStatus(BaseModel):
 
 class SystemStatus(BaseModel):
     """System status information."""
+
     hostname: str
     uptime: int  # Seconds
     cpu_temp: float  # Celsius
