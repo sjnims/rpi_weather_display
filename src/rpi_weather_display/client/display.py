@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import Optional, Tuple, Union
 
 from PIL import Image
 
@@ -17,7 +16,7 @@ class EPaperDisplay:
         """
         self.config = config
         self._display = None
-        self._last_image: Optional[Image.Image] = None
+        self._last_image: Image.Image | None = None
         self._initialized = False
 
     def initialize(self) -> None:
@@ -27,8 +26,7 @@ class EPaperDisplay:
         """
         try:
             # Try to import the IT8951 library, which is only available on Raspberry Pi
-            from IT8951.display import AutoEPDDisplay
-            from IT8951.display import EPD
+            from IT8951.display import EPD, AutoEPDDisplay
 
             # Initialize the display
             self._display = AutoEPDDisplay(vcom=-2.06)
@@ -59,7 +57,7 @@ class EPaperDisplay:
             self._display.clear()
             self._last_image = None
 
-    def display_image(self, image_path: Union[str, Path]) -> None:
+    def display_image(self, image_path: str | Path) -> None:
         """Display an image on the e-paper display.
 
         Args:
@@ -90,7 +88,6 @@ class EPaperDisplay:
 
             # Check if we can use partial refresh
             if self.config.partial_refresh and self._last_image is not None:
-                from IT8951.display import AutoEPDDisplay
 
                 # Calculate the bounding box of differences
                 bbox = self._calculate_diff_bbox(self._last_image, image)
@@ -104,7 +101,6 @@ class EPaperDisplay:
                     return
             else:
                 # Full refresh
-                from IT8951 import constants
 
                 self._display.display(image)
 
@@ -113,7 +109,7 @@ class EPaperDisplay:
         except Exception as e:
             print(f"Error displaying image: {e}")
 
-    def _calculate_diff_bbox(self, old_image: Image.Image, new_image: Image.Image) -> Optional[Tuple[int, int, int, int]]:
+    def _calculate_diff_bbox(self, old_image: Image.Image, new_image: Image.Image) -> tuple[int, int, int, int] | None:
         """Calculate the bounding box of differences between two images.
 
         Args:

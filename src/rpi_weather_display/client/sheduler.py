@@ -1,10 +1,10 @@
 import logging
 import time
+from collections.abc import Callable
 from datetime import datetime, timedelta
-from typing import Callable, Optional
 
 from rpi_weather_display.models.config import AppConfig
-from rpi_weather_display.models.system import BatteryStatus, SystemStatus
+from rpi_weather_display.models.system import BatteryStatus
 
 
 class Scheduler:
@@ -18,8 +18,8 @@ class Scheduler:
         """
         self.config = config
         self.logger = logging.getLogger(__name__)
-        self._last_refresh: Optional[datetime] = None
-        self._last_update: Optional[datetime] = None
+        self._last_refresh: datetime | None = None
+        self._last_update: datetime | None = None
         self._running = False
 
     def should_refresh(self, battery_status: BatteryStatus) -> bool:

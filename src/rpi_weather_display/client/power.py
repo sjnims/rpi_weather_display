@@ -1,11 +1,10 @@
 import logging
 import subprocess
-import time
-from datetime import datetime, time as dt_time
-from typing import Dict, Optional, Tuple
+from datetime import datetime
+from datetime import time as dt_time
 
 from rpi_weather_display.models.config import PowerConfig
-from rpi_weather_display.models.system import BatteryState, BatteryStatus, SystemStatus
+from rpi_weather_display.models.system import BatteryState, BatteryStatus
 
 
 class PowerManager:
@@ -259,7 +258,7 @@ class PowerManager:
             self.logger.error(f"Failed to schedule wakeup: {e}")
             return False
 
-    def get_system_metrics(self) -> Dict[str, float]:
+    def get_system_metrics(self) -> dict[str, float]:
         """Get system metrics like CPU temperature and usage.
 
         Returns:
@@ -270,7 +269,7 @@ class PowerManager:
         try:
             # CPU temperature
             try:
-                with open("/sys/class/thermal/thermal_zone0/temp", "r") as f:
+                with open("/sys/class/thermal/thermal_zone0/temp") as f:
                     temp = int(f.read().strip()) / 1000.0
                     metrics["cpu_temp"] = temp
             except (FileNotFoundError, ValueError):
@@ -289,7 +288,7 @@ class PowerManager:
 
             # Memory usage
             try:
-                with open("/proc/meminfo", "r") as f:
+                with open("/proc/meminfo") as f:
                     meminfo = f.read()
                     total = int(meminfo.split("MemTotal:")[1].split("kB")[0].strip()) * 1024
                     free = int(meminfo.split("MemFree:")[1].split("kB")[0].strip()) * 1024

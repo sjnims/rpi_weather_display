@@ -1,13 +1,11 @@
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
 
 import jinja2
-from PIL import Image
 
-from rpi_weather_display.models.config import AppConfig, DisplayConfig
-from rpi_weather_display.models.system import BatteryStatus, SystemStatus
+from rpi_weather_display.models.config import AppConfig
+from rpi_weather_display.models.system import BatteryStatus
 from rpi_weather_display.models.weather import WeatherData
 
 
@@ -33,7 +31,7 @@ class WeatherRenderer:
         self.jinja_env.filters["format_datetime"] = self._format_datetime
         self.jinja_env.filters["format_temp"] = self._format_temp
 
-    def _format_datetime(self, dt: Union[datetime, int], format_str: Optional[str] = None) -> str:
+    def _format_datetime(self, dt: datetime | int, format_str: str | None = None) -> str:
         """Format a datetime object or Unix timestamp.
 
         Args:
@@ -51,7 +49,7 @@ class WeatherRenderer:
 
         return dt.strftime(format_str)
 
-    def _format_temp(self, temp: float, units: Optional[str] = None) -> str:
+    def _format_temp(self, temp: float, units: str | None = None) -> str:
         """Format a temperature value.
 
         Args:
@@ -130,8 +128,8 @@ class WeatherRenderer:
             return "battery-low-bold"
 
     async def render_image(
-        self, html: str, width: int, height: int, output_path: Optional[Path] = None
-    ) -> Union[bytes, Path]:
+        self, html: str, width: int, height: int, output_path: Path | None = None
+    ) -> bytes | Path:
         """Render HTML to an image.
 
         Args:
@@ -175,8 +173,8 @@ class WeatherRenderer:
         self,
         weather_data: WeatherData,
         battery_status: BatteryStatus,
-        output_path: Optional[Path] = None,
-    ) -> Union[bytes, Path]:
+        output_path: Path | None = None,
+    ) -> bytes | Path:
         """Render weather data to an image.
 
         Args:

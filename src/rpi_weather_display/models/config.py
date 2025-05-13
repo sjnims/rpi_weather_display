@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import Dict, List, Optional, Union
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -7,8 +6,8 @@ from pydantic import BaseModel, Field, field_validator
 class WeatherConfig(BaseModel):
     """Weather API configuration."""
     api_key: str
-    location: Dict[str, float] = Field(default_factory=lambda: {"lat": 0.0, "lon": 0.0})
-    city_name: Optional[str] = None
+    location: dict[str, float] = Field(default_factory=lambda: {"lat": 0.0, "lon": 0.0})
+    city_name: str | None = None
     units: str = "metric"
     language: str = "en"
     update_interval_minutes: int = 30
@@ -64,7 +63,7 @@ class ServerConfig(BaseModel):
 class LoggingConfig(BaseModel):
     """Logging configuration."""
     level: str = "INFO"
-    file: Optional[str] = None
+    file: str | None = None
     format: str = "json"
     max_size_mb: int = 5
     backup_count: int = 3
@@ -81,11 +80,11 @@ class AppConfig(BaseModel):
     development_mode: bool = False
 
     @classmethod
-    def from_yaml(cls, config_path: Union[str, Path]) -> "AppConfig":
+    def from_yaml(cls, config_path: str | Path) -> "AppConfig":
         """Load configuration from YAML file."""
         import yaml
 
-        with open(config_path, "r") as f:
+        with open(config_path) as f:
             config_data = yaml.safe_load(f)
 
         return cls.model_validate(config_data)

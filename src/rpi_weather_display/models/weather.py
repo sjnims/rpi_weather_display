@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import Dict, List, Optional, Union
 
 from pydantic import BaseModel, Field
 
@@ -27,8 +26,8 @@ class CurrentWeather(BaseModel):
     visibility: int
     wind_speed: float
     wind_deg: int
-    wind_gust: Optional[float] = None
-    weather: List[WeatherCondition]
+    wind_gust: float | None = None
+    weather: list[WeatherCondition]
 
     @property
     def timestamp(self) -> datetime:
@@ -79,11 +78,11 @@ class DailyWeather(BaseModel):
     dew_point: float
     wind_speed: float
     wind_deg: int
-    wind_gust: Optional[float] = None
-    weather: List[WeatherCondition]
+    wind_gust: float | None = None
+    weather: list[WeatherCondition]
     clouds: int
     pop: float  # Probability of precipitation
-    rain: Optional[float] = None
+    rain: float | None = None
     uvi: float
 
     @property
@@ -105,8 +104,8 @@ class HourlyWeather(BaseModel):
     visibility: int
     wind_speed: float
     wind_deg: int
-    wind_gust: Optional[float] = None
-    weather: List[WeatherCondition]
+    wind_gust: float | None = None
+    weather: list[WeatherCondition]
     pop: float  # Probability of precipitation
 
     @property
@@ -131,7 +130,7 @@ class AirPollution(BaseModel):
 class AirPollutionData(BaseModel):
     """Air pollution data with timestamp."""
     dt: int
-    main: Dict[str, int] = Field(..., alias="main")
+    main: dict[str, int] = Field(..., alias="main")
     components: AirPollution
 
     @property
@@ -152,7 +151,7 @@ class WeatherData(BaseModel):
     timezone: str
     timezone_offset: int
     current: CurrentWeather
-    hourly: List[HourlyWeather]
-    daily: List[DailyWeather]
-    air_pollution: Optional[AirPollutionData] = None
+    hourly: list[HourlyWeather]
+    daily: list[DailyWeather]
+    air_pollution: AirPollutionData | None = None
     last_updated: datetime = Field(default_factory=datetime.now)

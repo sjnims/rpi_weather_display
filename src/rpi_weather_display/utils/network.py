@@ -3,7 +3,6 @@ import socket
 import subprocess
 import time
 from contextlib import contextmanager
-from typing import Dict, Optional, Tuple
 
 from rpi_weather_display.models.config import PowerConfig
 from rpi_weather_display.models.system import NetworkState, NetworkStatus
@@ -60,10 +59,10 @@ class NetworkManager:
             # Try to connect to a reliable host (Google DNS)
             socket.create_connection(("8.8.8.8", 53), timeout=self.config.wifi_timeout_seconds)
             return True
-        except (socket.timeout, socket.error):
+        except (TimeoutError, OSError):
             return False
 
-    def _get_ssid(self) -> Optional[str]:
+    def _get_ssid(self) -> str | None:
         """Get the current SSID.
 
         Returns:
@@ -82,7 +81,7 @@ class NetworkManager:
         except (subprocess.SubprocessError, subprocess.TimeoutExpired):
             return None
 
-    def _get_ip_address(self) -> Optional[str]:
+    def _get_ip_address(self) -> str | None:
         """Get the current IP address.
 
         Returns:
@@ -98,7 +97,7 @@ class NetworkManager:
         except Exception:
             return None
 
-    def _get_signal_strength(self) -> Optional[int]:
+    def _get_signal_strength(self) -> int | None:
         """Get the current WiFi signal strength.
 
         Returns:

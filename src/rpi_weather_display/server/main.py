@@ -1,11 +1,8 @@
 import argparse
-import asyncio
-import logging
 import tempfile
 from pathlib import Path
-from typing import Dict, Optional
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
@@ -30,7 +27,7 @@ class RenderRequest(BaseModel):
     """Request model for rendering weather image."""
 
     battery: BatteryInfo
-    metrics: Dict[str, float] = {}
+    metrics: dict[str, float] = {}
 
 
 class WeatherDisplayServer:
@@ -121,7 +118,7 @@ class WeatherDisplayServer:
             self.logger.error(f"Error rendering weather image: {e}")
             raise HTTPException(status_code=500, detail=str(e))
 
-    async def _handle_weather(self) -> Dict:
+    async def _handle_weather(self) -> dict:
         """Handle weather data request.
 
         Returns:

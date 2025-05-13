@@ -1,6 +1,5 @@
 from datetime import datetime
-from enum import Enum, auto
-from typing import Dict, Optional
+from enum import Enum
 
 from pydantic import BaseModel, Field
 
@@ -20,7 +19,7 @@ class BatteryStatus(BaseModel):
     current: float  # mA
     temperature: float  # Celsius
     state: BatteryState = BatteryState.UNKNOWN
-    time_remaining: Optional[int] = None  # Minutes
+    time_remaining: int | None = None  # Minutes
 
     @property
     def is_low(self) -> bool:
@@ -44,10 +43,10 @@ class NetworkState(str, Enum):
 class NetworkStatus(BaseModel):
     """Network status information."""
     state: NetworkState = NetworkState.DISCONNECTED
-    ssid: Optional[str] = None
-    ip_address: Optional[str] = None
-    signal_strength: Optional[int] = None  # dBm
-    last_connection: Optional[datetime] = None
+    ssid: str | None = None
+    ip_address: str | None = None
+    signal_strength: int | None = None  # dBm
+    last_connection: datetime | None = None
 
 
 class SystemStatus(BaseModel):
@@ -61,5 +60,5 @@ class SystemStatus(BaseModel):
     battery: BatteryStatus
     network: NetworkStatus
     last_updated: datetime = Field(default_factory=datetime.now)
-    last_refresh: Optional[datetime] = None
-    metrics: Dict[str, float] = Field(default_factory=dict)
+    last_refresh: datetime | None = None
+    metrics: dict[str, float] = Field(default_factory=dict)

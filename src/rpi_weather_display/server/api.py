@@ -1,6 +1,5 @@
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple, Union
 
 import httpx
 
@@ -29,10 +28,10 @@ class WeatherAPIClient:
         """
         self.config = config
         self.logger = logging.getLogger(__name__)
-        self._last_forecast: Optional[WeatherData] = None
-        self._last_update: Optional[datetime] = None
+        self._last_forecast: WeatherData | None = None
+        self._last_update: datetime | None = None
 
-    async def get_coordinates(self) -> Tuple[float, float]:
+    async def get_coordinates(self) -> tuple[float, float]:
         """Get latitude and longitude from city name if needed.
 
         Returns:

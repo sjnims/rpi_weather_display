@@ -1,18 +1,13 @@
 import argparse
-import logging
-import os
 import tempfile
 from pathlib import Path
-from typing import Optional
 
 import requests
-from PIL import Image
 
 from rpi_weather_display.client.display import EPaperDisplay
 from rpi_weather_display.client.power import PowerManager
 from rpi_weather_display.client.scheduler import Scheduler
 from rpi_weather_display.models.config import AppConfig
-from rpi_weather_display.models.system import BatteryStatus, SystemStatus
 from rpi_weather_display.utils.logging import setup_logging
 
 
