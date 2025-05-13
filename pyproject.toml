@@ -31,7 +31,7 @@ pytest-benchmark = "^4.0.0"
 pytest-xdist = "^3.3.1"
 pytest-html = "^4.1.1"
 hypothesis = "^6.87.1"
-ruff = "^0.1.5"
+ruff = "^0.5.3"
 pyright = "^1.1.334"
 pre-commit = "^3.5.0"
 

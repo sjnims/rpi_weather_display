@@ -94,10 +94,10 @@
 ## Project structure
 
 - Follow the src-layout pattern (src/package_name/) for better packaging, e.g. `src/rpi-weather-display/`
-  - Use `src/rpi-weather-display/client/` for client code.
-  - Use `src/rpi-weather-display/server/` for server code.
-  - Use `src/rpi-weather-display/utils/` for shared code between client and server.
-  - Use `src/rpi-weather-display/models/` for data models.
+  - Use `src/rpi_weather_display/client/` for client code.
+  - Use `src/rpi_weather_display/server/` for server code.
+  - Use `src/rpi_weather_display/utils/` for shared code between client and server.
+  - Use `src/rpi_weather_display/models/` for data models.
 - Use `tests/` directory for unit tests.
 - Use `pyproject.toml` for configuration (PEP 621)
 - Include standard files (README.md, CHANGELOG.md, LICENSE)
