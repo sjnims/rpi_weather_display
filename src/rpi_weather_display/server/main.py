@@ -10,6 +10,7 @@ fetches weather data, renders images, and provides preview capabilities.
 
 import argparse
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -42,15 +43,49 @@ class RenderRequest(BaseModel):
     metrics: dict[str, float] = {}
 
 
+class RealFileSystem:
+    """File system implementation using actual file system operations."""
+
+    def exists(self, path: Path) -> bool:
+        """Check if a path exists.
+
+        Args:
+            path: Path to check.
+
+        Returns:
+            True if the path exists, False otherwise.
+        """
+        return path.exists()
+
+    def is_dir(self, path: Path) -> bool:
+        """Check if a path is a directory.
+
+        Args:
+            path: Path to check.
+
+        Returns:
+            True if the path is a directory, False otherwise.
+        """
+        return path.is_dir()
+
+
 class WeatherDisplayServer:
     """Main server application for the weather display."""
 
-    def __init__(self, config_path: Path) -> None:
+    def __init__(
+        self,
+        config_path: Path,
+        file_system: RealFileSystem | None = None,
+        app_factory: Callable[[], FastAPI] = lambda: FastAPI(title="Weather Display Server"),
+    ) -> None:
         """Initialize the server.
 
         Args:
             config_path: Path to configuration file.
+            file_system: Optional custom file system handler (useful for testing).
+            app_factory: Optional factory function to create FastAPI app.
         """
+        self.file_system = file_system or RealFileSystem()
         # Load configuration
         self.config = AppConfig.from_yaml(config_path)
 
@@ -58,15 +93,28 @@ class WeatherDisplayServer:
         self.logger = setup_logging(self.config.logging, "server")
 
         # Create FastAPI app
-        self.app = FastAPI(title="Weather Display Server")
+        self.app = app_factory()
 
         # Initialize components
         self.api_client = WeatherAPIClient(self.config.weather)
 
         # Template directory
-        self.template_dir = Path(__file__).parent.parent.parent.parent / "templates"
-        if not self.template_dir.exists():
-            self.template_dir = Path("/etc/rpi-weather-display/templates")
+        self.template_dir = self._find_directory(
+            "templates",
+            [
+                Path(__file__).parent.parent.parent.parent / "templates",
+                Path("/etc/rpi-weather-display/templates"),
+            ],
+        )
+
+        # Static directory
+        self.static_dir = self._find_directory(
+            "static",
+            [
+                Path(__file__).parent.parent.parent.parent / "static",
+                Path("/etc/rpi-weather-display/static"),
+            ],
+        )
 
         # Initialize renderer
         self.renderer = WeatherRenderer(self.config, self.template_dir)
@@ -79,17 +127,7 @@ class WeatherDisplayServer:
         self._setup_routes()
 
         # Set up static files handling
-        static_dir = Path(__file__).parent.parent.parent.parent / "static"
-        if static_dir.exists():
-            self.app.mount("/static", StaticFiles(directory=static_dir), name="static")
-        else:
-            alt_static_dir = Path("/etc/rpi-weather-display/static")
-            if alt_static_dir.exists():
-                self.app.mount("/static", StaticFiles(directory=alt_static_dir), name="static")
-            else:
-                self.logger.warning(
-                    "Static files directory not found. Some resources may not load correctly."
-                )
+        self._setup_static_files()
 
         self.logger.info("Weather Display Server initialized")
 
@@ -183,6 +221,34 @@ class WeatherDisplayServer:
         except Exception as e:
             self.logger.error(f"Error getting weather data: {e}")
             raise HTTPException(status_code=500, detail=str(e)) from e
+
+    def _find_directory(self, name: str, candidates: list[Path]) -> Path:
+        """Find a directory from a list of candidates.
+
+        Args:
+            name: Name of directory for logging.
+            candidates: List of paths to check in order.
+
+        Returns:
+            The first existing path, or the first candidate if none exist.
+        """
+        for path in candidates:
+            if self.file_system.exists(path):
+                return path
+
+        self.logger.warning(
+            f"{name.capitalize()} directory not found. Some resources may not load correctly."
+        )
+        return candidates[0]  # Return first candidate as default
+
+    def _setup_static_files(self) -> None:
+        """Set up static files handling."""
+        if self.static_dir and self.file_system.exists(self.static_dir):
+            self.app.mount("/static", StaticFiles(directory=self.static_dir), name="static")
+        else:
+            self.logger.warning(
+                "Static files directory not found. Some resources may not load correctly."
+            )
 
     def run(self, host: str | None = None, port: int | None = None) -> None:
         """Run the server.
