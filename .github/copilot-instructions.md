@@ -93,7 +93,7 @@
 
 ## Project structure
 
-- Follow the src-layout pattern (src/package_name/) for better packaging, e.g. `src/rpi-weather-display/`
+- Follow the src-layout pattern (src/package_name/) for better packaging, e.g. `src/rpi_weather_display/`
   - Use `src/rpi_weather_display/client/` for client code.
   - Use `src/rpi_weather_display/server/` for server code.
   - Use `src/rpi_weather_display/utils/` for shared code between client and server.
@@ -196,7 +196,7 @@
 - Use GitHub Actions for continuous integration.
 - Automate testing, linting, and type checking.
 - Implement automated deployment to the Docker container.
-  - Use Docker image tags to version releases (e.g., `weather-display:v1.0.0`).
+  - Use Docker image tags to version releases (e.g., `rpi-weather-display:v1.0.0`).
   - Deploy updates using rolling updates to minimize downtime.
   - Example GitHub Actions workflow for deployment:
     ```yaml
@@ -212,9 +212,9 @@
           - name: Check out code
             uses: actions/checkout@v3
           - name: Build Docker image
-            run: docker build -t weather-display:${{ github.sha }} .
+            run: docker build -t rpi-weather-display:${{ github.sha }} .
           - name: Push Docker image
-            run: docker push weather-display:${{ github.sha }}
+            run: docker push rpi-weather-display:${{ github.sha }}
     ```
 - Add status badges to `README.md` to indicate build and test status.
 - Include a staging environment for testing updates before production deployment.

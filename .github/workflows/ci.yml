@@ -117,7 +117,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v4
         with:
-          images: ghcr.io/${{ github.repository }}/weather-display
+          images: ghcr.io/${{ github.repository }}/rpi-weather-display
           tags: |
             type=sha,format=short
             type=ref,event=branch

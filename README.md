@@ -90,16 +90,16 @@ sudo bash deploy/scripts/optimize-power.sh
 
 1. Build Docker image:
    ```bash
-   docker build -t weather-display-server .
+   docker build -t rpi-weather-display-server .
    ```
 
 2. Run Docker container:
    ```bash
    docker run -d \
-     --name weather-display \
+     --name rpi-weather-display \
      -p 8000:8000 \
      -v /path/to/config.yaml:/etc/rpi-weather-display/config.yaml \
-     weather-display-server
+     rpi-weather-display-server
    ```
 
 ## Development

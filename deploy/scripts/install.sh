@@ -7,16 +7,16 @@
 # The script:
 #   • installs Python 3.11 + Poetry
 #   • clones the repository and installs dependencies via Poetry
-#   • deploys /etc/systemd/system/weather-display.service
+#   • deploys /etc/systemd/system/rpi-weather-display.service
 #   • applies power‑saving tweaks via the optimize-power.sh script
 #   • reboots once everything is configured
 set -euo pipefail
 
-readonly REPO="sjnims/raspberry-pi-weather-display"
+readonly REPO="sjnims/rpi_weather_display"
 readonly VERSION="${VERSION:-latest}"
 readonly INSTALL_DIR="/opt/rpiweather"
 readonly VENV_DIR="${INSTALL_DIR}/venv"
-readonly SERVICE_FILE="/etc/systemd/system/weather-display.service"
+readonly SERVICE_FILE="/etc/systemd/system/rpi-weather-display.service"
 
 info()  { echo -e "\e[32m[install]\e[0m $1"; }
 warn()  { echo -e "\e[33m[install]\e[0m $1"; }
@@ -73,7 +73,7 @@ WantedBy=multi-user.target
 EOF
 
 sudo systemctl daemon-reload
-sudo systemctl enable weather-display.service
+sudo systemctl enable rpi-weather-display.service
 
 ###############################################################################
 # 5. Apply comprehensive power optimizations                                  #

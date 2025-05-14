@@ -38,7 +38,7 @@ class WeatherDisplayClient:
         self.scheduler = Scheduler(self.config)
 
         # Image cache path
-        self.cache_dir = Path(tempfile.gettempdir()) / "weather-display"
+        self.cache_dir = Path(tempfile.gettempdir()) / "rpi-weather-display"
         self.cache_dir.mkdir(exist_ok=True)
         self.current_image_path = self.cache_dir / "current.png"
 
