@@ -5,6 +5,7 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+MagicMock/
 
 # Build artifacts
 *.so
@@ -39,6 +40,9 @@ tmp/
 .coverage.*
 htmlcov/
 .tox/
+.pytest_cache/
+.ruff_cache/
+cov_annotate/
 
 # OS and editor files
 .DS_Store
@@ -54,6 +58,3 @@ Thumbs.db
 # Cursor - keep settings but ignore other files
 **/.cursor/*
 !**/.cursor/settings.json
-
-# Docker
-.dockerignore
