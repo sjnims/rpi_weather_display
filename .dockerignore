@@ -1,0 +1,56 @@
+# Version control
+.git/
+.gitignore
+.github/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.benchmarks/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# Development environments
+.vscode/
+.idea/
+.cursor/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Temporary files
+*.log
+*.tmp
+tmp/
+temp/
+
+# Local development files
+config.yaml
+*.env
+
+# Test directories and data
+tests/
+test_*
+MagicMock/
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# macOS specific
+.DS_Store
+
+# Deployment scripts (not needed in container)
+deploy/
