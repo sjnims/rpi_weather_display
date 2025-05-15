@@ -3,8 +3,8 @@
 Provides abstraction for interacting with the Waveshare e-paper display,
 handling image rendering, partial refreshes, and power management.
 """
-# ruff: noqa: S101
-# ^ Ignores "Use of assert detected" - assertions are used for type checking only
+# ruff: noqa: S101, ANN401
+# ^ Ignores "Use of assert detected" and "Any type" warnings
 
 from pathlib import Path
 from typing import Any, TypeVar
@@ -19,6 +19,26 @@ AutoEPDDisplayType = TypeVar("AutoEPDDisplayType")
 # pyright: reportUnknownVariableType=false
 # pyright: reportUnknownArgumentType=false
 # pyright: reportUnknownMemberType=false
+
+
+def _import_it8951() -> Any | None:
+    """Import IT8951 library or return None if not available."""
+    try:
+        from IT8951.display import AutoEPDDisplay  # type: ignore
+
+        return AutoEPDDisplay
+    except ImportError:
+        return None
+
+
+def _import_numpy() -> Any | None:
+    """Import numpy or return None if not available."""
+    try:
+        import numpy as np  # type: ignore
+
+        return np
+    except ImportError:
+        return None
 
 
 class EPaperDisplay:
@@ -42,23 +62,22 @@ class EPaperDisplay:
         """
         try:
             # Try to import the IT8951 library, which is only available on Raspberry Pi
-            from IT8951.display import AutoEPDDisplay  # type: ignore
+            auto_epd_display = _import_it8951()
+            if not auto_epd_display:
+                print("Warning: IT8951 library not available. Using mock display.")
+                self._initialized = False
+                return
 
             # Initialize the display
-            self._display = AutoEPDDisplay(vcom=-2.06)
-            # PyRight doesn't know that self._display is now not None, so we need an assertion
-            assert self._display is not None
-            self._display.clear()
+            self._display = auto_epd_display(vcom=-2.06)
+            if self._display:
+                self._display.clear()
 
-            # Set rotation
-            if self.config.rotate in [0, 90, 180, 270]:
-                self._display.epd.set_rotation(self.config.rotate // 90)
+                # Set rotation
+                if self.config.rotate in [0, 90, 180, 270]:
+                    self._display.epd.set_rotation(self.config.rotate // 90)
 
             self._initialized = True
-        except ImportError:
-            # When running on development machine, print message
-            print("Warning: IT8951 library not available. Using mock display.")
-            self._initialized = False
         except Exception as e:
             # Log any other exceptions
             print(f"Error initializing display: {e}")
@@ -66,7 +85,7 @@ class EPaperDisplay:
 
     def _check_initialized(self) -> None:
         """Check if the display is initialized."""
-        if not self._initialized and not self._display:
+        if not self._initialized:
             raise RuntimeError("Display not initialized. Call initialize() first.")
 
     def clear(self) -> None:
@@ -130,6 +149,29 @@ class EPaperDisplay:
         except Exception as e:
             print(f"Error displaying image: {e}")
 
+    def _get_bbox_dimensions(
+        self, non_zero: tuple[list[int], list[int]], diff_shape: tuple[int, int]
+    ) -> tuple[int, int, int, int] | None:
+        """Calculate the dimensions of the bounding box.
+
+        Args:
+            non_zero: Tuple of arrays with non-zero indices
+            diff_shape: Shape of the difference array
+
+        Returns:
+            Bounding box as (left, top, right, bottom) or None
+        """
+        np = _import_numpy()
+        if not np:
+            return None
+
+        left = max(0, int(np.min(non_zero[1])) - 5)  # Add margin
+        top = max(0, int(np.min(non_zero[0])) - 5)
+        right = min(int(diff_shape[1]), int(np.max(non_zero[1])) + 5)
+        bottom = min(int(diff_shape[0]), int(np.max(non_zero[0])) + 5)
+
+        return (left, top, right, bottom)
+
     def _calculate_diff_bbox(
         self, old_image: Image.Image, new_image: Image.Image
     ) -> tuple[int, int, int, int] | None:
@@ -143,7 +185,9 @@ class EPaperDisplay:
             Tuple of (left, top, right, bottom) or None if no significant differences.
         """
         try:
-            import numpy as np  # type: ignore
+            np = _import_numpy()
+            if not np:
+                return None
 
             # Convert to numpy arrays
             old_array = np.array(old_image)
@@ -163,27 +207,16 @@ class EPaperDisplay:
             if len(non_zero[0]) == 0:
                 return None
 
-            # Calculate bounding box
-            left = max(0, int(np.min(non_zero[1])) - 5)  # Add margin
-            top = max(0, int(np.min(non_zero[0])) - 5)
-            right = min(int(diff.shape[1]), int(np.max(non_zero[1])) + 5)
-            bottom = min(int(diff.shape[0]), int(np.max(non_zero[0])) + 5)
-
-            return (left, top, right, bottom)
-        except ImportError:
-            # numpy not available, return None
-            return None
+            # Calculate and return bounding box
+            return self._get_bbox_dimensions(non_zero, diff.shape)
         except Exception as e:
             print(f"Error calculating diff bbox: {e}")
             return None
 
     def sleep(self) -> None:
         """Put the display to sleep (deep sleep mode)."""
-        if self._initialized and self._display:
-            # Some e-paper displays have a sleep command
+        if self._initialized and self._display and hasattr(self._display, "epd"):
             try:
-                # PyRight doesn't know that self._display is not None, so we need an assertion
-                assert self._display is not None
                 self._display.epd.sleep()
             except AttributeError:
                 # If sleep not available, we'll just leave it as is
