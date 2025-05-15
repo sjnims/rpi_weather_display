@@ -380,3 +380,439 @@ class TestNetworkManager:
         # Verify result
         assert result is False
         mock_create_connection.assert_called_once()
+
+    def test_set_app_config(self, network_manager: NetworkManager, app_config: AppConfig) -> None:
+        """Test set_app_config method."""
+        # Initially app_config is None
+        assert network_manager.app_config is None
+
+        # Set app_config
+        network_manager.set_app_config(app_config)
+
+        # Verify app_config was set
+        assert network_manager.app_config is app_config
+
+    @patch("subprocess.run")
+    @patch("pathlib.Path.exists")
+    def test_get_ssid_success(
+        self, mock_exists: MagicMock, mock_run: MagicMock, network_manager: NetworkManager
+    ) -> None:
+        """Test _get_ssid method with successful execution."""
+        # Mock path.exists to return True
+        mock_exists.return_value = True
+
+        # Mock subprocess result
+        mock_process = MagicMock()
+        mock_process.returncode = 0
+        mock_process.stdout = "test_ssid\n"
+        mock_run.return_value = mock_process
+
+        # Call the method
+        ssid = network_manager._get_ssid()  # type: ignore
+
+        # Verify result and method calls
+        assert ssid == "test_ssid"
+        mock_run.assert_called_with(
+            [str(Path(IWGETID_PATH)), "-r"],
+            capture_output=True,
+            text=True,
+            timeout=network_manager.config.wifi_timeout_seconds,
+            shell=False,
+        )
+
+    @patch("subprocess.run")
+    @patch("pathlib.Path.exists")
+    def test_get_ssid_command_not_found(
+        self, mock_exists: MagicMock, mock_run: MagicMock, network_manager: NetworkManager
+    ) -> None:
+        """Test _get_ssid method when command is not found."""
+        # Mock path.exists to return False (command not found)
+        mock_exists.return_value = False
+
+        # Call the method
+        ssid = network_manager._get_ssid()  # type: ignore
+
+        # Verify result and that subprocess was not called
+        assert ssid is None
+        mock_run.assert_not_called()
+
+    @patch("subprocess.run")
+    @patch("pathlib.Path.exists")
+    def test_get_ssid_command_error(
+        self, mock_exists: MagicMock, mock_run: MagicMock, network_manager: NetworkManager
+    ) -> None:
+        """Test _get_ssid method when command returns an error."""
+        # Mock path.exists to return True
+        mock_exists.return_value = True
+
+        # Mock subprocess result with error
+        mock_process = MagicMock()
+        mock_process.returncode = 1
+        mock_process.stdout = ""
+        mock_run.return_value = mock_process
+
+        # Call the method
+        ssid = network_manager._get_ssid()  # type: ignore
+
+        # Verify result
+        assert ssid is None
+
+    @patch("subprocess.run")
+    @patch("pathlib.Path.exists")
+    def test_get_ssid_subprocess_exception(
+        self, mock_exists: MagicMock, mock_run: MagicMock, network_manager: NetworkManager
+    ) -> None:
+        """Test _get_ssid method when subprocess throws an exception."""
+        # Mock path.exists to return True
+        mock_exists.return_value = True
+
+        # Mock subprocess to raise exception
+        mock_run.side_effect = subprocess.TimeoutExpired(cmd="test", timeout=1)
+
+        # Call the method
+        ssid = network_manager._get_ssid()  # type: ignore
+
+        # Verify result
+        assert ssid is None
+
+    @patch("socket.socket")
+    def test_get_ip_address_success(
+        self, mock_socket: MagicMock, network_manager: NetworkManager
+    ) -> None:
+        """Test _get_ip_address method with successful execution."""
+        # Set up the mock socket
+        mock_sock_instance = MagicMock()
+        mock_sock_instance.getsockname.return_value = ("192.168.1.5", 12345)
+
+        # Configure the mock socket context manager
+        mock_socket.return_value.__enter__.return_value = mock_sock_instance
+
+        # Call the method
+        ip = network_manager._get_ip_address()  # type: ignore
+
+        # Verify result
+        assert ip == "192.168.1.5"
+        mock_sock_instance.connect.assert_called_with(("10.255.255.255", 1))
+
+    @patch("socket.socket")
+    def test_get_ip_address_exception(
+        self, mock_socket: MagicMock, network_manager: NetworkManager
+    ) -> None:
+        """Test _get_ip_address method when an exception occurs."""
+        # Set up the mock socket to raise an exception
+        mock_socket.return_value.__enter__.side_effect = OSError("Test socket error")
+
+        # Call the method
+        ip = network_manager._get_ip_address()  # type: ignore
+
+        # Verify result
+        assert ip is None
+
+    @patch("subprocess.run")
+    @patch("pathlib.Path.exists")
+    def test_get_signal_strength_success(
+        self, mock_exists: MagicMock, mock_run: MagicMock, network_manager: NetworkManager
+    ) -> None:
+        """Test _get_signal_strength method with successful execution."""
+        # Mock path.exists to return True
+        mock_exists.return_value = True
+
+        # Mock subprocess result
+        mock_process = MagicMock()
+        mock_process.returncode = 0
+        mock_process.stdout = (
+            'wlan0   IEEE 802.11  ESSID:"TestWifi"\n'
+            "          Mode:Managed  Frequency:2.412 GHz  Access Point: 12:34:56:78:9A:BC\n"
+            "          Signal level=-68 dBm  Noise level=0 dBm\n"
+            "          Rx invalid nwid:0  Rx invalid crypt:0  Rx invalid frag:0\n"
+        )
+        mock_run.return_value = mock_process
+
+        # Call the method
+        signal = network_manager._get_signal_strength()  # type: ignore
+
+        # Verify result and method calls
+        assert signal == -68
+        mock_run.assert_called_with(
+            [str(Path(IWCONFIG_PATH)), "wlan0"],
+            capture_output=True,
+            text=True,
+            timeout=network_manager.config.wifi_timeout_seconds,
+            shell=False,
+        )
+
+    @patch("subprocess.run")
+    @patch("pathlib.Path.exists")
+    def test_get_signal_strength_command_not_found(
+        self, mock_exists: MagicMock, mock_run: MagicMock, network_manager: NetworkManager
+    ) -> None:
+        """Test _get_signal_strength method when command is not found."""
+        # Mock path.exists to return False (command not found)
+        mock_exists.return_value = False
+
+        # Call the method
+        signal = network_manager._get_signal_strength()  # type: ignore
+
+        # Verify result and that subprocess was not called
+        assert signal is None
+        mock_run.assert_not_called()
+
+    @patch("subprocess.run")
+    @patch("pathlib.Path.exists")
+    def test_get_signal_strength_parse_error(
+        self, mock_exists: MagicMock, mock_run: MagicMock, network_manager: NetworkManager
+    ) -> None:
+        """Test _get_signal_strength method when parsing fails."""
+        # Mock path.exists to return True
+        mock_exists.return_value = True
+
+        # Mock subprocess result with malformed output
+        mock_process = MagicMock()
+        mock_process.returncode = 0
+        mock_process.stdout = (
+            'wlan0   IEEE 802.11  ESSID:"TestWifi"\n'
+            "          Mode:Managed  Frequency:2.412 GHz  Access Point: 12:34:56:78:9A:BC\n"
+            "          Signal quality=50/100  Signal level=bad dBm\n"
+        )  # Malformed signal level
+        mock_run.return_value = mock_process
+
+        # Call the method
+        signal = network_manager._get_signal_strength()  # type: ignore
+
+        # Verify result
+        assert signal is None
+
+    @patch("subprocess.run")
+    @patch("pathlib.Path.exists")
+    def test_get_signal_strength_command_error(
+        self, mock_exists: MagicMock, mock_run: MagicMock, network_manager: NetworkManager
+    ) -> None:
+        """Test _get_signal_strength method when command returns an error."""
+        # Mock path.exists to return True
+        mock_exists.return_value = True
+
+        # Mock subprocess result with error
+        mock_process = MagicMock()
+        mock_process.returncode = 1
+        mock_process.stdout = "Device not found"
+        mock_run.return_value = mock_process
+
+        # Call the method
+        signal = network_manager._get_signal_strength()  # type: ignore
+
+        # Verify result
+        assert signal is None
+
+    @patch("subprocess.run")
+    @patch("pathlib.Path.exists")
+    def test_get_signal_strength_subprocess_exception(
+        self, mock_exists: MagicMock, mock_run: MagicMock, network_manager: NetworkManager
+    ) -> None:
+        """Test _get_signal_strength method when subprocess throws an exception."""
+        # Mock path.exists to return True
+        mock_exists.return_value = True
+
+        # Mock subprocess to raise exception
+        mock_run.side_effect = subprocess.TimeoutExpired(cmd="test", timeout=1)
+
+        # Call the method
+        signal = network_manager._get_signal_strength()  # type: ignore
+
+        # Verify result
+        assert signal is None
+
+    @patch("subprocess.run")
+    @patch("pathlib.Path.exists")
+    def test_get_signal_strength_value_error(
+        self, mock_exists: MagicMock, mock_run: MagicMock, network_manager: NetworkManager
+    ) -> None:
+        """Test _get_signal_strength method when parsing signal level fails."""
+        # Mock path.exists to return True
+        mock_exists.return_value = True
+
+        # Mock subprocess result with signal level that causes ValueError during int conversion
+        mock_process = MagicMock()
+        mock_process.returncode = 0
+        mock_process.stdout = (
+            'wlan0   IEEE 802.11  ESSID:"TestWifi"\n'
+            "          Mode:Managed  Frequency:2.412 GHz  Access Point: 12:34:56:78:9A:BC\n"
+            "          Signal level=invalid dBm\n"
+        )  # Will cause ValueError
+        mock_run.return_value = mock_process
+
+        # Call the method
+        signal = network_manager._get_signal_strength()  # type: ignore
+
+        # Verify result
+        assert signal is None
+
+    @patch("subprocess.run")
+    @patch("pathlib.Path.exists")
+    def test_enable_wifi_command_not_found(
+        self, mock_exists: MagicMock, mock_run: MagicMock, network_manager: NetworkManager
+    ) -> None:
+        """Test _enable_wifi method when commands are not found."""
+        # Mock sequence of path.exists for sudo and ifconfig
+        mock_exists.side_effect = [False, True]  # sudo not found, ifconfig found
+
+        # Call the method
+        network_manager._enable_wifi()  # type: ignore
+
+        # Verify subprocess was not called
+        mock_run.assert_not_called()
+
+        # Reset mock for another test
+        mock_exists.reset_mock()
+        mock_exists.side_effect = [True, False]  # sudo found, ifconfig not found
+
+        # Call the method again
+        network_manager._enable_wifi()  # type: ignore
+
+        # Verify subprocess was not called
+        mock_run.assert_not_called()
+
+    @patch("subprocess.run")
+    @patch("pathlib.Path.exists")
+    def test_get_signal_strength_index_error(
+        self, mock_exists: MagicMock, mock_run: MagicMock, network_manager: NetworkManager
+    ) -> None:
+        """Test _get_signal_strength method when index error occurs during parsing."""
+        # Mock path.exists to return True
+        mock_exists.return_value = True
+
+        # Mock subprocess result with output that would cause an IndexError during parsing
+        mock_process = MagicMock()
+        mock_process.returncode = 0
+        mock_process.stdout = (
+            'wlan0   IEEE 802.11  ESSID:"TestWifi"\n'
+            "          Mode:Managed  Frequency:2.412 GHz  Access Point: 12:34:56:78:9A:BC\n"
+            "          Signal level=\n"
+        )  # Will cause IndexError when splitting
+        mock_run.return_value = mock_process
+
+        # Call the method
+        signal = network_manager._get_signal_strength()  # type: ignore
+
+        # Verify result
+        assert signal is None
+
+    @patch("subprocess.run")
+    @patch("pathlib.Path.exists")
+    def test_get_signal_strength_branch_conditions(
+        self, mock_exists: MagicMock, mock_run: MagicMock, network_manager: NetworkManager
+    ) -> None:
+        """Test different branch conditions in _get_signal_strength method."""
+        # Mock path.exists to return True
+        mock_exists.return_value = True
+
+        # Test branch where line contains "Signal level" but splitting doesn't yield expected parts
+        mock_process = MagicMock()
+        mock_process.returncode = 0
+        mock_process.stdout = (
+            'wlan0   IEEE 802.11  ESSID:"TestWifi"\n' "          Signal level\n"
+        )  # No equals sign, will skip over
+        mock_run.return_value = mock_process
+
+        # Call the method
+        signal = network_manager._get_signal_strength()  # type: ignore
+
+        # Verify result is None because no valid signal was found
+        assert signal is None
+
+    def test_get_ip_address_os_error(self, network_manager: NetworkManager) -> None:
+        """Test _get_ip_address method with OSError from socket."""
+        # Using real socket but with an invalid IP to trigger OSError
+        with patch("socket.socket.connect", side_effect=OSError("Network unreachable")):
+            # Call the method
+            ip = network_manager._get_ip_address()  # type: ignore
+
+            # Verify result
+            assert ip is None
+
+    @patch("socket.create_connection")
+    def test_check_connectivity_oserror(
+        self, mock_create_connection: MagicMock, network_manager: NetworkManager
+    ) -> None:
+        """Test _check_connectivity when connection raises OSError."""
+        # Mock OSError (not just TimeoutError)
+        mock_create_connection.side_effect = OSError("Network unreachable")
+
+        # Test method
+        result = network_manager._check_connectivity()  # type: ignore
+
+        # Verify result
+        assert result is False
+        mock_create_connection.assert_called_once()
+
+    @patch("subprocess.run")
+    @patch("pathlib.Path.exists")
+    def test_enable_wifi_subprocess_error(
+        self, mock_exists: MagicMock, mock_run: MagicMock, network_manager: NetworkManager
+    ) -> None:
+        """Test _enable_wifi method when subprocess throws an error."""
+        # Mock paths exist
+        mock_exists.return_value = True
+
+        # Configure subprocess to raise SubprocessError
+        mock_run.side_effect = subprocess.SubprocessError("Test subprocess error")
+
+        # Call the method - it should handle the exception
+        network_manager._enable_wifi()  # type: ignore
+
+        # Verify subprocess was called
+        mock_run.assert_called_once()
+
+    @patch("socket.create_connection")
+    def test_ensure_connectivity_no_app_config(
+        self,
+        mock_create_connection: MagicMock,
+        network_manager: NetworkManager,
+    ) -> None:
+        """Test ensure_connectivity when app_config is None."""
+        # Ensure app_config is None
+        assert network_manager.app_config is None
+
+        # Mock successful connection
+        with (
+            patch.object(network_manager, "_check_connectivity", return_value=True),
+            patch.object(network_manager, "_enable_wifi"),
+            patch.object(network_manager, "_disable_wifi") as mock_disable_wifi,
+        ):
+            # Test context manager
+            with network_manager.ensure_connectivity():
+                pass
+
+            # Verify disable_wifi was called (since app_config is None)
+            mock_disable_wifi.assert_called_once()
+
+    @patch("pathlib.Path.exists")
+    def test_disable_wifi_both_commands_not_found(
+        self, mock_exists: MagicMock, network_manager: NetworkManager
+    ) -> None:
+        """Test _disable_wifi when both sudo and ifconfig commands are not found."""
+        # Mock both commands not found
+        mock_exists.return_value = False
+
+        # Call the method - should handle gracefully
+        network_manager._disable_wifi()  # type: ignore
+
+    @patch("subprocess.run")
+    @patch("pathlib.Path.exists")
+    def test_get_ssid_empty_output(
+        self, mock_exists: MagicMock, mock_run: MagicMock, network_manager: NetworkManager
+    ) -> None:
+        """Test _get_ssid method with empty output but success code."""
+        # Mock path.exists to return True
+        mock_exists.return_value = True
+
+        # Mock subprocess result with empty output but success code
+        mock_process = MagicMock()
+        mock_process.returncode = 0
+        mock_process.stdout = ""  # Empty output
+        mock_run.return_value = mock_process
+
+        # Call the method
+        ssid = network_manager._get_ssid()  # type: ignore
+
+        # Verify result is None despite success code
+        assert ssid is None
