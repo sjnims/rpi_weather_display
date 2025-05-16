@@ -27,6 +27,7 @@ from rpi_weather_display.models.config import (
 )
 from rpi_weather_display.models.system import BatteryState, BatteryStatus
 from rpi_weather_display.models.weather import (
+    AirPollutionData,
     CurrentWeather,
     DailyFeelsLike,
     DailyTemp,
@@ -1901,3 +1902,56 @@ class TestWeatherRenderer:
             assert context["uvi_time"] == renderer._format_time(
                 datetime.fromtimestamp(mock_timestamp), context["config"].display.time_format
             )
+
+    @pytest.mark.asyncio()
+    async def test_air_quality_label_conversion(self, renderer: WeatherRenderer) -> None:
+        """Test that the AQI numeric value is correctly converted to a descriptive label."""
+        # Create test weather data with air pollution data
+        weather_data = MagicMock(spec=WeatherData)
+        weather_data.current = MagicMock(spec=CurrentWeather)
+        weather_data.current.weather = [MagicMock(spec=WeatherCondition)]
+        weather_data.current.weather[0].id = 800
+        weather_data.current.weather[0].icon = "01d"
+        weather_data.current.pressure = 1013
+        weather_data.current.wind_speed = 3.0
+        weather_data.daily = []
+        weather_data.hourly = []
+
+        # Create air pollution data with AQI value
+        air_pollution = MagicMock(spec=AirPollutionData)
+
+        # Create battery status
+        battery_status = BatteryStatus(
+            level=80, voltage=3.9, current=0.0, temperature=25.0, state=BatteryState.DISCHARGING
+        )
+
+        # Mock template
+        mock_template = MagicMock()
+        mock_template.render.return_value = "<html>Air Quality Test</html>"
+
+        with patch.object(renderer.jinja_env, "get_template", return_value=mock_template):
+            # Test each AQI value
+            for aqi_value, expected_label in [
+                (1, "Good"),
+                (2, "Fair"),
+                (3, "Moderate"),
+                (4, "Poor"),
+                (5, "Very Poor"),
+                (6, "Unknown"),  # Unexpected value
+            ]:
+                # Set the AQI value for this test case
+                air_pollution.aqi = aqi_value
+                weather_data.air_pollution = air_pollution
+
+                # Generate HTML
+                await renderer.generate_html(weather_data, battery_status)
+
+                # Verify the rendered template was called with the correct AQI label
+                context = mock_template.render.call_args[1]
+                assert context["aqi"] == expected_label
+
+            # Test with no air pollution data
+            weather_data.air_pollution = None
+            await renderer.generate_html(weather_data, battery_status)
+            context = mock_template.render.call_args[1]
+            assert context["aqi"] == "Unknown"

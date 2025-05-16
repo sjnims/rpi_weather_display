@@ -230,7 +230,26 @@ class WeatherRenderer:
                     uvi_time = self._format_time(
                         datetime.fromtimestamp(max_uvi_timestamp), time_format
                     )
-            aqi = "Good"  # Mock value - would need air quality
+
+            # Air quality assessment based on AQI value
+            if hasattr(weather_data, "air_pollution") and weather_data.air_pollution is not None:
+                aqi_value = weather_data.air_pollution.aqi
+                # Convert AQI numeric value to descriptive label based on OpenWeatherMap scale
+                if aqi_value == 1:
+                    aqi = "Good"
+                elif aqi_value == 2:
+                    aqi = "Fair"
+                elif aqi_value == 3:
+                    aqi = "Moderate"
+                elif aqi_value == 4:
+                    aqi = "Poor"
+                elif aqi_value == 5:
+                    aqi = "Very Poor"
+                else:
+                    aqi = "Unknown"  # Fallback for unexpected values
+            else:
+                aqi = "Unknown"  # If air pollution data is not available
+
             pressure = weather_data.current.pressure
 
             # City name (from config or weather data)
