@@ -116,7 +116,7 @@ class TestScheduler:
     ) -> None:
         """Test should_refresh returns True on first run."""
         # Patch the utility function to return False to ensure first-time refresh is allowed
-        with patch("rpi_weather_display.utils.time_utils.is_quiet_hours", return_value=False):
+        with patch("rpi_weather_display.utils.is_quiet_hours", return_value=False):
             assert scheduler.should_refresh(battery_status) is True
 
     def test_should_refresh_normal_interval(
@@ -124,7 +124,7 @@ class TestScheduler:
     ) -> None:
         """Test should_refresh with normal interval."""
         # Patch the utility function to return False to ensure refresh is allowed
-        with patch("rpi_weather_display.utils.time_utils.is_quiet_hours", return_value=False):
+        with patch("rpi_weather_display.utils.is_quiet_hours", return_value=False):
             # Set last refresh to 31 minutes ago
             scheduler.__setattr__("_last_refresh", datetime.now() - timedelta(minutes=31))
             assert scheduler.should_refresh(battery_status) is True
@@ -138,7 +138,7 @@ class TestScheduler:
     ) -> None:
         """Test should_refresh with low battery (doubles interval)."""
         # Patch the utility function to return False to ensure refresh is allowed based on timing
-        with patch("rpi_weather_display.utils.time_utils.is_quiet_hours", return_value=False):
+        with patch("rpi_weather_display.utils.is_quiet_hours", return_value=False):
             # Set last refresh to 61 minutes ago (2x normal interval + 1)
             scheduler.__setattr__("_last_refresh", datetime.now() - timedelta(minutes=61))
             assert scheduler.should_refresh(low_battery_status) is True
@@ -219,7 +219,7 @@ class TestScheduler:
     ) -> None:
         """Test should_update with low battery (doubles interval)."""
         # Patch the utility function to return False to ensure battery-based doubling
-        with patch("rpi_weather_display.utils.time_utils.is_quiet_hours", return_value=False):
+        with patch("rpi_weather_display.utils.is_quiet_hours", return_value=False):
             # Set last update to 61 minutes ago (2x normal interval + 1)
             scheduler.__setattr__("_last_update", datetime.now() - timedelta(minutes=61))
             assert scheduler.should_update(low_battery_status) is True
@@ -467,7 +467,7 @@ class TestScheduler:
         assert result1 >= 60, "Sleep time should be at least 60 seconds"
 
         # Test with the utility function patched to True - should use wake_up_interval
-        with patch("rpi_weather_display.utils.time_utils.is_quiet_hours", return_value=True):
+        with patch("rpi_weather_display.utils.is_quiet_hours", return_value=True):
             quiet_hours_sleep = scheduler._calculate_sleep_time(battery_status)  # type: ignore
             # Since we've removed direct access to the method, this test is no longer valid
             # as the context is now always determined by the utility function
@@ -479,7 +479,7 @@ class TestScheduler:
 
         # Test with _time_until_quiet_change - need to override is_quiet_hours to False first
         with (
-            patch("rpi_weather_display.utils.time_utils.is_quiet_hours", return_value=False),
+            patch("rpi_weather_display.utils.is_quiet_hours", return_value=False),
             patch.object(scheduler, "_time_until_quiet_change", return_value=30),
             patch.object(scheduler, "_last_refresh", None),
             patch.object(scheduler, "_last_update", None),
@@ -496,7 +496,7 @@ class TestScheduler:
         current_time = datetime(2023, 1, 1, 12, 0, 0)
 
         with (
-            patch("rpi_weather_display.utils.time_utils.is_quiet_hours", return_value=False),
+            patch("rpi_weather_display.utils.is_quiet_hours", return_value=False),
             patch.object(scheduler, "_time_until_quiet_change", return_value=3600),
             freeze_time(current_time),
         ):
@@ -523,7 +523,7 @@ class TestScheduler:
         current_time = datetime(2023, 1, 1, 12, 0, 0)
 
         with (
-            patch("rpi_weather_display.utils.time_utils.is_quiet_hours", return_value=False),
+            patch("rpi_weather_display.utils.is_quiet_hours", return_value=False),
             patch.object(scheduler, "_time_until_quiet_change", return_value=3600),
             freeze_time(current_time),
         ):
@@ -549,7 +549,7 @@ class TestScheduler:
         current_time = datetime(2023, 1, 1, 12, 0, 0)
 
         with (
-            patch("rpi_weather_display.utils.time_utils.is_quiet_hours", return_value=False),
+            patch("rpi_weather_display.utils.is_quiet_hours", return_value=False),
             patch.object(scheduler, "_time_until_quiet_change", return_value=3600),
             freeze_time(current_time),
         ):
@@ -576,7 +576,7 @@ class TestScheduler:
         """Test _calculate_sleep_time ensures at least 10 seconds."""
         # Setup all times to return very small or negative values
         with (
-            patch("rpi_weather_display.utils.time_utils.is_quiet_hours", return_value=False),
+            patch("rpi_weather_display.utils.is_quiet_hours", return_value=False),
             patch.object(scheduler, "_time_until_quiet_change", return_value=5),  # < 10 seconds
             freeze_time(datetime(2023, 1, 1, 12, 0, 0)),
         ):
