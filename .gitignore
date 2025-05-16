@@ -33,7 +33,6 @@ tmp/
 uvi_max_cache.json
 
 # Generated content
-*.png
 *.html
 
 # Test and coverage
