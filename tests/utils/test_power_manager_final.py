@@ -112,8 +112,7 @@ class TestPowerManagerFinal:
 
         # Configure quiet hours for testing
         config = power_manager.config.model_copy(deep=True)
-        # Set a smaller wake_up_interval_minutes to avoid long sleep times in tests
-        config.power.wake_up_interval_minutes = 1
+        config.power.wake_up_interval_minutes = 60  # Ensure this is explicitly set
         power_manager.config = config
 
         # Set the power state to QUIET_HOURS to trigger that code path
@@ -122,8 +121,8 @@ class TestPowerManagerFinal:
         # Calculate sleep time in QUIET_HOURS state, it should return wake_up_interval_minutes * 60
         result = power_manager.calculate_sleep_time()
 
-        # Should return 60 seconds (1 minute * 60)
-        assert result == 60
+        # Should return 3600 seconds (60 minutes * 60 seconds)
+        assert result == 3600
 
     def test_time_until_quiet_change_daytime_span(self, power_manager: PowerStateManager) -> None:
         """Test _time_until_quiet_change with quiet hours during the day (start < end)."""
