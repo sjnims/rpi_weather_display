@@ -9,7 +9,7 @@
 <section class="weather-display__main">
   <svg class="weather-display__main-icon">
     <use
-      href="/static/icons/sprite.svg#{{ weather.current.weather[0] }}">
+      href="/static/icons/sprite.svg#{{ weather.current.weather[0] | weather_icon }}">
     </use>
   </svg>
   <div class="weather-display__main-temp">{{ weather.current.temp | round | int }}<span>{{ units_temp }}</span></div>
@@ -37,13 +37,13 @@
     <svg class="weather-display__detail-icon">
       <use href="/static/icons/sprite.svg#wi-sunrise"></use>
     </svg>
-    <span>{{ weather.current.sunrise_local }}</span>
+    <span>{{ current_times.sunrise_local }}</span>
   </div>
   <div class="weather-display__detail">
     <svg class="weather-display__detail-icon">
       <use href="/static/icons/sprite.svg#wi-sunset"></use>
     </svg>
-    <span>{{ weather.current.sunset_local }}</span>
+    <span>{{ current_times.sunset_local }}</span>
   </div>
   <div class="weather-display__detail">
     <svg class="weather-display__detail-icon">
@@ -82,7 +82,7 @@
         href="/static/icons/sprite.svg#{{ moon_phase }}">
       </use>
     </svg>
-    <span>{{ moon_phase }}</span>
+    <span>{{ weather.daily[0].moon_phase | moon_phase_label }}</span>
   </div>
 </section>
 

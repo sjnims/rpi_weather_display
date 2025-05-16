@@ -3,7 +3,7 @@
 <div class="forecast">
   {% for d in daily %}
   <div class="forecast__card">
-    <div class="forecast__card-name">{{ d.weekday_short }}</div>
+    <div class="forecast__card-name">{{ daily_times[loop.index0].weekday_short }}</div>
     <svg class="forecast__card-icon">
       <use
         href="/static/icons/sprite.svg#{{ d.weather[0] | weather_icon | replace('.svg','') }}">
@@ -25,13 +25,13 @@
       <svg class="forecast__card-icon" style="width:1rem;height:1rem;">
         <use href="/static/icons/sprite.svg#wi-sunrise"></use>
       </svg>
-      <span>{{ d.sunrise_local }}</span>
+      <span>{{ daily_times[loop.index0].sunrise_local }}</span>
     </div>
     <div class="sun-details">
       <svg class="forecast__card-icon" style="width:1rem;height:1rem;">
         <use href="/static/icons/sprite.svg#wi-sunset"></use>
       </svg>
-      <span>{{ d.sunset_local }}</span>
+      <span>{{ daily_times[loop.index0].sunset_local }}</span>
     </div>
   </div>
   {% endfor %}

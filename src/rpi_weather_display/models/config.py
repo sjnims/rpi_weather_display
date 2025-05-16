@@ -21,6 +21,7 @@ class WeatherConfig(BaseModel):
     language: str = "en"
     update_interval_minutes: int = 30
     forecast_days: int = 5
+    hourly_forecast_count: int = 24
 
     @field_validator("update_interval_minutes")
     @classmethod
@@ -28,6 +29,14 @@ class WeatherConfig(BaseModel):
         """Validate update interval is not too frequent."""
         if v < 15:
             raise ValueError("Update interval must be at least 15 minutes to conserve battery")
+        return v
+
+    @field_validator("hourly_forecast_count")
+    @classmethod
+    def validate_hourly_forecast_count(cls, v: int) -> int:
+        """Validate the number of hourly forecasts to show."""
+        if v < 1 or v > 48:
+            raise ValueError("Hourly forecast count must be between 1 and 48")
         return v
 
 

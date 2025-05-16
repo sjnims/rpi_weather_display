@@ -3,7 +3,7 @@
 <div class="forecast">
   {% for h in hourly %}
   <div class="forecast__card">
-    <div class="forecast__card-name">{{ h.local_time }}</div>
+    <div class="forecast__card-name">{{ hourly_times[loop.index0].local_time }}</div>
     <svg class="forecast__card-icon">
       <use
         href="/static/icons/sprite.svg#{{ h.weather[0] | weather_icon | replace('.svg','') }}">

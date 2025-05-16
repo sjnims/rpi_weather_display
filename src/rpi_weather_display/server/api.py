@@ -52,10 +52,25 @@ class WeatherAPIClient:
         if not self.config.city_name:
             raise ValueError("No location coordinates or city name provided in configuration")
 
+        # Format city name properly for the API
+        # The API expects formats like "London" or "London,GB" without spaces around the comma
+        city_query = self.config.city_name
+        if "," in city_query:
+            # Split by comma and rejoin without spaces around the comma
+            parts = [part.strip() for part in city_query.split(",")]
+
+            # Check if this is a US city with state abbreviation (e.g., "Smyrna, GA")
+            # If so, add the US country code
+            if len(parts) == 2 and len(parts[1]) == 2 and parts[1].isupper():
+                parts.append("US")
+
+            city_query = ",".join(parts)
+            self.logger.info(f"Formatted city query: {city_query}")
+
         # Use geocoding API to get coordinates
         try:
             async with httpx.AsyncClient() as client:
-                params = {"q": self.config.city_name, "limit": 1, "appid": self.config.api_key}
+                params = {"q": city_query, "limit": 1, "appid": self.config.api_key}
 
                 response = await client.get(self.GEOCODING_URL, params=params)
                 response.raise_for_status()

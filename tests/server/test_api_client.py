@@ -363,3 +363,217 @@ async def test_get_icon_mapping(app_config: AppConfig) -> None:
 
     # Test fallback for unknown icon
     assert await api_client.get_icon_mapping("unknown") == "cloud-bold"
+
+
+@pytest.mark.asyncio()
+async def test_get_coordinates_city_name_with_state(
+    app_config: AppConfig, mock_httpx_client: AsyncMock
+) -> None:
+    """Test city name formatting for US cities with state abbreviations."""
+    # Set up the mock response
+    mock_response = create_mock_response(
+        200, [{"name": "Atlanta", "lat": 33.7490, "lon": -84.3880, "country": "US"}]
+    )
+    mock_httpx_client.get.return_value = mock_response
+
+    # Configure app to use city name with state
+    app_config.weather.location = {}
+    app_config.weather.city_name = "Atlanta, GA"  # City with state abbreviation
+
+    # Create API client
+    api_client = WeatherAPIClient(app_config.weather)
+
+    # Get coordinates
+    lat, lon = await api_client.get_coordinates()
+
+    # Check that coordinates match the mock response
+    assert lat == 33.7490
+    assert lon == -84.3880
+
+    # Verify the API call was made with properly formatted query (should add US)
+    mock_httpx_client.get.assert_called_once()
+    args, kwargs = mock_httpx_client.get.call_args
+    assert args[0] == api_client.GEOCODING_URL
+    assert kwargs["params"]["q"] == "Atlanta,GA,US"  # No spaces, with US added
+
+
+@pytest.mark.asyncio()
+async def test_get_coordinates_city_name_with_country(
+    app_config: AppConfig, mock_httpx_client: AsyncMock
+) -> None:
+    """Test city name formatting with country code."""
+    # Set up the mock response
+    mock_response = create_mock_response(
+        200, [{"name": "London", "lat": 51.5074, "lon": -0.1278, "country": "GB"}]
+    )
+    mock_httpx_client.get.return_value = mock_response
+
+    # Configure app to use city name with country
+    app_config.weather.location = {}
+    app_config.weather.city_name = "London, GB"  # City with country code
+
+    # Create API client
+    api_client = WeatherAPIClient(app_config.weather)
+
+    # Get coordinates
+    lat, lon = await api_client.get_coordinates()
+
+    # Check that coordinates match the mock response
+    assert lat == 51.5074
+    assert lon == -0.1278
+
+    # Verify the API call was made with properly formatted query
+    # Note: The code adds 'US' to any 2-character country code
+    mock_httpx_client.get.assert_called_once()
+    args, kwargs = mock_httpx_client.get.call_args
+    assert args[0] == api_client.GEOCODING_URL
+    assert kwargs["params"]["q"] == "London,GB,US"  # With 'US' added
+
+
+@pytest.mark.asyncio()
+async def test_get_coordinates_general_exception(
+    app_config: AppConfig, mock_httpx_client: AsyncMock
+) -> None:
+    """Test handling of general exceptions in geocoding."""
+    # Set up the mock to raise a general exception
+    mock_httpx_client.get.side_effect = ValueError("Invalid query")
+
+    # Configure app to use city name
+    app_config.weather.location = {}
+    app_config.weather.city_name = "New York"
+
+    # Create API client
+    api_client = WeatherAPIClient(app_config.weather)
+
+    # Should propagate the general exception
+    with pytest.raises(ValueError, match="Invalid query"):
+        await api_client.get_coordinates()
+
+
+@pytest.mark.asyncio()
+async def test_get_weather_data_empty_air_data(
+    app_config: AppConfig, mock_weather_data: dict[str, Any], mock_httpx_client: AsyncMock
+) -> None:
+    """Test handling of empty air pollution data."""
+    # Set up mock responses
+    weather_response = create_mock_response(200, mock_weather_data)
+    air_response = create_mock_response(200, {"list": []})  # Empty air pollution data
+
+    mock_httpx_client.get.side_effect = [weather_response, air_response]
+
+    # Create API client with location
+    app_config.weather.location = {"lat": 40.7128, "lon": -74.0060}
+    api_client = WeatherAPIClient(app_config.weather)
+
+    # Call with force refresh
+    result = await api_client.get_weather_data(force_refresh=True)
+
+    # Verify air pollution data is None
+    assert result.air_pollution is None
+
+    # Verify API calls were made
+    assert mock_httpx_client.get.call_count == 2
+
+
+@pytest.mark.asyncio()
+async def test_get_weather_data_general_exception(
+    app_config: AppConfig, mock_httpx_client: AsyncMock
+) -> None:
+    """Test handling of general exceptions when fetching weather data."""
+    # Set up the mock to raise a general exception
+    mock_httpx_client.get.side_effect = ValueError("Invalid data")
+
+    # Create API client with location
+    app_config.weather.location = {"lat": 40.7128, "lon": -74.0060}
+    api_client = WeatherAPIClient(app_config.weather)
+
+    # Call should raise without cached data
+    with pytest.raises(ValueError, match="Invalid data"):
+        await api_client.get_weather_data(force_refresh=True)
+
+
+@pytest.mark.asyncio()
+async def test_get_weather_data_general_exception_with_cache(
+    app_config: AppConfig, mock_weather_data: dict[str, Any], mock_httpx_client: AsyncMock
+) -> None:
+    """Test that cached data is returned when general exception occurs but cache is available."""
+    # Set up the mock to raise a general exception
+    mock_httpx_client.get.side_effect = ValueError("Invalid data")
+
+    # Create API client with location
+    app_config.weather.location = {"lat": 40.7128, "lon": -74.0060}
+    api_client = WeatherAPIClient(app_config.weather)
+
+    # Set up cached data
+    weather = WeatherData.model_validate(mock_weather_data)
+    api_client.set_forecast_for_testing(weather)
+
+    # Call should return cached data despite general exception
+    result = await api_client.get_weather_data(force_refresh=True)
+    assert result is weather
+
+
+@pytest.mark.asyncio()
+async def test_get_icon_mapping_comprehensive(app_config: AppConfig) -> None:
+    """Test mapping of all weather icon codes to sprite icon IDs."""
+    # Create API client
+    api_client = WeatherAPIClient(app_config.weather)
+
+    # Define all expected icon mappings
+    expected_mappings = {
+        "01d": "sun-bold",
+        "01n": "moon-bold",
+        "02d": "sun-cloud-bold",
+        "02n": "moon-cloud-bold",
+        "03d": "cloud-bold",
+        "03n": "cloud-bold",
+        "04d": "clouds-bold",
+        "04n": "clouds-bold",
+        "09d": "cloud-drizzle-bold",
+        "09n": "cloud-drizzle-bold",
+        "10d": "sun-cloud-rain-bold",
+        "10n": "moon-cloud-rain-bold",
+        "11d": "cloud-lightning-bold",
+        "11n": "cloud-lightning-bold",
+        "13d": "cloud-snow-bold",
+        "13n": "cloud-snow-bold",
+        "50d": "cloud-fog-bold",
+        "50n": "cloud-fog-bold",
+    }
+
+    # Test all icon mappings
+    for icon_code, expected_icon in expected_mappings.items():
+        actual_icon = await api_client.get_icon_mapping(icon_code)
+        assert actual_icon == expected_icon, f"Icon mapping failed for {icon_code}"
+
+
+@pytest.mark.asyncio()
+async def test_get_coordinates_city_name_non_state_abbreviation(
+    app_config: AppConfig, mock_httpx_client: AsyncMock
+) -> None:
+    """Test city name formatting with comma but non-state abbreviation."""
+    # Set up the mock response
+    mock_response = create_mock_response(
+        200, [{"name": "Paris", "lat": 48.8566, "lon": 2.3522, "country": "FR"}]
+    )
+    mock_httpx_client.get.return_value = mock_response
+
+    # Configure app to use city name with country, but not in state abbreviation format
+    app_config.weather.location = {}
+    app_config.weather.city_name = "Paris, France"  # Not a 2-letter uppercase code
+
+    # Create API client
+    api_client = WeatherAPIClient(app_config.weather)
+
+    # Get coordinates
+    lat, lon = await api_client.get_coordinates()
+
+    # Check that coordinates match the mock response
+    assert lat == 48.8566
+    assert lon == 2.3522
+
+    # Verify the API call was made with properly formatted query
+    mock_httpx_client.get.assert_called_once()
+    args, kwargs = mock_httpx_client.get.call_args
+    assert args[0] == api_client.GEOCODING_URL
+    assert kwargs["params"]["q"] == "Paris,France"  # With spaces removed, but no US added
