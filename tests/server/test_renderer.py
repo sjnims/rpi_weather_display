@@ -1470,7 +1470,7 @@ class TestWeatherRenderer:
             # Expected format: uvi_max will be "7.8" and uvi_time will be the formatted time of hour2  # noqa: E501
             # The hour4 value should be ignored since it's for tomorrow
             expected_max = "7.8"
-            expected_time = datetime.fromtimestamp(hour2.dt).strftime("%H:%M")
+            expected_time = renderer._format_time(datetime.fromtimestamp(hour2.dt))
 
             # Verify the mock template was called
             assert mock_template.render.called
@@ -1526,7 +1526,7 @@ class TestWeatherRenderer:
 
             # The current UV index (8.2) should be the maximum, not the hourly forecast values
             expected_max = "8.2"
-            expected_time = now.strftime("%H:%M")
+            expected_time = renderer._format_time(now)
 
             # Verify the mock template was called
             assert mock_template.render.called
