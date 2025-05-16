@@ -50,6 +50,17 @@ class DisplayConfig(BaseModel):
     partial_refresh: bool = True
     timestamp_format: str = "%Y-%m-%d %H:%M"
     time_format: str | None = None  # When None, will use AM/PM without leading zeros
+    pressure_units: str = "hPa"  # Options: "hPa", "mmHg", "inHg"
+    display_datetime_format: str | None = None  # Format for displayed dates and times
+
+    @field_validator("pressure_units")
+    @classmethod
+    def validate_pressure_units(cls, v: str) -> str:
+        """Validate pressure units are one of the supported types."""
+        valid_units = ["hPa", "mmHg", "inHg"]
+        if v not in valid_units:
+            raise ValueError(f"Pressure units must be one of: {', '.join(valid_units)}")
+        return v
 
 
 class PowerConfig(BaseModel):

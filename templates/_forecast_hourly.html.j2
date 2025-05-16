@@ -13,7 +13,7 @@
     <div class="forecast__card-meta">
       {{ h.wind_speed | round(0) }} {{ units_wind }}<br>
       <svg class="forecast__wind-icon"
-        style="transform: rotate({{ h.wind_deg | wind_direction_angle }}); transform-origin: center center;">
+        style="transform: rotate({{ h.wind_deg + 180 }}deg); transform-origin: center center;">
         <use href="/static/icons/sprite.svg#wi-wind-deg"></use>
       </svg><br>
       {{ get_hourly_precipitation(h) }} {{ units_precip }}<br>

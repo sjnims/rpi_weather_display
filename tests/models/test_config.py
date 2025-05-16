@@ -92,6 +92,7 @@ class TestDisplayConfig:
         assert display_config.refresh_interval_minutes == 30
         assert display_config.partial_refresh is True
         assert display_config.timestamp_format == "%Y-%m-%d %H:%M"
+        assert display_config.pressure_units == "hPa"
 
     def test_custom_values(self) -> None:
         """Test DisplayConfig with custom values."""
@@ -102,6 +103,7 @@ class TestDisplayConfig:
             refresh_interval_minutes=60,
             partial_refresh=False,
             timestamp_format="%H:%M %d/%m/%Y",
+            pressure_units="mmHg",
         )
 
         assert display_config.width == 800
@@ -110,6 +112,12 @@ class TestDisplayConfig:
         assert display_config.refresh_interval_minutes == 60
         assert display_config.partial_refresh is False
         assert display_config.timestamp_format == "%H:%M %d/%m/%Y"
+        assert display_config.pressure_units == "mmHg"
+
+    def test_invalid_pressure_units(self) -> None:
+        """Test validation of pressure units."""
+        with pytest.raises(ValueError, match="Pressure units must be one of"):
+            DisplayConfig(pressure_units="invalid")
 
 
 class TestPowerConfig:
@@ -327,6 +335,7 @@ class TestAppConfig:
         display:
           width: 800
           height: 600
+          pressure_units: mmHg
         power:
           quiet_hours_start: "23:00"
           quiet_hours_end: "06:00"
@@ -348,6 +357,7 @@ class TestAppConfig:
                 assert config.weather.city_name == "London"
                 assert config.display.width == 800
                 assert config.display.height == 600
+                assert config.display.pressure_units == "mmHg"
                 assert config.server.url == "http://test-server"
                 assert config.server.port == 8080
                 assert config.logging.level == "DEBUG"
@@ -357,30 +367,32 @@ class TestAppConfig:
         """Test loading configuration from an actual YAML file."""
         # Create a temporary YAML file
         config_path = tmp_path / "test_config.yaml"
-        yaml_content = """
+        test_yaml_content = """
         weather:
-          api_key: real_yaml_test_key
-          city_name: Paris
+          api_key: test_real_yaml_key
+          city_name: Berlin
+          units: metric
         display:
-          width: 1000
-          height: 800
+          width: 1280
+          height: 720
+          pressure_units: inHg
         power:
           quiet_hours_start: "22:00"
         server:
-          url: http://real-test-server
+          url: http://test-yaml-server
         """
-        config_path.write_text(yaml_content)
+        config_path.write_text(test_yaml_content)
 
         # Load the config from the file
         config = AppConfig.from_yaml(config_path)
 
         # Verify the loaded values
-        assert config.weather.api_key == "real_yaml_test_key"
-        assert config.weather.city_name == "Paris"
-        assert config.display.width == 1000
-        assert config.display.height == 800
-        assert config.power.quiet_hours_start == "22:00"
-        assert config.server.url == "http://real-test-server"
+        assert config.weather.api_key == "test_real_yaml_key"
+        assert config.weather.city_name == "Berlin"
+        assert config.display.width == 1280
+        assert config.display.height == 720
+        assert config.display.pressure_units == "inHg"
+        assert config.server.url == "http://test-yaml-server"
 
         # Check defaults are set for values not in the YAML
         assert config.weather.units == "metric"

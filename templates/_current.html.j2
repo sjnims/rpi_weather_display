@@ -71,10 +71,10 @@
   </div>
   <div class="weather-display__detail">
     <svg class="weather-display__detail-icon"
-      style="transform: rotate({{ weather.current.wind_deg }}); transform-origin: center center;">
+      style="transform: rotate({{ weather.current.wind_deg + 180 }}deg); transform-origin: center center;">
       <use href="/static/icons/sprite.svg#wi-wind-deg"></use>
     </svg>
-    <span>{{ weather.current.wind_deg }}</span>
+    <span>{{ weather.current.wind_deg | wind_direction_cardinal }}</span>
   </div>
   <div class="weather-display__detail">
     <svg class="weather-display__detail-icon">

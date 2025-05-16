@@ -1971,3 +1971,180 @@ class TestWeatherRenderer:
             await renderer.generate_html(weather_data, battery_status)
             context = mock_template.render.call_args[1]
             assert context["aqi"] == "Unknown"
+
+    def test_convert_pressure_hpa(self, renderer: WeatherRenderer) -> None:
+        """Test converting pressure when target is already hPa."""
+        pressure_hpa = 1013.25
+        result = renderer._convert_pressure(pressure_hpa, "hPa")
+        assert result == 1013.25  # No conversion needed
+
+    def test_convert_pressure_mmhg(self, renderer: WeatherRenderer) -> None:
+        """Test converting pressure from hPa to mmHg."""
+        pressure_hpa = 1013.25
+        result = renderer._convert_pressure(pressure_hpa, "mmHg")
+        expected = pressure_hpa * 0.75006
+        assert abs(result - expected) < 0.01  # Account for floating point precision
+
+    def test_convert_pressure_inhg(self, renderer: WeatherRenderer) -> None:
+        """Test converting pressure from hPa to inHg."""
+        pressure_hpa = 1013.25
+        result = renderer._convert_pressure(pressure_hpa, "inHg")
+        expected = pressure_hpa * 0.02953
+        assert abs(result - expected) < 0.0001  # Account for floating point precision
+
+    def test_convert_pressure_fallback(self, renderer: WeatherRenderer) -> None:
+        """Test fallback to hPa for unknown units."""
+        pressure_hpa = 1013.25
+        result = renderer._convert_pressure(pressure_hpa, "unknown")
+        assert result == 1013.25  # Should fallback to hPa
+
+    @pytest.mark.asyncio()
+    async def test_pressure_units_in_template(self, renderer: WeatherRenderer) -> None:
+        """Test that pressure is converted and correct units are used in the template."""
+        # Create test weather data
+        weather_data = MagicMock(spec=WeatherData)
+        weather_data.current = MagicMock(spec=CurrentWeather)
+        weather_data.current.weather = [MagicMock(spec=WeatherCondition)]
+        weather_data.current.weather[0].id = 800
+        weather_data.current.weather[0].icon = "01d"
+        weather_data.current.pressure = 1013.25
+        weather_data.current.wind_speed = 3.0
+        weather_data.hourly = []
+        weather_data.daily = []
+
+        # Create battery status
+        battery_status = BatteryStatus(
+            level=80, voltage=3.9, current=0.0, temperature=25.0, state=BatteryState.DISCHARGING
+        )
+
+        # Test with default units (hPa)
+        mock_template = MagicMock()
+        mock_template.render.return_value = "<html>Pressure Units Test</html>"
+
+        with patch.object(renderer.jinja_env, "get_template", return_value=mock_template):
+            await renderer.generate_html(weather_data, battery_status)
+
+            # Check the template context
+            context = mock_template.render.call_args[1]
+            assert context["units_pressure"] == "hPa"
+            assert context["pressure"] == 1013.2  # Rounded to 1 decimal place
+
+        # Test with mmHg setting
+        renderer.config.display.pressure_units = "mmHg"
+        mock_template = MagicMock()
+        mock_template.render.return_value = "<html>Pressure Units Test</html>"
+
+        with patch.object(renderer.jinja_env, "get_template", return_value=mock_template):
+            await renderer.generate_html(weather_data, battery_status)
+
+            # Check the template context
+            context = mock_template.render.call_args[1]
+            assert context["units_pressure"] == "mmHg"
+            expected_mmhg = round(1013.25 * 0.75006, 1)
+            assert context["pressure"] == expected_mmhg
+
+        # Test with inHg setting
+        renderer.config.display.pressure_units = "inHg"
+        mock_template = MagicMock()
+        mock_template.render.return_value = "<html>Pressure Units Test</html>"
+
+        with patch.object(renderer.jinja_env, "get_template", return_value=mock_template):
+            await renderer.generate_html(weather_data, battery_status)
+
+            # Check the template context
+            context = mock_template.render.call_args[1]
+            assert context["units_pressure"] == "inHg"
+            expected_inhg = round(1013.25 * 0.02953, 1)
+            assert context["pressure"] == expected_inhg
+
+    @pytest.mark.asyncio()
+    async def test_wind_direction_cardinal_filter(self, renderer: WeatherRenderer) -> None:
+        """Test the wind_direction_cardinal filter with various angles."""
+        # Create minimal weather data
+        weather_data = MagicMock(spec=WeatherData)
+        weather_data.current = MagicMock(spec=CurrentWeather)
+        weather_data.current.weather = [MagicMock(spec=WeatherCondition)]
+        weather_data.current.weather[0].id = 800
+        weather_data.current.weather[0].icon = "01d"
+        weather_data.current.wind_speed = 5.0
+        weather_data.current.pressure = 1013
+        weather_data.hourly = []
+        weather_data.daily = []
+
+        # Create battery status
+        battery_status = BatteryStatus(
+            level=80, voltage=3.9, current=0.0, temperature=25.0, state=BatteryState.DISCHARGING
+        )
+
+        # Mock template
+        mock_template = MagicMock()
+        mock_template.render.return_value = "<html>Wind Direction Test</html>"
+
+        with patch.object(renderer.jinja_env, "get_template", return_value=mock_template):
+            # Generate HTML to register the filter
+            await renderer.generate_html(weather_data, battery_status)
+
+            # Get the filter directly from the environment with proper typing
+            wind_cardinal = cast(
+                Callable[[float], str],
+                renderer.jinja_env.filters["wind_direction_cardinal"],
+            )
+
+            # Test cardinal directions at exact points
+            test_cases = [
+                (0, "N"),
+                (22.5, "NNE"),
+                (45, "NE"),
+                (67.5, "ENE"),
+                (90, "E"),
+                (112.5, "ESE"),
+                (135, "SE"),
+                (157.5, "SSE"),
+                (180, "S"),
+                (202.5, "SSW"),
+                (225, "SW"),
+                (247.5, "WSW"),
+                (270, "W"),
+                (292.5, "WNW"),
+                (315, "NW"),
+                (337.5, "NNW"),
+                (360, "N"),  # Should wrap to N
+            ]
+
+            for angle, expected in test_cases:
+                assert wind_cardinal(angle) == expected
+
+            # Test with values slightly off the exact points to ensure proper rounding
+            assert wind_cardinal(11) == "N"
+            assert wind_cardinal(35) == "NE"
+            assert wind_cardinal(370) == "N"  # Test wrapping beyond 360
+
+    def test_format_datetime_display_default(self, renderer: WeatherRenderer) -> None:
+        """Test formatting datetime for display with the default format."""
+        # Test a specific date/time
+        dt = datetime(2023, 5, 7, 15, 30, 0)  # May 7, 2023, 3:30 PM
+        result = renderer._format_datetime_display(dt)
+        assert result == "5/7/2023 3:30 PM"
+
+        # Test midnight with single-digit month
+        dt = datetime(2023, 1, 1, 0, 0, 0)  # Jan 1, 2023, 12:00 AM
+        result = renderer._format_datetime_display(dt)
+        assert result == "1/1/2023 12:00 AM"
+
+    def test_format_datetime_display_with_config(self, renderer: WeatherRenderer) -> None:
+        """Test formatting datetime for display with a config format."""
+        dt = datetime(2023, 5, 7, 15, 30, 0)  # May 7, 2023, 3:30 PM
+
+        # Set a custom format in the config
+        renderer.config.display.display_datetime_format = "%m/%d/%Y %I:%M %p"
+        result = renderer._format_datetime_display(dt)
+        assert result == "05/07/2023 03:30 PM"
+
+        # Clean up
+        renderer.config.display.display_datetime_format = None
+
+    def test_format_datetime_display_with_custom_format(self, renderer: WeatherRenderer) -> None:
+        """Test formatting datetime for display with a custom format string."""
+        dt = datetime(2023, 5, 7, 15, 30, 0)  # May 7, 2023, 3:30 PM
+        result = renderer._format_datetime_display(dt, format_str="%d-%m-%Y %H:%M")
+        assert result == "07-05-2023 15:30"

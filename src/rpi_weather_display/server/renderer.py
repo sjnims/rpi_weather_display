@@ -121,6 +121,42 @@ class WeatherRenderer:
             # Use the provided format
             return dt.strftime(format_str)
 
+    def _format_datetime_display(self, dt: datetime | int, format_str: str | None = None) -> str:
+        """Format a datetime for display using config or a default format without leading zeros.
+
+        Args:
+            dt: Datetime object or Unix timestamp
+            format_str: Optional format string to override config
+
+        Returns:
+            Formatted datetime string
+        """
+        if isinstance(dt, int):
+            dt = datetime.fromtimestamp(dt)
+
+        # Check for format in arguments, then config, then use default
+        if format_str is not None:
+            return dt.strftime(format_str)
+
+        # Check for display_datetime_format in config
+        if (
+            hasattr(self.config.display, "display_datetime_format")
+            and self.config.display.display_datetime_format
+        ):
+            return dt.strftime(self.config.display.display_datetime_format)
+
+        # Default format: MM/DD/YYYY HH:MM AM/PM without leading zeros
+        month = dt.month
+        day = dt.day
+        year = dt.year
+        hour = dt.hour % 12
+        if hour == 0:
+            hour = 12  # 12-hour clock shows 12 for noon/midnight, not 0
+        minute = dt.minute
+        am_pm = dt.strftime("%p")
+
+        return f"{month}/{day}/{year} {hour}:{minute:02d} {am_pm}"
+
     async def generate_html(self, weather_data: WeatherData, battery_status: BatteryStatus) -> str:
         """Generate HTML for the weather display.
 
@@ -144,7 +180,7 @@ class WeatherRenderer:
             # Calculate current date and time info
             now = datetime.now()
             date_str = now.strftime("%A, %B %d, %Y")
-            last_refresh = now.strftime(self.config.display.timestamp_format)
+            last_refresh = self._format_datetime_display(now)
 
             # Use custom time formatting method for all time displays
             time_format = self.config.display.time_format
@@ -202,7 +238,7 @@ class WeatherRenderer:
             units_temp = "°C" if is_metric else "°F"
             units_wind = "m/s" if is_metric else "mph"
             units_precip = "mm" if is_metric else "in"
-            units_pressure = "hPa"  # Standard unit regardless of system
+            units_pressure = self.config.display.pressure_units
 
             # Handle Beaufort scale for wind (simplified)
             bft = min(int(weather_data.current.wind_speed / 3.5) + 1, 12)
@@ -250,7 +286,9 @@ class WeatherRenderer:
             else:
                 aqi = "Unknown"  # If air pollution data is not available
 
-            pressure = weather_data.current.pressure
+            # Convert pressure to the configured units
+            raw_pressure = weather_data.current.pressure
+            pressure = round(self._convert_pressure(raw_pressure, units_pressure), 1)
 
             # City name (from config or weather data)
             city = self.config.weather.city_name or "Unknown Location"
@@ -411,12 +449,53 @@ class WeatherRenderer:
                 """Convert wind direction to rotation angle."""
                 return deg  # Pass through as is
 
+            def wind_direction_cardinal(deg: float) -> str:
+                """Convert wind degrees to 16-point cardinal direction.
+
+                Args:
+                    deg: Wind direction in degrees (0-360)
+
+                Returns:
+                    Cardinal direction as string (N, NNE, NE, etc.)
+                """
+                # Define the 16 cardinal directions
+                directions = [
+                    "N",
+                    "NNE",
+                    "NE",
+                    "ENE",
+                    "E",
+                    "ESE",
+                    "SE",
+                    "SSE",
+                    "S",
+                    "SSW",
+                    "SW",
+                    "WSW",
+                    "W",
+                    "WNW",
+                    "NW",
+                    "NNW",
+                ]
+
+                # Each direction covers 22.5 degrees, starting from N at 0/360 degrees
+                # Normalize the angle to 0-360 range
+                deg = deg % 360
+
+                # Calculate the index in the directions list
+                # Add 11.25 (half of 22.5) to ensure proper rounding
+                index = int(round(deg / 22.5)) % 16
+
+                # Return the cardinal direction
+                return directions[index]
+
             # Register custom filters/functions for the template render
             # Use the original environment directly for better test coverage
             self.jinja_env.filters["weather_icon"] = weather_icon_filter
             self.jinja_env.filters["moon_phase_icon"] = moon_phase_icon_filter
             self.jinja_env.filters["moon_phase_label"] = moon_phase_label_filter
             self.jinja_env.filters["wind_direction_angle"] = wind_direction_angle_filter  # type: ignore
+            self.jinja_env.filters["wind_direction_cardinal"] = wind_direction_cardinal
 
             # Register template globals
             self.jinja_env.globals["get_precipitation_amount"] = get_precipitation_amount  # type: ignore
@@ -739,3 +818,25 @@ class WeatherRenderer:
                 self.logger.warning(f"Error writing UVI cache file: {e}")
 
         return max_uvi, max_uvi_timestamp
+
+    def _convert_pressure(self, pressure_hpa: float, target_units: str) -> float:
+        """Convert pressure from hPa to the target units.
+
+        Args:
+            pressure_hpa: Pressure in hectopascals (hPa)
+            target_units: Target units ("hPa", "mmHg", or "inHg")
+
+        Returns:
+            Converted pressure value
+        """
+        if target_units == "hPa":
+            return pressure_hpa
+        elif target_units == "mmHg":
+            # 1 hPa = 0.75006375541921 mmHg
+            return pressure_hpa * 0.75006
+        elif target_units == "inHg":
+            # 1 hPa = 0.02953 inHg
+            return pressure_hpa * 0.02953
+        else:
+            # Default fallback to hPa
+            return pressure_hpa
