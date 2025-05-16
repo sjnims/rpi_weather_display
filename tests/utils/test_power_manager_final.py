@@ -319,7 +319,7 @@ class TestPowerManagerFinal:
 
         # Verify the result uses the expected value
         # With default sleep_time = 60, and _time_until_quiet_change returning 100,
-        # it should choose min(60, 100) = 60
+        # it should correctly choose min(60, 100) = 60
         assert result == 60
 
     def test_time_until_quiet_change_with_positive_values(
