@@ -473,9 +473,12 @@ class PowerStateManager:
                 sleep_time = min(sleep_time, int(time_until_update))
 
         # Calculate time until quiet hours start/end
-        time_until_quiet_change = self._time_until_quiet_change()
-        if time_until_quiet_change > 0:
-            sleep_time = min(sleep_time, int(time_until_quiet_change))
+        quiet_change_time = self._time_until_quiet_change()
+        if quiet_change_time > 0:
+            # We must take the minimum between the current sleep_time and quiet_change_time
+            # to ensure we wake up at the right time for quiet hours transitions
+            # (this ensures we don't sleep through a quiet hours start/end time)
+            sleep_time = min(sleep_time, int(quiet_change_time))
 
         # Ensure we don't sleep for too short a time (min 10 seconds)
         return max(sleep_time, 10)

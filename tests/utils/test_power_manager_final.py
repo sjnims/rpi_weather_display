@@ -131,12 +131,21 @@ class TestPowerManagerFinal:
         # For code coverage, we'll directly test the branch condition where
         # time_until_quiet_change > 0
 
-        with patch.object(power_manager, "_time_until_quiet_change", return_value=3600):
+        # Use the default sleep time (60s) as our test case
+        # We'll mock _time_until_quiet_change to return 3600s (more than default)
+        # The expected result should be 60s (min of 60 and 3600)
+        with patch.object(power_manager, "_time_until_quiet_change") as mock_method:
+            # Mock _time_until_quiet_change to return 3600
+            mock_method.return_value = 3600
+
             # Set the power state to normal so it doesn't use wake_up_interval_minutes
             power_manager.set_internal_state_for_testing(PowerState.NORMAL)
 
-            # Call calculate_sleep_time which uses _time_until_quiet_change
+            # Call calculate_sleep_time which should use mocked _time_until_quiet_change
             result = power_manager.calculate_sleep_time()
+
+            # Verify _time_until_quiet_change was called
+            mock_method.assert_called_once()
 
             # With _time_until_quiet_change returning 3600, and default sleep time 60,
             # it should use the min(3600, 60) = 60
@@ -289,15 +298,20 @@ class TestPowerManagerFinal:
         """Test more branches in _time_until_quiet_change."""
         # Test time_until_start/end logic when both values are positive
         with patch.object(power_manager, "_time_until_quiet_change") as mock_method:
-            # First call: make _time_until_quiet_change get called and return a reasonable value
+            # Set up the mock to return a value when called
             mock_method.return_value = 100
 
             # Call a method that uses _time_until_quiet_change
             power_manager.set_internal_state_for_testing(PowerState.NORMAL)
-            power_manager.calculate_sleep_time()
+            result = power_manager.calculate_sleep_time()
 
             # Verify _time_until_quiet_change was called
             mock_method.assert_called_once()
+
+            # Verify the result uses the mocked value
+            # With default sleep_time = 60, and mock returning 100,
+            # it should choose min(60, 100) = 60
+            assert result == 60
 
     def test_time_until_quiet_change_with_positive_values(
         self, power_manager: PowerStateManager
