@@ -1441,12 +1441,26 @@ class TestWeatherRenderer:
 
         # Second hour with maximum value (within today)
         hour2 = MagicMock(spec=HourlyWeather)
-        hour2.dt = int(now.replace(hour=now.hour + 1).timestamp())
+        # Add one hour safely by using timedelta instead of directly changing the hour
+        next_hour_time = now + timedelta(hours=1)
+        # Ensure the next hour is still today
+        if next_hour_time.date() == today.date():
+            hour2.dt = int(next_hour_time.timestamp())
+        else:
+            # If next hour would be tomorrow, use current hour
+            hour2.dt = int(now.timestamp())
         hour2.uvi = 7.8  # Maximum value
 
         # Third hour (within today)
         hour3 = MagicMock(spec=HourlyWeather)
-        hour3.dt = int(now.replace(hour=now.hour + 2).timestamp())
+        # Add two hours safely using timedelta
+        two_hours_later = now + timedelta(hours=2)
+        # Ensure still within today
+        if two_hours_later.date() == today.date():
+            hour3.dt = int(two_hours_later.timestamp())
+        else:
+            # If two hours later would be tomorrow, use 30 minutes from now (still today)
+            hour3.dt = int((now + timedelta(minutes=30)).timestamp())
         hour3.uvi = 5.3
 
         # Fourth hour with higher UV value for the next day (should be ignored)
@@ -1512,11 +1526,13 @@ class TestWeatherRenderer:
 
         # Create hourly forecasts with different UV values, all for today
         hour1 = MagicMock(spec=HourlyWeather)
-        hour1.dt = int(now.timestamp()) + 3600  # 1 hour from now
+        # Use timedelta to safely add hours
+        hour1.dt = int((now + timedelta(hours=1)).timestamp())  # 1 hour from now
         hour1.uvi = 2.5
 
         hour2 = MagicMock(spec=HourlyWeather)
-        hour2.dt = int(now.timestamp()) + 7200  # 2 hours from now
+        # Use timedelta to safely add hours
+        hour2.dt = int((now + timedelta(hours=2)).timestamp())  # 2 hours from now
         hour2.uvi = 7.8
 
         # Set hourly forecast with test data
