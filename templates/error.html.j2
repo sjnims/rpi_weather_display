@@ -1,0 +1,24 @@
+{% extends "_base.html.j2" %}
+
+{% block body %}
+  <div class="error-container">
+    <h1 class="error-title">Weather Display Error</h1>
+
+    <div class="error-message">
+      {{ error_message }}
+    </div>
+
+    <div class="error-instructions">
+      <p>The weather display encountered an error. Please check:</p>
+      <ul>
+        <li>Internet connection</li>
+        <li>Server availability</li>
+        <li>API configuration</li>
+      </ul>
+    </div>
+
+    <div class="error-timestamp">
+      Error occurred at: {{ timestamp }}
+    </div>
+  </div>
+{% endblock %}

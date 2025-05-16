@@ -1,0 +1,40 @@
+<!-- Begin Daily Forecast Section -->
+
+<div class="forecast">
+  {% for d in daily %}
+  <div class="forecast__card">
+    <div class="forecast__card-name">{{ d.weekday_short }}</div>
+    <svg class="forecast__card-icon">
+      <use
+        href="/static/icons/sprite.svg#{{ d.weather[0] | weather_icon | replace('.svg','') }}">
+      </use>
+    </svg>
+    <div class="forecast__card-temp">
+      {{ d.temp.min | round | int }}{{ units_temp }}
+      /
+      {{ d.temp.max | round | int }}{{ units_temp }}
+    </div>
+    <svg class="forecast__card-icon">
+      <use
+        href="/static/icons/sprite.svg#{{ d.moon_phase | moon_phase_icon | replace('.svg','') }}">
+      </use>
+    </svg>
+    <div class="forecast__card-meta">{{ d.moon_phase | moon_phase_label }}</div>
+
+    <div class="sun-details">
+      <svg class="forecast__card-icon" style="width:1rem;height:1rem;">
+        <use href="/static/icons/sprite.svg#wi-sunrise"></use>
+      </svg>
+      <span>{{ d.sunrise_local }}</span>
+    </div>
+    <div class="sun-details">
+      <svg class="forecast__card-icon" style="width:1rem;height:1rem;">
+        <use href="/static/icons/sprite.svg#wi-sunset"></use>
+      </svg>
+      <span>{{ d.sunset_local }}</span>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- End Daily Forecast Section -->

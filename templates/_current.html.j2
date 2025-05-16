@@ -1,0 +1,89 @@
+<!-- Begin Current Section -->
+
+<!-- TO DO: Feels like {{ weather.current.feels_like | round | int }}{{ units_temp }} -->
+
+<section class="weather-display__location">
+  <h1>{{ city }}</h1>
+</section>
+
+<section class="weather-display__main">
+  <svg class="weather-display__main-icon">
+    <use
+      href="/static/icons/sprite.svg#{{ weather.current.weather[0] }}">
+    </use>
+  </svg>
+  <div class="weather-display__main-temp">{{ weather.current.temp | round | int }}<span>{{ units_temp }}</span></div>
+</section>
+
+<div class="weather-display__description">{{ weather.current.weather[0].description | capitalize }}</div>
+
+<section class="weather-display__details">
+  <div class="weather-display__detail">
+    <svg class="weather-display__detail-icon">
+      <use href="/static/icons/sprite.svg#wi-wind-beaufort-{{ bft }}"></use>
+    </svg>
+    <span>{{ weather.current.wind_speed | round }} {{ units_wind }}</span>
+  </div>
+  {% set precip = get_precipitation_amount(weather.current) %}
+  {% if precip %}
+  <div class="weather-display__detail">
+    <svg class="weather-display__detail-icon">
+      <use href="/static/icons/sprite.svg#wi-raindrop"></use>
+    </svg>
+    <span>{{ precip }} {{ units_precip }}</span>
+  </div>
+  {% endif %}
+  <div class="weather-display__detail">
+    <svg class="weather-display__detail-icon">
+      <use href="/static/icons/sprite.svg#wi-sunrise"></use>
+    </svg>
+    <span>{{ weather.current.sunrise_local }}</span>
+  </div>
+  <div class="weather-display__detail">
+    <svg class="weather-display__detail-icon">
+      <use href="/static/icons/sprite.svg#wi-sunset"></use>
+    </svg>
+    <span>{{ weather.current.sunset_local }}</span>
+  </div>
+  <div class="weather-display__detail">
+    <svg class="weather-display__detail-icon">
+      <use href="/static/icons/sprite.svg#wi-day-sunny"></use>
+    </svg>
+    <span>{{ daylight }}</span>
+  </div>
+  <div class="weather-display__detail">
+    <svg class="weather-display__detail-icon">
+      <use href="/static/icons/sprite.svg#wi-hot"></use>
+    </svg>
+    <span>{{ uvi_max }} at {{ uvi_time }}</span>
+  </div>
+  <div class="weather-display__detail">
+    <svg class="weather-display__detail-icon">
+      <use href="/static/icons/sprite.svg#wi-day-haze"></use>
+    </svg>
+    <span>{{ aqi }}</span>
+  </div>
+  <div class="weather-display__detail">
+    <svg class="weather-display__detail-icon">
+      <use href="/static/icons/sprite.svg#wi-barometer"></use>
+    </svg>
+    <span>{{ pressure }} {{ units_pressure }}</span>
+  </div>
+  <div class="weather-display__detail">
+    <svg class="weather-display__detail-icon"
+      style="transform: rotate({{ weather.current.wind_deg }}); transform-origin: center center;">
+      <use href="/static/icons/sprite.svg#wi-wind-deg"></use>
+    </svg>
+    <span>{{ weather.current.wind_deg }}</span>
+  </div>
+  <div class="weather-display__detail">
+    <svg class="weather-display__detail-icon">
+      <use
+        href="/static/icons/sprite.svg#{{ moon_phase }}">
+      </use>
+    </svg>
+    <span>{{ moon_phase }}</span>
+  </div>
+</section>
+
+<!-- End Current Section -->

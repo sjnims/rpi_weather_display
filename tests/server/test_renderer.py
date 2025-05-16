@@ -71,7 +71,7 @@ def template_dir(tmp_path: Path) -> Path:
     template_dir.mkdir()
 
     # Create a minimal template file
-    template_file = template_dir / "weather.html.j2"
+    template_file = template_dir / "dashboard.html.j2"
     template_file.write_text("""
     <!DOCTYPE html>
     <html>

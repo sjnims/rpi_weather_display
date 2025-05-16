@@ -229,13 +229,13 @@ def test_get_battery_icon(
 ) -> None:
     """Test get_battery_icon function."""
     # Test battery icon for normal battery
-    assert get_battery_icon(normal_battery) == "battery-high-bold"
+    assert get_battery_icon(normal_battery) == "battery-medium-bold"
 
     # Test battery icon for low battery
     assert get_battery_icon(low_battery) == "battery-low-bold"
 
     # Test battery icon for critical battery
-    assert get_battery_icon(critical_battery) == "battery-low-bold"
+    assert get_battery_icon(critical_battery) == "battery-empty-bold"
 
     # Test battery icon for charging battery
     assert get_battery_icon(charging_battery) == "battery-charging-bold"

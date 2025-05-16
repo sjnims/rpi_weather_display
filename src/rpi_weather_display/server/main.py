@@ -23,6 +23,7 @@ from rpi_weather_display.models.config import AppConfig
 from rpi_weather_display.models.system import BatteryState, BatteryStatus
 from rpi_weather_display.server.api import WeatherAPIClient
 from rpi_weather_display.server.renderer import WeatherRenderer
+from rpi_weather_display.utils.error_utils import get_error_location
 from rpi_weather_display.utils.logging import setup_logging
 
 
@@ -168,7 +169,8 @@ class WeatherDisplayServer:
                 # Return HTML content
                 return Response(content=html, media_type="text/html")
             except Exception as e:
-                self.logger.error(f"Error generating preview: {e}")
+                error_location = get_error_location()
+                self.logger.error(f"Error generating preview [{error_location}]: {e}")
                 raise HTTPException(status_code=500, detail=str(e)) from e
 
     async def _handle_render(self, request: RenderRequest) -> Response:
@@ -203,7 +205,8 @@ class WeatherDisplayServer:
             # Return the image
             return FileResponse(tmp_path, media_type="image/png", filename="weather.png")
         except Exception as e:
-            self.logger.error(f"Error rendering weather image: {e}")
+            error_location = get_error_location()
+            self.logger.error(f"Error rendering weather image [{error_location}]: {e}")
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     async def _handle_weather(self) -> dict[str, Any]:
@@ -219,7 +222,8 @@ class WeatherDisplayServer:
             # Return as dict
             return weather_data.model_dump()
         except Exception as e:
-            self.logger.error(f"Error getting weather data: {e}")
+            error_location = get_error_location()
+            self.logger.error(f"Error getting weather data [{error_location}]: {e}")
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     def _find_directory(self, name: str, candidates: list[Path]) -> Path:

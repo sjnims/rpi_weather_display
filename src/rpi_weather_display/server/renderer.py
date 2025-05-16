@@ -16,8 +16,14 @@ import jinja2
 
 from rpi_weather_display.models.config import AppConfig
 from rpi_weather_display.models.system import BatteryStatus
-from rpi_weather_display.models.weather import WeatherData
+from rpi_weather_display.models.weather import (
+    CurrentWeather,
+    HourlyWeather,
+    WeatherCondition,
+    WeatherData,
+)
 from rpi_weather_display.utils import get_battery_icon
+from rpi_weather_display.utils.error_utils import get_error_location
 
 
 class WeatherRenderer:
@@ -93,30 +99,130 @@ class WeatherRenderer:
         """
         try:
             # Load the template
-            template = self.jinja_env.get_template("weather.html.j2")
+            template = self.jinja_env.get_template("dashboard.html.j2")
 
             # Get battery icon based on status
             battery_icon = self._get_battery_icon(battery_status)
 
-            # Prepare template context
+            # Calculate current date and time info
+            now = datetime.now()
+            date_str = now.strftime("%A, %B %d, %Y")
+            last_refresh = now.strftime(self.config.display.timestamp_format)
+
+            # Set up units based on config
+            is_metric = self.config.weather.units == "metric"
+            units_temp = "°C" if is_metric else "°F"
+            units_wind = "m/s" if is_metric else "mph"
+            units_precip = "mm" if is_metric else "in"
+            units_pressure = "hPa"  # Standard unit regardless of system
+
+            # Handle Beaufort scale for wind (simplified)
+            bft = min(int(weather_data.current.wind_speed / 3.5) + 1, 12)
+
+            # Prepare mock data for fields that require calculation
+            daylight = "12h 30m"  # Mock value - would need calculation
+            uvi_max = "5.2"  # Mock value - would need max calculation
+            uvi_time = "12:00"  # Mock value - would need time calculation
+            aqi = "Good"  # Mock value - would need air quality
+            pressure = weather_data.current.pressure
+
+            # Moon phase (placeholder - would need actual calculation)
+            moon_phase = "moon-waxing-gibbous"
+
+            # City name (from config or weather data)
+            city = self.config.weather.city_name or "Unknown Location"
+
+            # Helper function for precipitation amount
+            def get_precipitation_amount(
+                weather_item: CurrentWeather | HourlyWeather,
+            ) -> float | None:
+                """Extract precipitation amount from weather item."""
+                # This would need proper implementation based on your data structure
+                return None
+
+            # Helper function for hourly precipitation
+            def get_hourly_precipitation(hour: HourlyWeather) -> str:
+                """Get precipitation amount for an hourly forecast."""
+                # This would need proper implementation
+                return "0"
+
+            # Helper filter for weather icons
+            def weather_icon_filter(weather_item: WeatherCondition) -> str:
+                """Convert weather item to icon."""
+                # Extract icon code and convert to your icon format
+                return "cloud-bold"  # Default placeholder
+
+            # Helper filter for moon phase
+            def moon_phase_icon_filter(phase: float) -> str:
+                """Convert moon phase to icon."""
+                return "moon-waxing-gibbous"  # Default placeholder
+
+            # Helper filter for moon phase label
+            def moon_phase_label_filter(phase: float) -> str:
+                """Get text label for moon phase."""
+                return "Waxing Gibbous"  # Default placeholder
+
+            # Helper filter for wind direction angle
+            def wind_direction_angle_filter(deg: float) -> float:
+                """Convert wind direction to rotation angle."""
+                return deg  # Pass through as is
+
+            # Register custom filters/functions for the template render
+            template_env = self.jinja_env.overlay()
+            template_env.filters["weather_icon"] = weather_icon_filter
+            template_env.filters["moon_phase_icon"] = moon_phase_icon_filter
+            template_env.filters["moon_phase_label"] = moon_phase_label_filter
+            template_env.filters["wind_direction_angle"] = wind_direction_angle_filter  # type: ignore
+            template_env.globals["get_precipitation_amount"] = get_precipitation_amount  # type: ignore
+            template_env.globals["get_hourly_precipitation"] = get_hourly_precipitation  # type: ignore
+
+            # Prepare context with all required variables
             context = {
+                # Main data objects
                 "weather": weather_data,
-                "battery": battery_status,
+                "battery": battery_status,  # Pass the full battery status object
+                "battery_status": battery_status,  # Full object if needed
                 "battery_icon": battery_icon,
                 "config": self.config,
-                "last_updated": datetime.now(),
-                "is_metric": self.config.weather.units == "metric",
+                # Date and time
+                "date": date_str,
+                "last_updated": now,
+                "last_refresh": last_refresh,
+                # Units
+                "is_metric": is_metric,
+                "units_temp": units_temp,
+                "units_wind": units_wind,
+                "units_precip": units_precip,
+                "units_pressure": units_pressure,
+                # Location
+                "city": city,
+                # Weather details
+                "bft": bft,
+                "daylight": daylight,
+                "uvi_max": uvi_max,
+                "uvi_time": uvi_time,
+                "aqi": aqi,
+                "pressure": pressure,
+                "moon_phase": moon_phase,
+                # Forecast data
+                "hourly": weather_data.hourly[:24],  # First 24 hours
+                "daily": weather_data.daily,  # All daily forecasts
             }
+
+            # Get the template with the extended environment
+            template = template_env.get_template("dashboard.html.j2")
 
             # Render the template
             html = template.render(**context)
 
             return html
         except jinja2.exceptions.TemplateError as e:
-            self.logger.error(f"Template error: {e}")
+            error_location = get_error_location()
+            self.logger.error(f"Template error [{error_location}]: {e}")
             raise
         except Exception as e:
-            self.logger.error(f"Error generating HTML: {e}")
+            error_location = get_error_location()
+            self.logger.error(f"Error generating HTML [{error_location}]: {e}")
             raise
 
     def _get_battery_icon(self, battery_status: BatteryStatus) -> str:
@@ -202,7 +308,8 @@ class WeatherRenderer:
                     await browser.close()
                     return screenshot
         except Exception as e:
-            self.logger.error(f"Error rendering image: {e}")
+            error_location = get_error_location()
+            self.logger.error(f"Error rendering image [{error_location}]: {e}")
             raise
 
     async def render_weather_image(

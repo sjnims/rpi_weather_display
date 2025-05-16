@@ -1,0 +1,23 @@
+<!-- Begin Header Section -->
+
+<header class="weather-display__header">
+  <div class="weather-display__header-date">{{ date }}</div>
+  <div class="weather-display__header-meta">
+    <div class="weather-display__header-meta-item">
+      <svg class="weather-display__header-icon">
+        <use href="/static/icons/sprite.svg#wi-refresh"></use>
+      </svg>
+      <span>{{ last_refresh }}</span>
+    </div>
+    <div class="weather-display__header-meta-item">
+      <svg class="weather-display__header-icon">
+        <use
+          href="/static/icons/sprite.svg#{{ battery_icon }}">
+        </use>
+      </svg>
+      <span>{{ battery.level }}%</span>
+    </div>
+  </div>
+</header>
+
+<!-- End Header Section -->

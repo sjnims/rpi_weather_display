@@ -17,6 +17,7 @@ from rpi_weather_display.models.weather import (
     HourlyWeather,
     WeatherData,
 )
+from rpi_weather_display.utils.error_utils import get_error_location
 
 
 class WeatherAPIClient:
@@ -70,10 +71,12 @@ class WeatherAPIClient:
 
                 return (lat, lon)
         except httpx.HTTPError as e:
-            self.logger.error(f"HTTP error during geocoding: {e}")
+            error_location = get_error_location()
+            self.logger.error(f"HTTP error during geocoding [{error_location}]: {e}")
             raise
         except Exception as e:
-            self.logger.error(f"Error during geocoding: {e}")
+            error_location = get_error_location()
+            self.logger.error(f"Error during geocoding [{error_location}]: {e}")
             raise
 
     async def get_weather_data(self, force_refresh: bool = False) -> WeatherData:
@@ -156,14 +159,16 @@ class WeatherAPIClient:
                 self.logger.info("Weather data updated successfully")
                 return weather
         except httpx.HTTPError as e:
-            self.logger.error(f"HTTP error during weather data fetch: {e}")
+            error_location = get_error_location()
+            self.logger.error(f"HTTP error during weather data fetch [{error_location}]: {e}")
             # If we have cached data, return it as a fallback
             if self._last_forecast is not None:
                 self.logger.warning("Using cached weather data due to API error")
                 return self._last_forecast
             raise
         except Exception as e:
-            self.logger.error(f"Error fetching weather data: {e}")
+            error_location = get_error_location()
+            self.logger.error(f"Error fetching weather data [{error_location}]: {e}")
             # If we have cached data, return it as a fallback
             if self._last_forecast is not None:
                 self.logger.warning("Using cached weather data due to error")

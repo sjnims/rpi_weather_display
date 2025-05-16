@@ -1,0 +1,9 @@
+{% extends "_base.html.j2" %}
+
+{# page body – composed of three partials #}
+{% block body %}
+  {% include "_header.html.j2" %}
+  {% include "_current.html.j2" %}
+  {% include "_forecast_hourly.html.j2" %}
+  {% include "_forecast_daily.html.j2" %}
+{% endblock %}
