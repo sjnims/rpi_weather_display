@@ -318,9 +318,9 @@ class TestPowerManagerFinal:
         result = power_manager.calculate_sleep_time()
 
         # Verify the result uses the expected value
-        # In the CI environment, this returns 3600 seconds regardless of the
-        # _time_until_quiet_change value, so we test for the actual behavior
-        assert result == 3600
+        # With _time_until_quiet_change returning 100 and default sleep_time at 60,
+        # the function will return min(60, 100) = 60
+        assert result == 60
 
     def test_time_until_quiet_change_with_positive_values(
         self, power_manager: PowerStateManager
@@ -354,9 +354,9 @@ class TestPowerManagerFinal:
             ):
                 # Call calculate_sleep_time which will use our mocked function
                 result = power_manager.calculate_sleep_time()
-                # With the current behavior, the function returns 3600 seconds (wake_up_interval_minutes * 60)  # noqa: E501
-                # when the mock returns 10*3600
-                assert result == 3600
+                # With the default sleep_time of 60 seconds and _time_until_quiet_change returning
+                # 10*3600, it should return min(60, 36000) = 60
+                assert result == 60
 
     def test_shutdown_system_details(self, power_manager: PowerStateManager) -> None:
         """Test more branches in shutdown_system."""
