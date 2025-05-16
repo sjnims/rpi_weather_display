@@ -8,7 +8,7 @@ for generating HTML and images from weather data.
 # pyright: reportPrivateUsage=false
 
 from collections.abc import Callable
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -1426,22 +1426,33 @@ class TestWeatherRenderer:
         weather_data.current.wind_speed = 3.0
         weather_data.daily = []
 
-        # Create hourly forecasts with different UV values
+        # Set up test dates
         now = datetime.now()
+        today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        next_day = today + timedelta(days=1)
+
+        # Create hourly forecasts with different UV values, all for today
         hour1 = MagicMock(spec=HourlyWeather)
         hour1.dt = int(now.timestamp())
         hour1.uvi = 2.5
 
+        # Second hour with maximum value (within today)
         hour2 = MagicMock(spec=HourlyWeather)
         hour2.dt = int(now.replace(hour=now.hour + 1).timestamp())
         hour2.uvi = 7.8  # Maximum value
 
+        # Third hour (within today)
         hour3 = MagicMock(spec=HourlyWeather)
         hour3.dt = int(now.replace(hour=now.hour + 2).timestamp())
         hour3.uvi = 5.3
 
+        # Fourth hour with higher UV value for the next day (should be ignored)
+        hour4 = MagicMock(spec=HourlyWeather)
+        hour4.dt = int(next_day.timestamp())
+        hour4.uvi = 9.5  # Higher than our expected max, but for tomorrow
+
         # Set hourly forecast with our test data
-        weather_data.hourly = [hour1, hour2, hour3]
+        weather_data.hourly = [hour1, hour2, hour3, hour4]
 
         # Create battery status
         battery_status = BatteryStatus(
@@ -1457,6 +1468,7 @@ class TestWeatherRenderer:
             await renderer.generate_html(weather_data, battery_status)
 
             # Expected format: uvi_max will be "7.8" and uvi_time will be the formatted time of hour2  # noqa: E501
+            # The hour4 value should be ignored since it's for tomorrow
             expected_max = "7.8"
             expected_time = datetime.fromtimestamp(hour2.dt).strftime("%H:%M")
 
@@ -1469,3 +1481,87 @@ class TestWeatherRenderer:
             # Check the values
             assert context["uvi_max"] == expected_max
             assert context["uvi_time"] == expected_time
+
+    @pytest.mark.asyncio()
+    async def test_uvi_max_calculation_with_current(self, renderer: WeatherRenderer) -> None:
+        """Test the calculation of maximum UV index using the current UV value."""
+        # Create test weather data with current and hourly forecasts
+        weather_data = MagicMock(spec=WeatherData)
+        weather_data.current = MagicMock(spec=CurrentWeather)
+        weather_data.current.weather = [MagicMock(spec=WeatherCondition)]
+        weather_data.current.weather[0].id = 800
+        weather_data.current.weather[0].icon = "01d"
+        weather_data.current.pressure = 1013
+        weather_data.current.wind_speed = 3.0
+        weather_data.current.uvi = 8.2  # Current UV index is higher than hourly forecasts
+        weather_data.daily = []
+
+        # Current time
+        now = datetime.now()
+
+        # Create hourly forecasts with different UV values, all for today
+        hour1 = MagicMock(spec=HourlyWeather)
+        hour1.dt = int(now.timestamp()) + 3600  # 1 hour from now
+        hour1.uvi = 2.5
+
+        hour2 = MagicMock(spec=HourlyWeather)
+        hour2.dt = int(now.timestamp()) + 7200  # 2 hours from now
+        hour2.uvi = 7.8
+
+        # Set hourly forecast with test data
+        weather_data.hourly = [hour1, hour2]
+
+        # Create battery status
+        battery_status = BatteryStatus(
+            level=80, voltage=3.9, current=0.0, temperature=25.0, state=BatteryState.DISCHARGING
+        )
+
+        # Setup mock template
+        mock_template = MagicMock()
+        mock_template.render.return_value = "<html>UV Max Test</html>"
+
+        with patch.object(renderer.jinja_env, "get_template", return_value=mock_template):
+            # Generate HTML
+            await renderer.generate_html(weather_data, battery_status)
+
+            # The current UV index (8.2) should be the maximum, not the hourly forecast values
+            expected_max = "8.2"
+            expected_time = now.strftime("%H:%M")
+
+            # Verify the mock template was called
+            assert mock_template.render.called
+
+            # Extract the context from the render call
+            context = mock_template.render.call_args[1]
+
+            # Check the values
+            assert context["uvi_max"] == expected_max
+            assert context["uvi_time"] == expected_time
+
+    def test_format_time_default(self, renderer: WeatherRenderer) -> None:
+        """Test formatting time with the default AM/PM format (no leading zeros)."""
+        # Test morning time
+        dt = datetime(2023, 5, 20, 9, 30, 0)
+        result = renderer._format_time(dt)
+        assert result == "9:30 AM"
+
+        # Test afternoon time
+        dt = datetime(2023, 5, 20, 14, 5, 0)
+        result = renderer._format_time(dt)
+        assert result == "2:05 PM"
+
+        # Test midnight
+        dt = datetime(2023, 5, 20, 0, 0, 0)
+        result = renderer._format_time(dt)
+        assert result == "12:00 AM"
+
+        # Test noon
+        dt = datetime(2023, 5, 20, 12, 0, 0)
+        result = renderer._format_time(dt)
+        assert result == "12:00 PM"
+
+    def test_format_time_custom_format(self, renderer: WeatherRenderer) -> None:
+        """Test formatting time with a custom format string."""
+        dt = datetime(2023, 5, 20, 15, 30, 0)
+        result = renderer._format_time(dt, "%H:%M")
+        assert result == "15:30"

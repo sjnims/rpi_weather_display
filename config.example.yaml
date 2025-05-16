@@ -14,6 +14,7 @@ display:
   refresh_interval_minutes: 30
   partial_refresh: true
   timestamp_format: "%Y-%m-%d %H:%M"
+  time_format: null
 
 power:
   quiet_hours_start: "23:00"

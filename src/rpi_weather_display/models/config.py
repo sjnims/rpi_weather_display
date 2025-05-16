@@ -49,6 +49,7 @@ class DisplayConfig(BaseModel):
     refresh_interval_minutes: int = 30
     partial_refresh: bool = True
     timestamp_format: str = "%Y-%m-%d %H:%M"
+    time_format: str | None = None  # When None, will use AM/PM without leading zeros
 
 
 class PowerConfig(BaseModel):

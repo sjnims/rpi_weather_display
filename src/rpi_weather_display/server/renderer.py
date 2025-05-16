@@ -5,7 +5,7 @@ images suitable for display on the e-paper screen using Playwright.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import jinja2
@@ -85,6 +85,41 @@ class WeatherRenderer:
         else:
             return f"{int(round(temp))}K"
 
+    def _format_time(self, dt: datetime | int, format_str: str | None = None) -> str:
+        """Format a datetime object or Unix timestamp as a time string.
+
+        Uses AM/PM format without leading zeros for hours by default,
+        or the specified format from config if provided.
+
+        Args:
+            dt: Datetime object or Unix timestamp.
+            format_str: Format string to use (or None to use config's time_format or default).
+
+        Returns:
+            Formatted time string.
+        """
+        if isinstance(dt, int):
+            dt = datetime.fromtimestamp(dt)
+
+            # Use format from config, or default to AM/PM without leading zeros
+        if format_str is None:
+            # Check if config has a time_format setting
+            if (
+                hasattr(self.config.display, "time_format")
+                and self.config.display.time_format is not None
+            ):
+                format_str = self.config.display.time_format
+                return dt.strftime(format_str)
+            else:
+                # Default to AM/PM format without leading zeros
+                hour = dt.hour % 12
+                if hour == 0:
+                    hour = 12  # 12-hour clock shows 12 for noon/midnight, not 0
+                return f"{hour}:{dt.minute:02d} {dt.strftime('%p')}"
+        else:
+            # Use the provided format
+            return dt.strftime(format_str)
+
     async def generate_html(self, weather_data: WeatherData, battery_status: BatteryStatus) -> str:
         """Generate HTML for the weather display.
 
@@ -110,8 +145,8 @@ class WeatherRenderer:
             date_str = now.strftime("%A, %B %d, %Y")
             last_refresh = now.strftime(self.config.display.timestamp_format)
 
-            # Format sunrise and sunset times
-            time_format = "%H:%M"
+            # Use custom time formatting method for all time displays
+            time_format = self.config.display.time_format
 
             # Create dictionaries for formatted times with default empty values
             current_times = {"sunrise_local": "", "sunset_local": ""}
@@ -119,11 +154,11 @@ class WeatherRenderer:
             # Only process if these attributes exist and have values
             if hasattr(weather_data.current, "sunrise") and weather_data.current.sunrise:
                 sunrise_dt = datetime.fromtimestamp(weather_data.current.sunrise)
-                current_times["sunrise_local"] = sunrise_dt.strftime(time_format)
+                current_times["sunrise_local"] = self._format_time(sunrise_dt, time_format)
 
             if hasattr(weather_data.current, "sunset") and weather_data.current.sunset:
                 sunset_dt = datetime.fromtimestamp(weather_data.current.sunset)
-                current_times["sunset_local"] = sunset_dt.strftime(time_format)
+                current_times["sunset_local"] = self._format_time(sunset_dt, time_format)
 
             # Format daily forecast times - simplified to improve coverage
             daily_times: list[dict[str, str]] = []
@@ -133,19 +168,18 @@ class WeatherRenderer:
 
                 # Format sunrise time
                 if hasattr(day, "sunrise") and day.sunrise:
-                    day_times["sunrise_local"] = datetime.fromtimestamp(day.sunrise).strftime(
-                        time_format
-                    )
+                    sunrise_dt = datetime.fromtimestamp(day.sunrise)
+                    day_times["sunrise_local"] = self._format_time(sunrise_dt, time_format)
 
                 # Format sunset time
                 if hasattr(day, "sunset") and day.sunset:
-                    day_times["sunset_local"] = datetime.fromtimestamp(day.sunset).strftime(
-                        time_format
-                    )
+                    sunset_dt = datetime.fromtimestamp(day.sunset)
+                    day_times["sunset_local"] = self._format_time(sunset_dt, time_format)
 
                 # Add weekday for the day forecast
                 if hasattr(day, "dt") and day.dt:
-                    day_times["weekday_short"] = datetime.fromtimestamp(day.dt).strftime("%a")
+                    day_dt = datetime.fromtimestamp(day.dt)
+                    day_times["weekday_short"] = day_dt.strftime("%a")
 
                 daily_times.append(day_times)
 
@@ -156,8 +190,8 @@ class WeatherRenderer:
                 hour_dt = datetime.fromtimestamp(hour.dt)
                 hourly_times.append(
                     {
-                        "local_time": hour_dt.strftime("%H:%M"),
-                        "hour": hour_dt.strftime("%H"),
+                        "local_time": self._format_time(hour_dt, time_format),
+                        "hour": str(hour_dt.hour if hour_dt.hour <= 12 else hour_dt.hour - 12),
                         "ampm": hour_dt.strftime("%p").lower(),
                     }
                 )
@@ -182,24 +216,38 @@ class WeatherRenderer:
             else:
                 daylight = "12h 30m"  # Fallback value if sunrise/sunset not available
 
-                # Calculate maximum UV index and its time from hourly forecast
+            # Calculate maximum UV index and its time from hourly forecast
             uvi_max = "0"
             uvi_time = "N/A"
 
             if weather_data.hourly:
+                # Start with current conditions
                 max_uvi = 0.0
                 max_uvi_timestamp = 0
 
-                # Find max UV index in the next 24 hours
-                for hour in weather_data.hourly[:24]:  # Limit to 24 hours
-                    if hasattr(hour, "uvi"):
+                # Check current UV index if available
+                if hasattr(weather_data.current, "uvi"):
+                    max_uvi = weather_data.current.uvi
+                    max_uvi_timestamp = int(now.timestamp())
+
+                # Get today's date range
+                today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+                tomorrow = today + timedelta(days=1)
+                today_start = int(today.timestamp())
+                today_end = int(tomorrow.timestamp()) - 1
+
+                # Find max UV index within today's remaining hours
+                for hour in weather_data.hourly:
+                    if (today_start <= hour.dt <= today_end) and hasattr(hour, "uvi"):
                         if hour.uvi > max_uvi:
                             max_uvi = hour.uvi
                             max_uvi_timestamp = hour.dt
 
                 if max_uvi > 0.0:
                     uvi_max = f"{max_uvi:.1f}"
-                    uvi_time = datetime.fromtimestamp(max_uvi_timestamp).strftime(time_format)
+                    uvi_time = self._format_time(
+                        datetime.fromtimestamp(max_uvi_timestamp), time_format
+                    )
             aqi = "Good"  # Mock value - would need air quality
             pressure = weather_data.current.pressure
 
