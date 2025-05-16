@@ -28,6 +28,7 @@ class BatteryStatus(BaseModel):
     temperature: float  # Celsius
     state: BatteryState = BatteryState.UNKNOWN
     time_remaining: int | None = None  # Minutes
+    timestamp: datetime | None = Field(default_factory=datetime.now)  # When this reading was taken
 
     @property
     def is_low(self) -> bool:

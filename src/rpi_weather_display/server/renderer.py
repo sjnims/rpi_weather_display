@@ -17,6 +17,7 @@ import jinja2
 from rpi_weather_display.models.config import AppConfig
 from rpi_weather_display.models.system import BatteryStatus
 from rpi_weather_display.models.weather import WeatherData
+from rpi_weather_display.utils import get_battery_icon
 
 
 class WeatherRenderer:
@@ -127,16 +128,7 @@ class WeatherRenderer:
         Returns:
             Icon ID from the sprite.
         """
-        if battery_status.state == "charging":
-            return "battery-charging-bold"
-        elif battery_status.level == 0:
-            return "battery-empty-bold"
-        elif battery_status.level > 80:
-            return "battery-full-bold"
-        elif battery_status.level > 30:
-            return "battery-high-bold"
-        else:
-            return "battery-low-bold"
+        return get_battery_icon(battery_status)
 
     def _get_weather_icon(self, icon_code: str) -> str:
         """Convert OpenWeatherMap icon code to our sprite icon ID.

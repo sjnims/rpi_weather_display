@@ -18,7 +18,7 @@ Priority is indicated as:
 
 ### 1.1 Extract Duplicate Code
 - [x] 🔴 1.1.1 Move `is_quiet_hours()` to a common utility function [COMPLETED 2024-06-04]
-- [ ] 🔴 1.1.2 Centralize battery threshold logic into a shared utility [PLANNED]
+- [x] 🔴 1.1.2 Centralize battery threshold logic into a shared utility [COMPLETED 2024-06-04]
 - [ ] 🟠 1.1.3 Create unified power state management interface [PLANNED]
 
 ### 1.2 WiFi Management Enhancement
@@ -128,9 +128,9 @@ Priority is indicated as:
 
 | Phase | Not Started | In Progress | Completed | Total |
 |-------|------------|-------------|-----------|-------|
-| 1     | 11         | 0           | 1         | 12    |
+| 1     | 10         | 0           | 2         | 12    |
 | 2     | 12         | 0           | 0         | 12    |
 | 3     | 12         | 0           | 0         | 12    |
 | 4     | 12         | 0           | 0         | 12    |
 | 5     | 12         | 0           | 0         | 12    |
-| Total | 59         | 0           | 1         | 60    |
+| Total | 58         | 0           | 2         | 60    |

@@ -11,7 +11,13 @@ from datetime import datetime, timedelta
 
 from rpi_weather_display.models.config import AppConfig
 from rpi_weather_display.models.system import BatteryStatus
-from rpi_weather_display.utils import is_quiet_hours
+from rpi_weather_display.utils import (
+    is_battery_critical,
+    is_battery_low,
+    is_charging,
+    is_quiet_hours,
+    should_double_intervals,
+)
 
 
 class Scheduler:
@@ -44,17 +50,14 @@ class Scheduler:
                 quiet_hours_start=self.config.power.quiet_hours_start,
                 quiet_hours_end=self.config.power.quiet_hours_end,
             )
-            and battery_status.state != "charging"
+            and not is_charging(battery_status)
             and not self.config.debug
         ):
             self.logger.info("Quiet hours and not charging, skipping refresh")
             return False
 
         # Check if battery is too low
-        if (
-            battery_status.level < self.config.power.critical_battery_threshold
-            and battery_status.state != "charging"
-        ):
+        if is_battery_critical(battery_status, self.config.power.critical_battery_threshold):
             self.logger.warning("Battery critically low, skipping refresh to conserve power")
             return False
 
@@ -66,10 +69,7 @@ class Scheduler:
         min_refresh_interval = timedelta(minutes=self.config.display.refresh_interval_minutes)
 
         # If battery is low, double the refresh interval unless charging
-        if (
-            battery_status.level < self.config.power.low_battery_threshold
-            and battery_status.state != "charging"
-        ):
+        if is_battery_low(battery_status, self.config.power.low_battery_threshold):
             min_refresh_interval *= 2
             self.logger.info("Battery low, doubling refresh interval")
 
@@ -92,14 +92,12 @@ class Scheduler:
         min_update_interval = timedelta(minutes=self.config.weather.update_interval_minutes)
 
         # If battery is low, double the update interval unless charging
-        if (
-            battery_status.level < self.config.power.low_battery_threshold
-            and battery_status.state != "charging"
-            and not is_quiet_hours(
-                quiet_hours_start=self.config.power.quiet_hours_start,
-                quiet_hours_end=self.config.power.quiet_hours_end,
-            )  # During quiet hours, we'll use the normal interval
-        ):
+        in_quiet_hours = is_quiet_hours(
+            quiet_hours_start=self.config.power.quiet_hours_start,
+            quiet_hours_end=self.config.power.quiet_hours_end,
+        )
+
+        if should_double_intervals(battery_status, self.config.power, in_quiet_hours):
             min_update_interval *= 2
             self.logger.info("Battery low, doubling update interval")
 
@@ -190,10 +188,7 @@ class Scheduler:
             refresh_interval = self.config.display.refresh_interval_minutes
 
             # If battery is low, double the refresh interval unless charging
-            if (
-                battery_status.level < self.config.power.low_battery_threshold
-                and battery_status.state != "charging"
-            ):
+            if is_battery_low(battery_status, self.config.power.low_battery_threshold):
                 refresh_interval *= 2
 
             next_refresh = self._last_refresh + timedelta(minutes=refresh_interval)
@@ -207,10 +202,7 @@ class Scheduler:
             update_interval = self.config.weather.update_interval_minutes
 
             # If battery is low, double the update interval unless charging
-            if (
-                battery_status.level < self.config.power.low_battery_threshold
-                and battery_status.state != "charging"
-            ):
+            if is_battery_low(battery_status, self.config.power.low_battery_threshold):
                 update_interval *= 2
 
             next_update = self._last_update + timedelta(minutes=update_interval)

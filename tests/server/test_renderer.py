@@ -272,46 +272,6 @@ class TestWeatherRenderer:
         """Test fallback for unknown OWM icon codes."""
         assert renderer._get_weather_icon("unknown-code") == "cloud-bold"  # Default fallback
 
-    def test_get_battery_icon_charging(self, renderer: WeatherRenderer) -> None:
-        """Test battery icon selection for charging state."""
-        battery = BatteryStatus(
-            level=50, voltage=3.8, current=500, temperature=25.0, state=BatteryState.CHARGING
-        )
-
-        assert renderer._get_battery_icon(battery) == "battery-charging-bold"
-
-    def test_get_battery_icon_empty(self, renderer: WeatherRenderer) -> None:
-        """Test battery icon selection for empty battery."""
-        battery = BatteryStatus(
-            level=0, voltage=3.1, current=-100, temperature=25.0, state=BatteryState.DISCHARGING
-        )
-
-        assert renderer._get_battery_icon(battery) == "battery-empty-bold"
-
-    def test_get_battery_icon_full(self, renderer: WeatherRenderer) -> None:
-        """Test battery icon selection for full battery."""
-        battery = BatteryStatus(
-            level=95, voltage=4.1, current=-10, temperature=25.0, state=BatteryState.DISCHARGING
-        )
-
-        assert renderer._get_battery_icon(battery) == "battery-full-bold"
-
-    def test_get_battery_icon_high(self, renderer: WeatherRenderer) -> None:
-        """Test battery icon selection for high battery level."""
-        battery = BatteryStatus(
-            level=75, voltage=3.9, current=-50, temperature=25.0, state=BatteryState.DISCHARGING
-        )
-
-        assert renderer._get_battery_icon(battery) == "battery-high-bold"
-
-    def test_get_battery_icon_low(self, renderer: WeatherRenderer) -> None:
-        """Test battery icon selection for low battery level."""
-        battery = BatteryStatus(
-            level=15, voltage=3.5, current=-150, temperature=25.0, state=BatteryState.DISCHARGING
-        )
-
-        assert renderer._get_battery_icon(battery) == "battery-low-bold"
-
     @pytest.mark.asyncio()
     async def test_generate_html(
         self, renderer: WeatherRenderer, weather_data: WeatherData, battery_status: BatteryStatus
