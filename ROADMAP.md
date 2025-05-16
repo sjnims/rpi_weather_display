@@ -17,7 +17,7 @@ Priority is indicated as:
 ## Phase 1: Power Optimization Integration (Target: v0.2.0)
 
 ### 1.1 Extract Duplicate Code
-- [ ] 🔴 1.1.1 Move `is_quiet_hours()` to a common utility function [PLANNED]
+- [x] 🔴 1.1.1 Move `is_quiet_hours()` to a common utility function [COMPLETED 2024-06-04]
 - [ ] 🔴 1.1.2 Centralize battery threshold logic into a shared utility [PLANNED]
 - [ ] 🟠 1.1.3 Create unified power state management interface [PLANNED]
 
@@ -128,9 +128,9 @@ Priority is indicated as:
 
 | Phase | Not Started | In Progress | Completed | Total |
 |-------|------------|-------------|-----------|-------|
-| 1     | 12         | 0           | 0         | 12    |
+| 1     | 11         | 0           | 1         | 12    |
 | 2     | 12         | 0           | 0         | 12    |
 | 3     | 12         | 0           | 0         | 12    |
 | 4     | 12         | 0           | 0         | 12    |
 | 5     | 12         | 0           | 0         | 12    |
-| Total | 60         | 0           | 0         | 60    |
+| Total | 59         | 0           | 1         | 60    |

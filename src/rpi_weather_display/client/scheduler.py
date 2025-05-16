@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 
 from rpi_weather_display.models.config import AppConfig
 from rpi_weather_display.models.system import BatteryStatus
+from rpi_weather_display.utils import is_quiet_hours
 
 
 class Scheduler:
@@ -38,7 +39,14 @@ class Scheduler:
             True if the display should be refreshed, False otherwise.
         """
         # Don't refresh if this is during quiet hours and battery is not charging
-        if self.is_quiet_hours() and battery_status.state != "charging" and not self.config.debug:
+        if (
+            is_quiet_hours(
+                quiet_hours_start=self.config.power.quiet_hours_start,
+                quiet_hours_end=self.config.power.quiet_hours_end,
+            )
+            and battery_status.state != "charging"
+            and not self.config.debug
+        ):
             self.logger.info("Quiet hours and not charging, skipping refresh")
             return False
 
@@ -87,45 +95,15 @@ class Scheduler:
         if (
             battery_status.level < self.config.power.low_battery_threshold
             and battery_status.state != "charging"
-            and not self.is_quiet_hours()  # During quiet hours, we'll use the normal interval
+            and not is_quiet_hours(
+                quiet_hours_start=self.config.power.quiet_hours_start,
+                quiet_hours_end=self.config.power.quiet_hours_end,
+            )  # During quiet hours, we'll use the normal interval
         ):
             min_update_interval *= 2
             self.logger.info("Battery low, doubling update interval")
 
         return time_since_update >= min_update_interval
-
-    def is_quiet_hours(self) -> bool:
-        """Check if current time is within quiet hours.
-
-        Returns:
-            True if current time is within quiet hours, False otherwise.
-        """
-        # Parse quiet hours from config
-        try:
-            start_hour, start_minute = map(int, self.config.power.quiet_hours_start.split(":"))
-            end_hour, end_minute = map(int, self.config.power.quiet_hours_end.split(":"))
-
-            from datetime import time as dt_time
-
-            start_time = dt_time(start_hour, start_minute)
-            end_time = dt_time(end_hour, end_minute)
-
-            # Get current time
-            now = datetime.now().time()
-
-            # Check if current time is within quiet hours
-            if start_time <= end_time:
-                # Simple case: start time is before end time
-                return start_time <= now <= end_time
-            else:
-                # Complex case: quiet hours span midnight
-                return now >= start_time or now <= end_time
-        except ValueError:
-            self.logger.error(
-                f"Invalid quiet hours format: "
-                f"{self.config.power.quiet_hours_start} - {self.config.power.quiet_hours_end}"
-            )
-            return False
 
     def run(
         self,
@@ -200,7 +178,10 @@ class Scheduler:
         sleep_time = 60
 
         # If in quiet hours, sleep for the wake_up_interval
-        if self.is_quiet_hours():
+        if is_quiet_hours(
+            quiet_hours_start=self.config.power.quiet_hours_start,
+            quiet_hours_end=self.config.power.quiet_hours_end,
+        ):
             return self.config.power.wake_up_interval_minutes * 60
 
         # Not in quiet hours, calculate based on refresh/update times

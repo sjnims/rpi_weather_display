@@ -7,7 +7,6 @@ for optimizing power consumption of the Raspberry Pi Zero.
 import logging
 import subprocess
 from datetime import datetime, timedelta
-from datetime import time as dt_time
 from pathlib import Path
 from typing import Any, TypedDict, cast
 
@@ -215,38 +214,6 @@ class PowerManager:
             return BatteryStatus(
                 level=0, voltage=0.0, current=0.0, temperature=0.0, state=BatteryState.UNKNOWN
             )
-
-    def is_quiet_hours(self) -> bool:
-        """Check if current time is within quiet hours.
-
-        Returns:
-            True if current time is within quiet hours, False otherwise.
-        """
-        # Parse quiet hours from config
-        try:
-            start_hour, start_minute = map(int, self.config.quiet_hours_start.split(":"))
-            end_hour, end_minute = map(int, self.config.quiet_hours_end.split(":"))
-
-            start_time = dt_time(start_hour, start_minute)
-            end_time = dt_time(end_hour, end_minute)
-
-            # Get current time
-            now = datetime.now().time()
-
-            # Check if current time is within quiet hours
-            if start_time <= end_time:
-                # Simple case: start time is before end time
-                return start_time <= now <= end_time
-            else:
-                # Complex case: quiet hours span midnight
-                return now >= start_time or now <= end_time
-        except ValueError:
-            # Break up long line
-            self.logger.error(
-                f"Invalid quiet hours format: {self.config.quiet_hours_start} - "
-                f"{self.config.quiet_hours_end}"
-            )
-            return False
 
     def shutdown_system(self) -> None:
         """Shutdown the Raspberry Pi."""

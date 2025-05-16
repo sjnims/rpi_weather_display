@@ -267,56 +267,6 @@ class TestPowerManager:
         assert status.temperature == 0.0
         assert status.state == BatteryState.UNKNOWN
 
-    @freeze_time("2023-01-01 00:00:00")  # Midnight
-    def test_is_quiet_hours_midnight(self, power_manager: PowerManager) -> None:
-        """Test is_quiet_hours at midnight (should be quiet)."""
-        assert power_manager.is_quiet_hours() is True
-
-    @freeze_time("2023-01-01 12:00:00")  # Noon
-    def test_is_quiet_hours_noon(self, power_manager: PowerManager) -> None:
-        """Test is_quiet_hours at noon (should not be quiet)."""
-        assert power_manager.is_quiet_hours() is False
-
-    @freeze_time("2023-01-01 23:30:00")  # Late night
-    def test_is_quiet_hours_late(self, power_manager: PowerManager) -> None:
-        """Test is_quiet_hours late at night (should be quiet)."""
-        assert power_manager.is_quiet_hours() is True
-
-    @freeze_time("2023-01-01 05:30:00")  # Early morning
-    def test_is_quiet_hours_early(self, power_manager: PowerManager) -> None:
-        """Test is_quiet_hours early morning (should be quiet)."""
-        assert power_manager.is_quiet_hours() is True
-
-    def test_is_quiet_hours_invalid_format(self, power_config: PowerConfig) -> None:
-        """Test is_quiet_hours with invalid time format."""
-        # Create config with invalid time format
-        power_config.quiet_hours_start = "invalid"
-        power_config.quiet_hours_end = "format"
-
-        manager = PowerManager(power_config)
-
-        # Should return False for invalid format
-        assert manager.is_quiet_hours() is False
-
-    def test_is_quiet_hours_daytime_span(self, power_config: PowerConfig) -> None:
-        """Test is_quiet_hours with daytime span (not overnight)."""
-        # Configure quiet hours during the day (10:00 - 14:00)
-        power_config.quiet_hours_start = "10:00"
-        power_config.quiet_hours_end = "14:00"
-
-        manager = PowerManager(power_config)
-
-        # Test during quiet hours
-        with freeze_time("2023-01-01 12:00:00"):  # Noon
-            assert manager.is_quiet_hours() is True
-
-        # Test outside quiet hours
-        with freeze_time("2023-01-01 09:00:00"):  # Morning
-            assert manager.is_quiet_hours() is False
-
-        with freeze_time("2023-01-01 15:00:00"):  # Afternoon
-            assert manager.is_quiet_hours() is False
-
     def test_shutdown_system_mock(self, power_manager: PowerManager) -> None:
         """Test shutdown_system in mock mode."""
         # Should not attempt actual shutdown when not initialized
