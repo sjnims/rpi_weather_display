@@ -1412,3 +1412,60 @@ class TestWeatherRenderer:
         # Check calculation results
         assert daylight_hours == expected_hours
         assert daylight_minutes == expected_minutes
+
+    @pytest.mark.asyncio()
+    async def test_uvi_max_calculation(self, renderer: WeatherRenderer) -> None:
+        """Test the calculation of maximum UV index and its time."""
+        # Create test weather data with hourly forecasts containing UV index values
+        weather_data = MagicMock(spec=WeatherData)
+        weather_data.current = MagicMock(spec=CurrentWeather)
+        weather_data.current.weather = [MagicMock(spec=WeatherCondition)]
+        weather_data.current.weather[0].id = 800
+        weather_data.current.weather[0].icon = "01d"
+        weather_data.current.pressure = 1013
+        weather_data.current.wind_speed = 3.0
+        weather_data.daily = []
+
+        # Create hourly forecasts with different UV values
+        now = datetime.now()
+        hour1 = MagicMock(spec=HourlyWeather)
+        hour1.dt = int(now.timestamp())
+        hour1.uvi = 2.5
+
+        hour2 = MagicMock(spec=HourlyWeather)
+        hour2.dt = int(now.replace(hour=now.hour + 1).timestamp())
+        hour2.uvi = 7.8  # Maximum value
+
+        hour3 = MagicMock(spec=HourlyWeather)
+        hour3.dt = int(now.replace(hour=now.hour + 2).timestamp())
+        hour3.uvi = 5.3
+
+        # Set hourly forecast with our test data
+        weather_data.hourly = [hour1, hour2, hour3]
+
+        # Create battery status
+        battery_status = BatteryStatus(
+            level=80, voltage=3.9, current=0.0, temperature=25.0, state=BatteryState.DISCHARGING
+        )
+
+        # Setup mock template
+        mock_template = MagicMock()
+        mock_template.render.return_value = "<html>UV Max Test</html>"
+
+        with patch.object(renderer.jinja_env, "get_template", return_value=mock_template):
+            # Generate HTML
+            await renderer.generate_html(weather_data, battery_status)
+
+            # Expected format: uvi_max will be "7.8" and uvi_time will be the formatted time of hour2  # noqa: E501
+            expected_max = "7.8"
+            expected_time = datetime.fromtimestamp(hour2.dt).strftime("%H:%M")
+
+            # Verify the mock template was called
+            assert mock_template.render.called
+
+            # Extract the context from the render call
+            context = mock_template.render.call_args[1]
+
+            # Check the values
+            assert context["uvi_max"] == expected_max
+            assert context["uvi_time"] == expected_time

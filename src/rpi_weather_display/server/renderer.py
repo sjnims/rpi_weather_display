@@ -1,7 +1,3 @@
-# pyright: reportMissingImports=false, reportUnknownVariableType=false
-# pyright: reportUnknownMemberType=false, reportUnknownArgumentType=false
-# pyright: reportUnusedImport=false
-
 """Weather data rendering module for creating display images.
 
 Provides functionality to render weather data into HTML and convert it to
@@ -130,7 +126,7 @@ class WeatherRenderer:
                 current_times["sunset_local"] = sunset_dt.strftime(time_format)
 
             # Format daily forecast times - simplified to improve coverage
-            daily_times = []
+            daily_times: list[dict[str, str]] = []
             for day in weather_data.daily:
                 # Initialize with default empty values
                 day_times = {"sunrise_local": "", "sunset_local": "", "weekday_short": ""}
@@ -154,7 +150,7 @@ class WeatherRenderer:
                 daily_times.append(day_times)
 
             # Format hourly forecast times
-            hourly_times = []
+            hourly_times: list[dict[str, str]] = []
             hourly_count = self.config.weather.hourly_forecast_count
             for hour in weather_data.hourly[:hourly_count]:  # Use config value
                 hour_dt = datetime.fromtimestamp(hour.dt)
@@ -186,8 +182,24 @@ class WeatherRenderer:
             else:
                 daylight = "12h 30m"  # Fallback value if sunrise/sunset not available
 
-            uvi_max = "5.2"  # Mock value - would need max calculation
-            uvi_time = "12:00"  # Mock value - would need time calculation
+                # Calculate maximum UV index and its time from hourly forecast
+            uvi_max = "0"
+            uvi_time = "N/A"
+
+            if weather_data.hourly:
+                max_uvi = 0.0
+                max_uvi_timestamp = 0
+
+                # Find max UV index in the next 24 hours
+                for hour in weather_data.hourly[:24]:  # Limit to 24 hours
+                    if hasattr(hour, "uvi"):
+                        if hour.uvi > max_uvi:
+                            max_uvi = hour.uvi
+                            max_uvi_timestamp = hour.dt
+
+                if max_uvi > 0.0:
+                    uvi_max = f"{max_uvi:.1f}"
+                    uvi_time = datetime.fromtimestamp(max_uvi_timestamp).strftime(time_format)
             aqi = "Good"  # Mock value - would need air quality
             pressure = weather_data.current.pressure
 
@@ -560,8 +572,8 @@ class WeatherRenderer:
         """Ensure the weather icon mapping dictionaries are loaded."""
         # Load and parse the CSV file once
         if not hasattr(self, "_weather_icon_map"):
-            self._weather_icon_map = {}
-            self._weather_id_to_icon = {}
+            self._weather_icon_map: dict[str, str] = {}
+            self._weather_id_to_icon: dict[str, str] = {}
 
             try:
                 import csv
