@@ -6,14 +6,14 @@ power management, and scheduled operations for the e-paper weather display.
 
 import argparse
 import tempfile
+import time
 from pathlib import Path
 
 import requests
 
 from rpi_weather_display.client.display import EPaperDisplay
-from rpi_weather_display.client.power import PowerManager
-from rpi_weather_display.client.scheduler import Scheduler
 from rpi_weather_display.models.config import AppConfig
+from rpi_weather_display.utils import PowerStateManager
 from rpi_weather_display.utils.logging import setup_logging
 
 
@@ -33,9 +33,8 @@ class WeatherDisplayClient:
         self.logger = setup_logging(self.config.logging, "client")
 
         # Initialize components
-        self.power_manager = PowerManager(self.config.power)
+        self.power_manager = PowerStateManager(self.config)
         self.display = EPaperDisplay(self.config.display)
-        self.scheduler = Scheduler(self.config)
 
         # Image cache path
         self.cache_dir = Path(tempfile.gettempdir()) / "rpi-weather-display"
@@ -43,6 +42,7 @@ class WeatherDisplayClient:
         self.current_image_path = self.cache_dir / "current.png"
 
         self.logger.info("Weather Display Client initialized")
+        self._running = False
 
     def initialize(self) -> None:
         """Initialize hardware and subsystems."""
@@ -101,6 +101,9 @@ class WeatherDisplayClient:
             with open(self.current_image_path, "wb") as f:
                 f.write(response.content)
 
+            # Record that we updated the weather data
+            self.power_manager.record_weather_update()
+
             self.logger.info("Weather data updated successfully")
             return True
         except requests.RequestException as e:
@@ -119,24 +122,25 @@ class WeatherDisplayClient:
             if self.current_image_path.exists():
                 # Display the image
                 self.display.display_image(self.current_image_path)
+                # Record that we refreshed the display
+                self.power_manager.record_display_refresh()
                 self.logger.info("Display refreshed successfully")
             else:
                 # No image available, try to update first
                 if self.update_weather():
                     self.display.display_image(self.current_image_path)
+                    # Record that we refreshed the display
+                    self.power_manager.record_display_refresh()
                     self.logger.info("Display refreshed successfully")
                 else:
                     self.logger.error("No image available and failed to update")
         except Exception as e:
             self.logger.error(f"Error refreshing display: {e}")
 
-    def _update_weather_wrapper(self) -> None:
-        """Wrapper for update_weather that doesn't return a value."""
-        self.update_weather()
-
     def run(self) -> None:
         """Run the client main loop."""
         self.logger.info("Starting Weather Display Client")
+        self._running = True
 
         try:
             # Initialize hardware
@@ -148,17 +152,35 @@ class WeatherDisplayClient:
             # Initial display refresh
             self.refresh_display()
 
-            # Run the scheduler
-            self.scheduler.run(
-                refresh_callback=self.refresh_display,
-                update_callback=self._update_weather_wrapper,
-                battery_callback=self.power_manager.get_battery_status,
-                sleep_callback=self._handle_sleep,
-            )
+            # Main loop using PowerStateManager for scheduling
+            while self._running:
+                # Check if we should update weather
+                if self.power_manager.should_update_weather():
+                    self.update_weather()
+
+                # Check if we should refresh display
+                if self.power_manager.should_refresh_display():
+                    self.refresh_display()
+
+                # Calculate sleep time
+                sleep_time = self.power_manager.calculate_sleep_time()
+
+                # If sleep time is long, consider deep sleep
+                if sleep_time > 10 * 60:  # More than 10 minutes
+                    minutes = sleep_time // 60
+                    if self._handle_sleep(minutes):
+                        break  # Exit loop if we're doing deep sleep
+
+                # Regular sleep
+                self.logger.info(f"Sleeping for {sleep_time} seconds")
+                time.sleep(sleep_time)
+
         except KeyboardInterrupt:
             self.logger.info("Client interrupted by user")
+            self._running = False
         except Exception as e:
             self.logger.error(f"Error in client main loop: {e}")
+            self._running = False
         finally:
             # Clean up
             self.shutdown()

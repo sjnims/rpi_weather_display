@@ -17,9 +17,9 @@ Priority is indicated as:
 ## Phase 1: Power Optimization Integration (Target: v0.2.0)
 
 ### 1.1 Extract Duplicate Code
-- [x] 🔴 1.1.1 Move `is_quiet_hours()` to a common utility function [COMPLETED 2024-06-04]
-- [x] 🔴 1.1.2 Centralize battery threshold logic into a shared utility [COMPLETED 2024-06-04]
-- [ ] 🟠 1.1.3 Create unified power state management interface [PLANNED]
+- [x] 🔴 1.1.1 Move `is_quiet_hours()` to a common utility function [COMPLETED 2025-05-15]
+- [x] 🔴 1.1.2 Centralize battery threshold logic into a shared utility [COMPLETED 2025-05-15]
+- [x] 🟠 1.1.3 Create unified power state management interface [COMPLETED 2025-05-15]
 
 ### 1.2 WiFi Management Enhancement
 - [ ] 🔴 1.2.1 Integrate `wifi-sleep.sh` script with `NetworkManager` class [PLANNED]

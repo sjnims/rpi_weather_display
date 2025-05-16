@@ -12,10 +12,17 @@ from rpi_weather_display.utils.battery_utils import (
     should_conserve_power,
     should_double_intervals,
 )
+from rpi_weather_display.utils.power_manager import (
+    PowerState,
+    PowerStateCallback,
+    PowerStateManager,
+)
 from rpi_weather_display.utils.time_utils import is_quiet_hours
 
 __all__ = [
+    # Time utilities
     "is_quiet_hours",
+    # Battery utilities
     "is_battery_critical",
     "is_battery_low",
     "is_charging",
@@ -26,4 +33,8 @@ __all__ = [
     "estimate_remaining_time",
     "calculate_drain_rate",
     "is_discharge_rate_abnormal",
+    # Power manager
+    "PowerState",
+    "PowerStateCallback",
+    "PowerStateManager",
 ]

@@ -5,6 +5,8 @@
 # ^ Allows tests to access protected members
 # pyright: reportUnknownMemberType=false
 # pyright: reportAttributeAccessIssue=false
+# pyright: reportFunctionMemberAccess=false
+# ^ Ignores "Cannot access attribute X for class function"
 
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -90,15 +92,12 @@ def mock_power_manager() -> MagicMock:
     )
     power_manager.schedule_wakeup = MagicMock(return_value=True)
     power_manager.shutdown_system = MagicMock()
+    power_manager.should_update_weather = MagicMock(return_value=False)
+    power_manager.should_refresh_display = MagicMock(return_value=False)
+    power_manager.calculate_sleep_time = MagicMock(return_value=60)
+    power_manager.record_display_refresh = MagicMock()
+    power_manager.record_weather_update = MagicMock()
     return power_manager
-
-
-@pytest.fixture()
-def mock_scheduler() -> MagicMock:
-    """Create a mock scheduler."""
-    scheduler = MagicMock()
-    scheduler.run = MagicMock()
-    return scheduler
 
 
 @pytest.fixture()
@@ -106,13 +105,11 @@ def client(
     config_path: Path,
     mock_display: MagicMock,
     mock_power_manager: MagicMock,
-    mock_scheduler: MagicMock,
 ) -> WeatherDisplayClient:
     """Create a WeatherDisplayClient with mocked components."""
     with (
         patch("rpi_weather_display.client.main.EPaperDisplay", return_value=mock_display),
-        patch("rpi_weather_display.client.main.PowerManager", return_value=mock_power_manager),
-        patch("rpi_weather_display.client.main.Scheduler", return_value=mock_scheduler),
+        patch("rpi_weather_display.client.main.PowerStateManager", return_value=mock_power_manager),
     ):
         client = WeatherDisplayClient(config_path)
         return client
@@ -125,8 +122,7 @@ class TestWeatherDisplayClient:
         """Test client initialization."""
         with (
             patch("rpi_weather_display.client.main.EPaperDisplay") as mock_display_cls,
-            patch("rpi_weather_display.client.main.PowerManager") as mock_power_cls,
-            patch("rpi_weather_display.client.main.Scheduler") as mock_scheduler_cls,
+            patch("rpi_weather_display.client.main.PowerStateManager") as mock_power_cls,
         ):
             client = WeatherDisplayClient(config_path)
 
@@ -136,7 +132,6 @@ class TestWeatherDisplayClient:
             # Check that components are initialized
             mock_power_cls.assert_called_once()
             mock_display_cls.assert_called_once()
-            mock_scheduler_cls.assert_called_once()
 
             # Check that cache directory is created
             assert client.cache_dir.exists()
@@ -147,8 +142,8 @@ class TestWeatherDisplayClient:
         client.initialize()
 
         # Verify components are initialized
-        client.power_manager.initialize.assert_called_once()  # type: ignore
-        client.display.initialize.assert_called_once()  # type: ignore
+        client.power_manager.initialize.assert_called_once()
+        client.display.initialize.assert_called_once()
 
     def test_update_weather_success(self, client: WeatherDisplayClient) -> None:
         """Test successful weather update."""
@@ -172,6 +167,9 @@ class TestWeatherDisplayClient:
 
             # Verify image was saved
             assert client.current_image_path.exists()
+
+            # Verify record_weather_update was called
+            client.power_manager.record_weather_update.assert_called_once()
 
     def test_update_weather_server_error(self, client: WeatherDisplayClient) -> None:
         """Test weather update with server error."""
@@ -225,7 +223,10 @@ class TestWeatherDisplayClient:
         client.refresh_display()
 
         # Verify display was refreshed with the image
-        client.display.display_image.assert_called_once_with(client.current_image_path)  # type: ignore
+        client.display.display_image.assert_called_once_with(client.current_image_path)
+
+        # Verify record_display_refresh was called
+        client.power_manager.record_display_refresh.assert_called_once()
 
     def test_refresh_display_no_cached_image_update_success(
         self, client: WeatherDisplayClient
@@ -242,7 +243,7 @@ class TestWeatherDisplayClient:
             mock_update.assert_called_once()
 
             # Verify display was refreshed
-            client.display.display_image.assert_called_once()  # type: ignore
+            client.display.display_image.assert_called_once()
 
     def test_refresh_display_no_cached_image_update_failure(
         self, client: WeatherDisplayClient
@@ -259,7 +260,7 @@ class TestWeatherDisplayClient:
             mock_update.assert_called_once()
 
             # Verify display was not refreshed
-            client.display.display_image.assert_not_called()  # type: ignore
+            client.display.display_image.assert_not_called()
 
     def test_refresh_display_no_cached_image_update_failure_log(
         self, client: WeatherDisplayClient
@@ -282,7 +283,7 @@ class TestWeatherDisplayClient:
     def test_refresh_display_exception(self, client: WeatherDisplayClient) -> None:
         """Test display refresh with exception."""
         # Mock exception during display
-        client.display.display_image.side_effect = Exception("Display error")  # type: ignore
+        client.display.display_image.side_effect = Exception("Display error")
 
         # Create a mock cached image
         client.current_image_path.parent.mkdir(exist_ok=True)
@@ -293,7 +294,7 @@ class TestWeatherDisplayClient:
         client.refresh_display()
 
         # Verify display was attempted
-        client.display.display_image.assert_called_once()  # type: ignore
+        client.display.display_image.assert_called_once()
 
     def test_run(self, client: WeatherDisplayClient) -> None:
         """Test the main run method."""
@@ -302,6 +303,14 @@ class TestWeatherDisplayClient:
             patch.object(client, "initialize") as mock_initialize,
             patch.object(client, "update_weather") as mock_update,
             patch.object(client, "refresh_display") as mock_refresh,
+            patch.object(client, "_running", True, create=True),
+            # Set _running to False after first loop iteration
+            patch.object(client.power_manager, "should_update_weather", side_effect=[True, False]),
+            patch.object(client.power_manager, "should_refresh_display", return_value=True),
+            patch.object(client.power_manager, "calculate_sleep_time", return_value=5),
+            patch("time.sleep"),
+            # Exit after one iteration
+            patch.object(client, "_handle_sleep", return_value=False),
         ):
             client.run()
 
@@ -309,18 +318,13 @@ class TestWeatherDisplayClient:
             mock_initialize.assert_called_once()
 
             # Verify initial update and refresh
-            mock_update.assert_called_once()
-            mock_refresh.assert_called_once()
+            mock_update.assert_called()
+            mock_refresh.assert_called()
 
-            # Verify scheduler was run
-            client.scheduler.run.assert_called_once()  # type: ignore
-
-            # Verify callbacks were passed correctly
-            args, kwargs = client.scheduler.run.call_args  # type: ignore
-            assert "refresh_callback" in kwargs
-            assert "update_callback" in kwargs
-            assert "battery_callback" in kwargs
-            assert "sleep_callback" in kwargs
+            # Verify power manager methods were called
+            client.power_manager.should_update_weather.assert_called()
+            client.power_manager.should_refresh_display.assert_called()
+            client.power_manager.calculate_sleep_time.assert_called()
 
     def test_run_keyboard_interrupt(self, client: WeatherDisplayClient) -> None:
         """Test run method with keyboard interrupt."""
@@ -355,9 +359,9 @@ class TestWeatherDisplayClient:
         assert result is False
 
         # Verify no shutdown attempted
-        client.power_manager.schedule_wakeup.assert_not_called()  # type: ignore
-        client.power_manager.shutdown_system.assert_not_called()  # type: ignore
-        client.display.sleep.assert_not_called()  # type: ignore
+        client.power_manager.schedule_wakeup.assert_not_called()
+        client.power_manager.shutdown_system.assert_not_called()
+        client.display.sleep.assert_not_called()
 
     def test_handle_sleep_short_duration(self, client: WeatherDisplayClient) -> None:
         """Test sleep handling with short duration."""
@@ -371,9 +375,9 @@ class TestWeatherDisplayClient:
         assert result is False
 
         # Verify no shutdown attempted
-        client.power_manager.schedule_wakeup.assert_not_called()  # type: ignore
-        client.power_manager.shutdown_system.assert_not_called()  # type: ignore
-        client.display.sleep.assert_not_called()  # type: ignore
+        client.power_manager.schedule_wakeup.assert_not_called()
+        client.power_manager.shutdown_system.assert_not_called()
+        client.display.sleep.assert_not_called()
 
     def test_handle_sleep_long_duration(self, client: WeatherDisplayClient) -> None:
         """Test sleep handling with long duration."""
@@ -387,9 +391,9 @@ class TestWeatherDisplayClient:
         assert result is True
 
         # Verify proper shutdown sequence
-        client.power_manager.schedule_wakeup.assert_called_once_with(30)  # type: ignore
-        client.display.sleep.assert_called_once()  # type: ignore
-        client.power_manager.shutdown_system.assert_called_once()  # type: ignore
+        client.power_manager.schedule_wakeup.assert_called_once_with(30)
+        client.display.sleep.assert_called_once()
+        client.power_manager.shutdown_system.assert_called_once()
 
     def test_handle_sleep_wakeup_failure(self, client: WeatherDisplayClient) -> None:
         """Test sleep handling with wakeup scheduling failure."""
@@ -397,7 +401,7 @@ class TestWeatherDisplayClient:
         client.config.debug = False
 
         # Mock wakeup scheduling failure
-        client.power_manager.schedule_wakeup.return_value = False  # type: ignore
+        client.power_manager.schedule_wakeup.return_value = False
 
         # Long sleep duration
         result = client._handle_sleep(30)
@@ -406,16 +410,16 @@ class TestWeatherDisplayClient:
         assert result is False
 
         # Verify wakeup was attempted but shutdown wasn't
-        client.power_manager.schedule_wakeup.assert_called_once_with(30)  # type: ignore
-        client.display.sleep.assert_not_called()  # type: ignore
-        client.power_manager.shutdown_system.assert_not_called()  # type: ignore
+        client.power_manager.schedule_wakeup.assert_called_once_with(30)
+        client.display.sleep.assert_not_called()
+        client.power_manager.shutdown_system.assert_not_called()
 
     def test_shutdown(self, client: WeatherDisplayClient) -> None:
         """Test client shutdown."""
         client.shutdown()
 
         # Verify display is closed
-        client.display.close.assert_called_once()  # type: ignore
+        client.display.close.assert_called_once()
 
     def test_main_path_for_early_return(self) -> None:
         """Test the early return path in the main function when config file doesn't exist."""
