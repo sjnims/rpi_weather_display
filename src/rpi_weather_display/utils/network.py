@@ -8,13 +8,15 @@ states, and retrieving network information for power-efficient operation.
 """
 
 import logging
+import random
 import socket
 import subprocess
 import time
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from rpi_weather_display.models.config import AppConfig, PowerConfig
 from rpi_weather_display.models.system import NetworkState, NetworkStatus
@@ -89,6 +91,62 @@ class NetworkManager:
             return True
         except (TimeoutError, OSError):
             return False
+
+    def _calculate_backoff_delay(self, attempt: int) -> float:
+        """Calculate delay for exponential backoff.
+
+        Args:
+            attempt: The current attempt number (0-based)
+
+        Returns:
+            Delay in seconds for the next retry
+        """
+        # Calculate base delay with exponential backoff
+        delay = self.config.retry_initial_delay_seconds * (
+            self.config.retry_backoff_factor**attempt
+        )
+
+        # Apply maximum delay cap
+        delay = min(delay, self.config.retry_max_delay_seconds)
+
+        # Add jitter to avoid thundering herd problem
+        jitter = random.uniform(  # noqa: S311
+            -self.config.retry_jitter_factor, self.config.retry_jitter_factor
+        )
+        delay = delay * (1 + jitter)
+
+        return max(0.1, delay)  # Ensure delay is positive
+
+    def with_retry(self, operation: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:  # noqa: ANN401
+        """Execute an operation with exponential backoff retries.
+
+        Args:
+            operation: The function to retry
+            *args: Arguments to pass to the operation
+            **kwargs: Keyword arguments to pass to the operation
+
+        Returns:
+            Result of the operation or None if all attempts fail
+        """
+        attempt = 0
+
+        while attempt < self.config.retry_max_attempts:
+            try:
+                return operation(*args, **kwargs)
+            except Exception as e:
+                attempt += 1
+                if attempt >= self.config.retry_max_attempts:
+                    self.logger.error(f"Operation failed after {attempt} attempts: {e!s}")
+                    return None
+
+                delay = self._calculate_backoff_delay(attempt)
+                self.logger.info(
+                    f"Retry attempt {attempt}/{self.config.retry_max_attempts} "
+                    f"after {delay:.2f}s: {e!s}"
+                )
+                time.sleep(delay)
+
+        return None
 
     def _get_ssid(self) -> str | None:
         """Get the current SSID.
@@ -178,14 +236,12 @@ class NetworkManager:
             self.logger.info("Not connected, attempting to enable WiFi")
             self._enable_wifi()
 
-            # Wait for connection
-            start_time = time.time()
-            while time.time() - start_time < self.config.wifi_timeout_seconds:
-                if self._check_connectivity():
-                    connected = True
-                    self.logger.info("Successfully connected to WiFi")
-                    break
-                time.sleep(1)
+            # Try to establish connection with exponential backoff
+            connected = self.with_retry(self._try_connect)
+            if connected:
+                self.logger.info("Successfully connected to WiFi")
+            else:
+                self.logger.warning("Failed to connect to WiFi after multiple attempts")
 
         try:
             yield connected
@@ -194,6 +250,22 @@ class NetworkManager:
             # Only disable if app_config exists and debug mode is off
             if self.app_config is None or not self.app_config.debug:
                 self._disable_wifi()
+
+    def _try_connect(self) -> bool:
+        """Try to establish network connectivity.
+
+        Returns:
+            True if connected, False otherwise.
+        """
+        # Wait for connection
+        start_time = time.time()
+        while time.time() - start_time < self.config.wifi_timeout_seconds:
+            if self._check_connectivity():
+                return True
+            time.sleep(1)
+
+        # If we reach here, connection failed
+        raise ConnectionError("Failed to establish network connection")
 
     def _enable_wifi(self) -> None:
         """Enable WiFi."""

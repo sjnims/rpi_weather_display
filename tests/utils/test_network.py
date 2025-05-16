@@ -1,6 +1,7 @@
 """Tests for the network module."""
 # ruff: noqa: S101, SLF001
 # ^ Ignores "Use of assert detected" and protected member access in test files
+# pyright: reportPrivateUsage=false, reportUnnecessaryTypeIgnoreComment=false
 
 import subprocess
 from pathlib import Path
@@ -36,6 +37,11 @@ def power_config() -> PowerConfig:
         low_battery_threshold=20,
         critical_battery_threshold=10,
         wifi_timeout_seconds=30,
+        retry_initial_delay_seconds=1.0,
+        retry_max_delay_seconds=300.0,
+        retry_backoff_factor=2.0,
+        retry_jitter_factor=0.1,
+        retry_max_attempts=5,
     )
 
 
@@ -124,7 +130,7 @@ class TestNetworkManager:
         mock_run.return_value = mock_process
 
         # Call the method
-        network_manager._enable_wifi()  # type: ignore[reportPrivateUsage]
+        network_manager._enable_wifi()
 
         # Verify subprocess was called correctly - now checks for wifi-sleep.sh script
         mock_run.assert_called_with(
@@ -149,7 +155,7 @@ class TestNetworkManager:
         mock_run.return_value = mock_process
 
         # Call the method
-        network_manager._disable_wifi()  # type: ignore[reportPrivateUsage]
+        network_manager._disable_wifi()
 
         # Verify subprocess was called correctly - now checks for wifi-sleep.sh script
         mock_run.assert_called_with(
@@ -172,7 +178,7 @@ class TestNetworkManager:
         mock_run.side_effect = subprocess.CalledProcessError(1, "cmd")
 
         # Call the method - it should handle the exception
-        network_manager._disable_wifi()  # type: ignore[reportPrivateUsage]
+        network_manager._disable_wifi()
 
     @patch("subprocess.run")
     @patch("pathlib.Path.exists")
@@ -293,17 +299,32 @@ class TestNetworkManager:
         network_manager: NetworkManager,
     ) -> None:
         """Test ensure_connectivity when reconnection fails."""
-        # First call is start time, second is current time after timeout
-        mock_time.side_effect = [
-            1000,  # Start time
-            1000 + network_manager.config.wifi_timeout_seconds + 1,  # Current time after timeout
-        ]
+        # We need enough time values for all retry attempts (2 values per attempt)
+        time_values = []
+        base_time = 1000
+        # Add time values for each retry attempt (start and end time for each)
+        for i in range(network_manager.config.retry_max_attempts):
+            # Each attempt needs 2 time values (start and end time check)
+            time_values.extend(
+                [
+                    base_time + i,  # Start time
+                    base_time
+                    + i
+                    + network_manager.config.wifi_timeout_seconds
+                    + 1,  # End time (timeout)
+                ]
+            )
+
+        # Set up the mock time values
+        mock_time.side_effect = time_values
 
         # Mock connection always failing
         with (
             patch.object(network_manager, "_check_connectivity", return_value=False),
             patch.object(network_manager, "_enable_wifi"),
             patch.object(network_manager, "_disable_wifi"),
+            # Directly patch with_retry to return False for simplicity
+            patch.object(network_manager, "with_retry", return_value=False),
         ):
             # Test context manager
             with network_manager.ensure_connectivity() as connected:
@@ -362,7 +383,7 @@ class TestNetworkManager:
         mock_create_connection.return_value = MagicMock()
 
         # Test method
-        result = network_manager._check_connectivity()  # type: ignore
+        result = network_manager._check_connectivity()
 
         # Verify result
         assert result is True
@@ -377,7 +398,7 @@ class TestNetworkManager:
         mock_create_connection.side_effect = TimeoutError()
 
         # Test method
-        result = network_manager._check_connectivity()  # type: ignore
+        result = network_manager._check_connectivity()
 
         # Verify result
         assert result is False
@@ -410,7 +431,7 @@ class TestNetworkManager:
         mock_run.return_value = mock_process
 
         # Call the method
-        ssid = network_manager._get_ssid()  # type: ignore
+        ssid = network_manager._get_ssid()
 
         # Verify result and method calls
         assert ssid == "test_ssid"
@@ -432,7 +453,7 @@ class TestNetworkManager:
         mock_exists.return_value = False
 
         # Call the method
-        ssid = network_manager._get_ssid()  # type: ignore
+        ssid = network_manager._get_ssid()
 
         # Verify result and that subprocess was not called
         assert ssid is None
@@ -454,7 +475,7 @@ class TestNetworkManager:
         mock_run.return_value = mock_process
 
         # Call the method
-        ssid = network_manager._get_ssid()  # type: ignore
+        ssid = network_manager._get_ssid()
 
         # Verify result
         assert ssid is None
@@ -472,7 +493,7 @@ class TestNetworkManager:
         mock_run.side_effect = subprocess.TimeoutExpired(cmd="test", timeout=1)
 
         # Call the method
-        ssid = network_manager._get_ssid()  # type: ignore
+        ssid = network_manager._get_ssid()
 
         # Verify result
         assert ssid is None
@@ -490,7 +511,7 @@ class TestNetworkManager:
         mock_socket.return_value.__enter__.return_value = mock_sock_instance
 
         # Call the method
-        ip = network_manager._get_ip_address()  # type: ignore
+        ip = network_manager._get_ip_address()
 
         # Verify result
         assert ip == "192.168.1.5"
@@ -505,7 +526,7 @@ class TestNetworkManager:
         mock_socket.return_value.__enter__.side_effect = OSError("Test socket error")
 
         # Call the method
-        ip = network_manager._get_ip_address()  # type: ignore
+        ip = network_manager._get_ip_address()
 
         # Verify result
         assert ip is None
@@ -531,7 +552,7 @@ class TestNetworkManager:
         mock_run.return_value = mock_process
 
         # Call the method
-        signal = network_manager._get_signal_strength()  # type: ignore
+        signal = network_manager._get_signal_strength()
 
         # Verify result and method calls
         assert signal == -68
@@ -553,7 +574,7 @@ class TestNetworkManager:
         mock_exists.return_value = False
 
         # Call the method
-        signal = network_manager._get_signal_strength()  # type: ignore
+        signal = network_manager._get_signal_strength()
 
         # Verify result and that subprocess was not called
         assert signal is None
@@ -579,7 +600,7 @@ class TestNetworkManager:
         mock_run.return_value = mock_process
 
         # Call the method
-        signal = network_manager._get_signal_strength()  # type: ignore
+        signal = network_manager._get_signal_strength()
 
         # Verify result
         assert signal is None
@@ -600,7 +621,7 @@ class TestNetworkManager:
         mock_run.return_value = mock_process
 
         # Call the method
-        signal = network_manager._get_signal_strength()  # type: ignore
+        signal = network_manager._get_signal_strength()
 
         # Verify result
         assert signal is None
@@ -618,7 +639,7 @@ class TestNetworkManager:
         mock_run.side_effect = subprocess.TimeoutExpired(cmd="test", timeout=1)
 
         # Call the method
-        signal = network_manager._get_signal_strength()  # type: ignore
+        signal = network_manager._get_signal_strength()
 
         # Verify result
         assert signal is None
@@ -643,7 +664,7 @@ class TestNetworkManager:
         mock_run.return_value = mock_process
 
         # Call the method
-        signal = network_manager._get_signal_strength()  # type: ignore
+        signal = network_manager._get_signal_strength()
 
         # Verify result
         assert signal is None
@@ -658,7 +679,7 @@ class TestNetworkManager:
         mock_exists.return_value = False
 
         # Call the method
-        network_manager._enable_wifi()  # type: ignore[reportPrivateUsage]
+        network_manager._enable_wifi()
 
         # Verify subprocess was not called
         mock_run.assert_not_called()
@@ -684,7 +705,7 @@ class TestNetworkManager:
             mock_run.return_value = mock_process
 
             # Call the method
-            network_manager._enable_wifi()  # type: ignore[reportPrivateUsage]
+            network_manager._enable_wifi()
 
             # Verify the legacy method was called instead
             mock_run.assert_called_with(
@@ -710,7 +731,7 @@ class TestNetworkManager:
         ]
 
         # Call the method - it should handle the exception
-        network_manager._enable_wifi()  # type: ignore[reportPrivateUsage]
+        network_manager._enable_wifi()
 
         # Verify both methods were attempted
         assert mock_run.call_count == 2
@@ -752,7 +773,7 @@ class TestNetworkManager:
         # Use patch.object to patch the exists method on Path instances
         with patch.object(Path, "exists", mock_exists_impl):
             # Call the method
-            network_manager._enable_wifi()  # type: ignore[reportPrivateUsage]
+            network_manager._enable_wifi()
 
             # Verify subprocess was called with ifconfig (legacy method)
             mock_run.assert_called_with(
@@ -783,7 +804,7 @@ class TestNetworkManager:
         # Use patch.object to patch the exists method on Path instances
         with patch.object(Path, "exists", mock_exists_impl):
             # Call the method
-            network_manager._disable_wifi()  # type: ignore[reportPrivateUsage]
+            network_manager._disable_wifi()
 
             # Verify subprocess was called with ifconfig (legacy method)
             mock_run.assert_called_with(
@@ -792,3 +813,148 @@ class TestNetworkManager:
                 timeout=network_manager.config.wifi_timeout_seconds,
                 shell=False,
             )
+
+    @patch("time.sleep")
+    def test_calculate_backoff_delay(
+        self, mock_sleep: MagicMock, network_manager: NetworkManager
+    ) -> None:
+        """Test _calculate_backoff_delay method."""
+        # Test with different attempt numbers
+        with patch("random.uniform", return_value=0):  # Remove jitter for predictable tests
+            # First attempt
+            delay = network_manager._calculate_backoff_delay(0)
+            assert delay == network_manager.config.retry_initial_delay_seconds
+
+            # Second attempt
+            delay = network_manager._calculate_backoff_delay(1)
+            expected = (
+                network_manager.config.retry_initial_delay_seconds
+                * network_manager.config.retry_backoff_factor
+            )
+            assert delay == expected
+
+            # Third attempt
+            delay = network_manager._calculate_backoff_delay(2)
+            expected = network_manager.config.retry_initial_delay_seconds * (
+                network_manager.config.retry_backoff_factor**2
+            )
+            assert delay == expected
+
+    @patch("time.sleep")
+    def test_with_retry_success_first_try(
+        self, mock_sleep: MagicMock, network_manager: NetworkManager
+    ) -> None:
+        """Test with_retry method when operation succeeds on first try."""
+        # Mock operation that succeeds
+        mock_operation = MagicMock(return_value="success")
+
+        # Call with_retry
+        result = network_manager.with_retry(mock_operation, "arg1", kwarg1="value1")
+
+        # Verify operation was called with correct arguments
+        mock_operation.assert_called_once_with("arg1", kwarg1="value1")
+
+        # Verify sleep was not called (no retries needed)
+        mock_sleep.assert_not_called()
+
+        # Verify result
+        assert result == "success"
+
+    @patch("time.sleep")
+    def test_with_retry_success_after_retry(
+        self, mock_sleep: MagicMock, network_manager: NetworkManager
+    ) -> None:
+        """Test with_retry method when operation succeeds after retry."""
+        # Mock operation that fails once, then succeeds
+        mock_operation = MagicMock(side_effect=[Exception("First attempt fails"), "success"])
+
+        # Call with_retry
+        result = network_manager.with_retry(mock_operation)
+
+        # Verify operation was called twice
+        assert mock_operation.call_count == 2
+
+        # Verify sleep was called once (1 retry)
+        assert mock_sleep.call_count == 1
+
+        # Verify result
+        assert result == "success"
+
+    @patch("time.sleep")
+    def test_with_retry_all_attempts_fail(
+        self, mock_sleep: MagicMock, network_manager: NetworkManager
+    ) -> None:
+        """Test with_retry method when all attempts fail."""
+        # Mock operation that always fails
+        mock_operation = MagicMock(side_effect=Exception("Operation fails"))
+
+        # Call with_retry
+        result = network_manager.with_retry(mock_operation)
+
+        # Verify operation was called for max attempts
+        assert mock_operation.call_count == network_manager.config.retry_max_attempts
+
+        # Verify sleep was called for max attempts - 1 (no sleep after last attempt)
+        assert mock_sleep.call_count == network_manager.config.retry_max_attempts - 1
+
+        # Verify result is None (operation failed)
+        assert result is None
+
+    @patch("time.sleep")
+    @patch("socket.create_connection")
+    def test_try_connect_success(
+        self,
+        mock_create_connection: MagicMock,
+        mock_sleep: MagicMock,
+        network_manager: NetworkManager,
+    ) -> None:
+        """Test _try_connect method when connection succeeds."""
+        # Mock _check_connectivity to return True
+        with patch.object(network_manager, "_check_connectivity", return_value=True):
+            # Call _try_connect
+            result = network_manager._try_connect()
+
+            # Verify result
+            assert result is True
+
+    @patch("time.sleep")
+    @patch("time.time")
+    def test_try_connect_timeout(
+        self, mock_time: MagicMock, mock_sleep: MagicMock, network_manager: NetworkManager
+    ) -> None:
+        """Test _try_connect method when connection times out."""
+        # First call is start time, second is current time after timeout
+        mock_time.side_effect = [
+            1000,  # Start time
+            1000 + network_manager.config.wifi_timeout_seconds + 1,  # Current time after timeout
+        ]
+
+        # Mock _check_connectivity to return False
+        with patch.object(network_manager, "_check_connectivity", return_value=False):
+            # Call _try_connect - should raise ConnectionError
+            with pytest.raises(ConnectionError):
+                network_manager._try_connect()
+
+    @patch("socket.create_connection")
+    @patch("time.sleep")
+    def test_ensure_connectivity_with_retry(
+        self,
+        mock_sleep: MagicMock,
+        mock_create_connection: MagicMock,
+        network_manager: NetworkManager,
+    ) -> None:
+        """Test ensure_connectivity with retry logic."""
+        # Mock _check_connectivity to return False initially
+        # Mock _try_connect and with_retry to simulate successful connection after retry
+        with (
+            patch.object(network_manager, "_check_connectivity", return_value=False),
+            patch.object(network_manager, "_enable_wifi"),
+            patch.object(network_manager, "_disable_wifi"),
+            patch.object(network_manager, "with_retry", return_value=True) as mock_with_retry,
+        ):
+            # Use context manager
+            with network_manager.ensure_connectivity() as connected:
+                assert connected is True
+
+            # Verify with_retry was called
+            mock_with_retry.assert_called_once_with(network_manager._try_connect)

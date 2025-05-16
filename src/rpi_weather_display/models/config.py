@@ -56,6 +56,11 @@ class PowerConfig(BaseModel):
     critical_battery_threshold: int = 10
     wake_up_interval_minutes: int = 60
     wifi_timeout_seconds: int = 30
+    retry_initial_delay_seconds: float = 1.0
+    retry_max_delay_seconds: float = 300.0  # 5 minutes max delay
+    retry_backoff_factor: float = 2.0
+    retry_jitter_factor: float = 0.1  # 10% jitter
+    retry_max_attempts: int = 5
     disable_hdmi: bool = True
     disable_bluetooth: bool = True
     disable_leds: bool = True
