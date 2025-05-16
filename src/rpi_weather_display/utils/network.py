@@ -24,6 +24,7 @@ IWGETID_PATH = "/sbin/iwgetid"
 IWCONFIG_PATH = "/sbin/iwconfig"
 IFCONFIG_PATH = "/sbin/ifconfig"
 SUDO_PATH = "/usr/bin/sudo"
+WIFI_SLEEP_SCRIPT = "/usr/local/bin/wifi-sleep.sh"
 
 
 class NetworkManager:
@@ -197,6 +198,34 @@ class NetworkManager:
     def _enable_wifi(self) -> None:
         """Enable WiFi."""
         try:
+            # Use wifi-sleep.sh script for better power management
+            sudo_path = Path(SUDO_PATH)
+            wifi_script = Path(WIFI_SLEEP_SCRIPT)
+
+            if not sudo_path.exists() or not wifi_script.exists():
+                self.logger.warning(
+                    f"Required commands not found: sudo={sudo_path.exists()}, "
+                    f"wifi-sleep.sh={wifi_script.exists()}"
+                )
+                # Fall back to old method if script doesn't exist
+                self._enable_wifi_legacy()
+                return
+
+            subprocess.run(  # nosec # noqa: S603
+                [str(sudo_path), str(wifi_script), "on"],
+                check=True,
+                timeout=self.config.wifi_timeout_seconds,
+                shell=False,  # Explicitly disable shell
+            )
+            self.logger.info("WiFi interface enabled with power saving")
+        except subprocess.SubprocessError as e:
+            self.logger.error(f"Failed to enable WiFi: {e}")
+            # Try legacy method as fallback
+            self._enable_wifi_legacy()
+
+    def _enable_wifi_legacy(self) -> None:
+        """Enable WiFi using legacy ifconfig method as fallback."""
+        try:
             # SECURITY: Safe command with fixed arguments - reviewed for injection risk
             sudo_path = Path(SUDO_PATH)
             ifconfig_path = Path(IFCONFIG_PATH)
@@ -211,12 +240,40 @@ class NetworkManager:
                 timeout=self.config.wifi_timeout_seconds,
                 shell=False,  # Explicitly disable shell
             )
-            self.logger.info("WiFi interface enabled")
+            self.logger.info("WiFi interface enabled (legacy method)")
         except subprocess.SubprocessError as e:
-            self.logger.error(f"Failed to enable WiFi: {e}")
+            self.logger.error(f"Failed to enable WiFi (legacy method): {e}")
 
     def _disable_wifi(self) -> None:
         """Disable WiFi to save power."""
+        try:
+            # Use wifi-sleep.sh script for better power management
+            sudo_path = Path(SUDO_PATH)
+            wifi_script = Path(WIFI_SLEEP_SCRIPT)
+
+            if not sudo_path.exists() or not wifi_script.exists():
+                self.logger.warning(
+                    f"Required commands not found: sudo={sudo_path.exists()}, "
+                    f"wifi-sleep.sh={wifi_script.exists()}"
+                )
+                # Fall back to old method if script doesn't exist
+                self._disable_wifi_legacy()
+                return
+
+            subprocess.run(  # nosec # noqa: S603
+                [str(sudo_path), str(wifi_script), "off"],
+                check=True,
+                timeout=self.config.wifi_timeout_seconds,
+                shell=False,  # Explicitly disable shell
+            )
+            self.logger.info("WiFi interface disabled with rfkill to save power")
+        except subprocess.SubprocessError as e:
+            self.logger.error(f"Failed to disable WiFi: {e}")
+            # Try legacy method as fallback
+            self._disable_wifi_legacy()
+
+    def _disable_wifi_legacy(self) -> None:
+        """Disable WiFi using legacy ifconfig method as fallback."""
         try:
             # SECURITY: Safe command with fixed arguments - reviewed for injection risk
             sudo_path = Path(SUDO_PATH)
@@ -232,6 +289,6 @@ class NetworkManager:
                 timeout=self.config.wifi_timeout_seconds,
                 shell=False,  # Explicitly disable shell
             )
-            self.logger.info("WiFi interface disabled to save power")
+            self.logger.info("WiFi interface disabled to save power (legacy method)")
         except subprocess.SubprocessError as e:
-            self.logger.error(f"Failed to disable WiFi: {e}")
+            self.logger.error(f"Failed to disable WiFi (legacy method): {e}")

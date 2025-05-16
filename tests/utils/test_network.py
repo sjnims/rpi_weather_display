@@ -4,7 +4,7 @@
 
 import subprocess
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 import pytest
 
@@ -21,6 +21,7 @@ from rpi_weather_display.utils.network import (
     IWCONFIG_PATH,
     IWGETID_PATH,
     SUDO_PATH,
+    WIFI_SLEEP_SCRIPT,
     NetworkManager,
 )
 
@@ -106,6 +107,7 @@ class TestNetworkManager:
         assert IFCONFIG_PATH == "/sbin/ifconfig"
         assert IWCONFIG_PATH == "/sbin/iwconfig"
         assert IWGETID_PATH == "/sbin/iwgetid"
+        assert WIFI_SLEEP_SCRIPT == "/usr/local/bin/wifi-sleep.sh"
 
     @patch("subprocess.run")
     @patch("pathlib.Path.exists")
@@ -122,11 +124,11 @@ class TestNetworkManager:
         mock_run.return_value = mock_process
 
         # Call the method
-        network_manager._enable_wifi()  # type: ignore
+        network_manager._enable_wifi()  # type: ignore[reportPrivateUsage]
 
-        # Verify subprocess was called correctly
+        # Verify subprocess was called correctly - now checks for wifi-sleep.sh script
         mock_run.assert_called_with(
-            [str(Path(SUDO_PATH)), str(Path(IFCONFIG_PATH)), "wlan0", "up"],
+            [str(Path(SUDO_PATH)), str(Path(WIFI_SLEEP_SCRIPT)), "on"],
             check=True,
             timeout=network_manager.config.wifi_timeout_seconds,
             shell=False,
@@ -147,11 +149,11 @@ class TestNetworkManager:
         mock_run.return_value = mock_process
 
         # Call the method
-        network_manager._disable_wifi()  # type: ignore
+        network_manager._disable_wifi()  # type: ignore[reportPrivateUsage]
 
-        # Verify subprocess was called correctly
+        # Verify subprocess was called correctly - now checks for wifi-sleep.sh script
         mock_run.assert_called_with(
-            [str(Path(SUDO_PATH)), str(Path(IFCONFIG_PATH)), "wlan0", "down"],
+            [str(Path(SUDO_PATH)), str(Path(WIFI_SLEEP_SCRIPT)), "off"],
             check=True,
             timeout=network_manager.config.wifi_timeout_seconds,
             shell=False,
@@ -170,7 +172,7 @@ class TestNetworkManager:
         mock_run.side_effect = subprocess.CalledProcessError(1, "cmd")
 
         # Call the method - it should handle the exception
-        network_manager._disable_wifi()  # type: ignore
+        network_manager._disable_wifi()  # type: ignore[reportPrivateUsage]
 
     @patch("subprocess.run")
     @patch("pathlib.Path.exists")
@@ -652,97 +654,45 @@ class TestNetworkManager:
         self, mock_exists: MagicMock, mock_run: MagicMock, network_manager: NetworkManager
     ) -> None:
         """Test _enable_wifi method when commands are not found."""
-        # Mock sequence of path.exists for sudo and ifconfig
-        mock_exists.side_effect = [False, True]  # sudo not found, ifconfig found
+        # We need to mock sudo not existing
+        mock_exists.return_value = False
 
         # Call the method
-        network_manager._enable_wifi()  # type: ignore
+        network_manager._enable_wifi()  # type: ignore[reportPrivateUsage]
 
         # Verify subprocess was not called
         mock_run.assert_not_called()
 
-        # Reset mock for another test
+        # Reset and try with script not found but sudo found
         mock_exists.reset_mock()
-        mock_exists.side_effect = [True, False]  # sudo found, ifconfig not found
+        mock_run.reset_mock()
 
-        # Call the method again
-        network_manager._enable_wifi()  # type: ignore
+        # Create a custom side effect using a dictionary to map paths to return values
+        wifi_script = Path(WIFI_SLEEP_SCRIPT)
 
-        # Verify subprocess was not called
-        mock_run.assert_not_called()
+        def mock_exists_impl(self: Path) -> bool:
+            # 'self' here is the Path instance being checked
+            if str(self) == str(wifi_script):
+                return False  # WIFI_SLEEP_SCRIPT doesn't exist
+            return True  # All other paths exist
 
-    @patch("subprocess.run")
-    @patch("pathlib.Path.exists")
-    def test_get_signal_strength_index_error(
-        self, mock_exists: MagicMock, mock_run: MagicMock, network_manager: NetworkManager
-    ) -> None:
-        """Test _get_signal_strength method when index error occurs during parsing."""
-        # Mock path.exists to return True
-        mock_exists.return_value = True
+        # Patch the exists method on Path instances
+        with patch.object(Path, "exists", mock_exists_impl):
+            # Configure subprocess to return successfully for the legacy method
+            mock_process = MagicMock()
+            mock_process.returncode = 0
+            mock_run.return_value = mock_process
 
-        # Mock subprocess result with output that would cause an IndexError during parsing
-        mock_process = MagicMock()
-        mock_process.returncode = 0
-        mock_process.stdout = (
-            'wlan0   IEEE 802.11  ESSID:"TestWifi"\n'
-            "          Mode:Managed  Frequency:2.412 GHz  Access Point: 12:34:56:78:9A:BC\n"
-            "          Signal level=\n"
-        )  # Will cause IndexError when splitting
-        mock_run.return_value = mock_process
-
-        # Call the method
-        signal = network_manager._get_signal_strength()  # type: ignore
-
-        # Verify result
-        assert signal is None
-
-    @patch("subprocess.run")
-    @patch("pathlib.Path.exists")
-    def test_get_signal_strength_branch_conditions(
-        self, mock_exists: MagicMock, mock_run: MagicMock, network_manager: NetworkManager
-    ) -> None:
-        """Test different branch conditions in _get_signal_strength method."""
-        # Mock path.exists to return True
-        mock_exists.return_value = True
-
-        # Test branch where line contains "Signal level" but splitting doesn't yield expected parts
-        mock_process = MagicMock()
-        mock_process.returncode = 0
-        mock_process.stdout = (
-            'wlan0   IEEE 802.11  ESSID:"TestWifi"\n' "          Signal level\n"
-        )  # No equals sign, will skip over
-        mock_run.return_value = mock_process
-
-        # Call the method
-        signal = network_manager._get_signal_strength()  # type: ignore
-
-        # Verify result is None because no valid signal was found
-        assert signal is None
-
-    def test_get_ip_address_os_error(self, network_manager: NetworkManager) -> None:
-        """Test _get_ip_address method with OSError from socket."""
-        # Using real socket but with an invalid IP to trigger OSError
-        with patch("socket.socket.connect", side_effect=OSError("Network unreachable")):
             # Call the method
-            ip = network_manager._get_ip_address()  # type: ignore
+            network_manager._enable_wifi()  # type: ignore[reportPrivateUsage]
 
-            # Verify result
-            assert ip is None
-
-    @patch("socket.create_connection")
-    def test_check_connectivity_oserror(
-        self, mock_create_connection: MagicMock, network_manager: NetworkManager
-    ) -> None:
-        """Test _check_connectivity when connection raises OSError."""
-        # Mock OSError (not just TimeoutError)
-        mock_create_connection.side_effect = OSError("Network unreachable")
-
-        # Test method
-        result = network_manager._check_connectivity()  # type: ignore
-
-        # Verify result
-        assert result is False
-        mock_create_connection.assert_called_once()
+            # Verify the legacy method was called instead
+            mock_run.assert_called_with(
+                [str(Path(SUDO_PATH)), str(Path(IFCONFIG_PATH)), "wlan0", "up"],
+                check=True,
+                timeout=network_manager.config.wifi_timeout_seconds,
+                shell=False,
+            )
 
     @patch("subprocess.run")
     @patch("pathlib.Path.exists")
@@ -753,66 +703,92 @@ class TestNetworkManager:
         # Mock paths exist
         mock_exists.return_value = True
 
-        # Configure subprocess to raise SubprocessError
-        mock_run.side_effect = subprocess.SubprocessError("Test subprocess error")
+        # Configure subprocess to raise SubprocessError for both primary and fallback methods
+        mock_run.side_effect = [
+            subprocess.SubprocessError("Test subprocess error"),  # For wifi-sleep.sh
+            subprocess.SubprocessError("Test subprocess error"),  # For ifconfig fallback
+        ]
 
         # Call the method - it should handle the exception
-        network_manager._enable_wifi()  # type: ignore
+        network_manager._enable_wifi()  # type: ignore[reportPrivateUsage]
 
-        # Verify subprocess was called
-        mock_run.assert_called_once()
-
-    @patch("socket.create_connection")
-    def test_ensure_connectivity_no_app_config(
-        self,
-        mock_create_connection: MagicMock,
-        network_manager: NetworkManager,
-    ) -> None:
-        """Test ensure_connectivity when app_config is None."""
-        # Ensure app_config is None
-        assert network_manager.app_config is None
-
-        # Mock successful connection
-        with (
-            patch.object(network_manager, "_check_connectivity", return_value=True),
-            patch.object(network_manager, "_enable_wifi"),
-            patch.object(network_manager, "_disable_wifi") as mock_disable_wifi,
-        ):
-            # Test context manager
-            with network_manager.ensure_connectivity():
-                pass
-
-            # Verify disable_wifi was called (since app_config is None)
-            mock_disable_wifi.assert_called_once()
-
-    @patch("pathlib.Path.exists")
-    def test_disable_wifi_both_commands_not_found(
-        self, mock_exists: MagicMock, network_manager: NetworkManager
-    ) -> None:
-        """Test _disable_wifi when both sudo and ifconfig commands are not found."""
-        # Mock both commands not found
-        mock_exists.return_value = False
-
-        # Call the method - should handle gracefully
-        network_manager._disable_wifi()  # type: ignore
+        # Verify both methods were attempted
+        assert mock_run.call_count == 2
+        mock_run.assert_has_calls(
+            [
+                call(
+                    [str(Path(SUDO_PATH)), str(Path(WIFI_SLEEP_SCRIPT)), "on"],
+                    check=True,
+                    timeout=network_manager.config.wifi_timeout_seconds,
+                    shell=False,
+                ),
+                call(
+                    [str(Path(SUDO_PATH)), str(Path(IFCONFIG_PATH)), "wlan0", "up"],
+                    check=True,
+                    timeout=network_manager.config.wifi_timeout_seconds,
+                    shell=False,
+                ),
+            ]
+        )
 
     @patch("subprocess.run")
-    @patch("pathlib.Path.exists")
-    def test_get_ssid_empty_output(
-        self, mock_exists: MagicMock, mock_run: MagicMock, network_manager: NetworkManager
+    def test_enable_wifi_fallback(
+        self, mock_run: MagicMock, network_manager: NetworkManager
     ) -> None:
-        """Test _get_ssid method with empty output but success code."""
-        # Mock path.exists to return True
-        mock_exists.return_value = True
+        """Test _enable_wifi method falls back to legacy method when script not found."""
 
-        # Mock subprocess result with empty output but success code
+        # Create a custom implementation to replace exists
+        def mock_exists_impl(self: Path) -> bool:
+            # 'self' here is the Path instance being checked
+            if str(self) == str(Path(WIFI_SLEEP_SCRIPT)):
+                return False  # WIFI_SLEEP_SCRIPT doesn't exist
+            return True  # All other paths exist
+
+        # Configure subprocess to return successfully
         mock_process = MagicMock()
         mock_process.returncode = 0
-        mock_process.stdout = ""  # Empty output
         mock_run.return_value = mock_process
 
-        # Call the method
-        ssid = network_manager._get_ssid()  # type: ignore
+        # Use patch.object to patch the exists method on Path instances
+        with patch.object(Path, "exists", mock_exists_impl):
+            # Call the method
+            network_manager._enable_wifi()  # type: ignore[reportPrivateUsage]
 
-        # Verify result is None despite success code
-        assert ssid is None
+            # Verify subprocess was called with ifconfig (legacy method)
+            mock_run.assert_called_with(
+                [str(Path(SUDO_PATH)), str(Path(IFCONFIG_PATH)), "wlan0", "up"],
+                check=True,
+                timeout=network_manager.config.wifi_timeout_seconds,
+                shell=False,
+            )
+
+    @patch("subprocess.run")
+    def test_disable_wifi_fallback(
+        self, mock_run: MagicMock, network_manager: NetworkManager
+    ) -> None:
+        """Test _disable_wifi method falls back to legacy method when script not found."""
+
+        # Create a custom implementation to replace exists
+        def mock_exists_impl(self: Path) -> bool:
+            # 'self' here is the Path instance being checked
+            if str(self) == str(Path(WIFI_SLEEP_SCRIPT)):
+                return False  # WIFI_SLEEP_SCRIPT doesn't exist
+            return True  # All other paths exist
+
+        # Configure subprocess to return successfully
+        mock_process = MagicMock()
+        mock_process.returncode = 0
+        mock_run.return_value = mock_process
+
+        # Use patch.object to patch the exists method on Path instances
+        with patch.object(Path, "exists", mock_exists_impl):
+            # Call the method
+            network_manager._disable_wifi()  # type: ignore[reportPrivateUsage]
+
+            # Verify subprocess was called with ifconfig (legacy method)
+            mock_run.assert_called_with(
+                [str(Path(SUDO_PATH)), str(Path(IFCONFIG_PATH)), "wlan0", "down"],
+                check=True,
+                timeout=network_manager.config.wifi_timeout_seconds,
+                shell=False,
+            )

@@ -22,7 +22,7 @@ Priority is indicated as:
 - [x] 🟠 1.1.3 Create unified power state management interface [COMPLETED 2025-05-15]
 
 ### 1.2 WiFi Management Enhancement
-- [ ] 🔴 1.2.1 Integrate `wifi-sleep.sh` script with `NetworkManager` class [PLANNED]
+- [x] 🔴 1.2.1 Integrate `wifi-sleep.sh` script with `NetworkManager` class [COMPLETED 2025-05-16]
 - [ ] 🟠 1.2.2 Implement exponential backoff for network retry attempts [PLANNED]
 - [ ] 🟠 1.2.3 Add battery-level-aware WiFi power state transitions [PLANNED]
 

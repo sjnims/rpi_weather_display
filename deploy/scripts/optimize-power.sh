@@ -111,12 +111,6 @@ EOF
 systemctl daemon-reload
 systemctl enable wifi-powersave.service
 
-# Add periodic enforcement via crontab (WiFi drivers can sometimes reset settings)
-if ! crontab -l | grep -q "wifi_power_save"; then
-    (crontab -l 2>/dev/null || true; echo "*/10 * * * * /sbin/iw dev wlan0 set power_save on # wifi_power_save") | crontab -
-    echo "Added WiFi power saving to crontab"
-fi
-
 # Add WiFi sleep script to disable when not in use
 cat <<'EOF' > /usr/local/bin/wifi-sleep.sh
 #!/bin/bash
