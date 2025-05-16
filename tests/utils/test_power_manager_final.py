@@ -354,7 +354,8 @@ class TestPowerManagerFinal:
             ):
                 # Call calculate_sleep_time which will use our mocked function
                 result = power_manager.calculate_sleep_time()
-                # With default config, wake_up_interval_minutes=60, so expect 3600 seconds
+                # With the current behavior, the function returns 3600 seconds (wake_up_interval_minutes * 60)  # noqa: E501
+                # when the mock returns 10*3600
                 assert result == 3600
 
     def test_shutdown_system_details(self, power_manager: PowerStateManager) -> None:
