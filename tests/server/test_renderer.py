@@ -7,11 +7,13 @@ for generating HTML and images from weather data.
 # ruff: noqa: S101
 # pyright: reportPrivateUsage=false
 
+import json
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any, cast
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, mock_open, patch
 
 import jinja2
 import pytest
@@ -1463,24 +1465,32 @@ class TestWeatherRenderer:
         mock_template = MagicMock()
         mock_template.render.return_value = "<html>UV Max Test</html>"
 
-        with patch.object(renderer.jinja_env, "get_template", return_value=mock_template):
-            # Generate HTML
-            await renderer.generate_html(weather_data, battery_status)
+        # Create a temporary cache file path and ensure it doesn't exist
+        with TemporaryDirectory() as temp_dir:
+            cache_file = Path(temp_dir) / "uvi_max_cache.json"
 
-            # Expected format: uvi_max will be "7.8" and uvi_time will be the formatted time of hour2  # noqa: E501
-            # The hour4 value should be ignored since it's for tomorrow
-            expected_max = "7.8"
-            expected_time = renderer._format_time(datetime.fromtimestamp(hour2.dt))
+            # Patch the cache file path
+            with (
+                patch.object(renderer.jinja_env, "get_template", return_value=mock_template),
+                patch.object(Path, "__new__", return_value=cache_file),
+            ):
+                # Generate HTML
+                await renderer.generate_html(weather_data, battery_status)
 
-            # Verify the mock template was called
-            assert mock_template.render.called
+                # Expected format: uvi_max will be "7.8" and uvi_time will be the formatted time of hour2  # noqa: E501
+                # The hour4 value should be ignored since it's for tomorrow
+                expected_max = "7.8"
+                expected_time = renderer._format_time(datetime.fromtimestamp(hour2.dt))
 
-            # Extract the context from the render call
-            context = mock_template.render.call_args[1]
+                # Verify the mock template was called
+                assert mock_template.render.called
 
-            # Check the values
-            assert context["uvi_max"] == expected_max
-            assert context["uvi_time"] == expected_time
+                # Extract the context from the render call
+                context = mock_template.render.call_args[1]
+
+                # Check the values
+                assert context["uvi_max"] == expected_max
+                assert context["uvi_time"] == expected_time
 
     @pytest.mark.asyncio()
     async def test_uvi_max_calculation_with_current(self, renderer: WeatherRenderer) -> None:
@@ -1520,23 +1530,32 @@ class TestWeatherRenderer:
         mock_template = MagicMock()
         mock_template.render.return_value = "<html>UV Max Test</html>"
 
-        with patch.object(renderer.jinja_env, "get_template", return_value=mock_template):
-            # Generate HTML
-            await renderer.generate_html(weather_data, battery_status)
+        # Create a temporary cache file path and ensure it doesn't exist
+        with TemporaryDirectory() as temp_dir:
+            cache_file = Path(temp_dir) / "uvi_max_cache.json"
 
-            # The current UV index (8.2) should be the maximum, not the hourly forecast values
-            expected_max = "8.2"
-            expected_time = renderer._format_time(now)
+            # Patch the cache file path
+            with (
+                patch.object(renderer.jinja_env, "get_template", return_value=mock_template),
+                patch.object(Path, "__new__", return_value=cache_file),
+            ):
+                # Generate HTML
+                await renderer.generate_html(weather_data, battery_status)
 
-            # Verify the mock template was called
-            assert mock_template.render.called
+                # The current UV index (8.2) should be the maximum, not the hourly forecast values
+                expected_max = "8.2"
+                current_timestamp = int(now.timestamp())
+                expected_time = renderer._format_time(datetime.fromtimestamp(current_timestamp))
 
-            # Extract the context from the render call
-            context = mock_template.render.call_args[1]
+                # Verify the mock template was called
+                assert mock_template.render.called
 
-            # Check the values
-            assert context["uvi_max"] == expected_max
-            assert context["uvi_time"] == expected_time
+                # Extract the context from the render call
+                context = mock_template.render.call_args[1]
+
+                # Check the values
+                assert context["uvi_max"] == expected_max
+                assert context["uvi_time"] == expected_time
 
     def test_format_time_default(self, renderer: WeatherRenderer) -> None:
         """Test formatting time with the default AM/PM format (no leading zeros)."""
@@ -1565,3 +1584,320 @@ class TestWeatherRenderer:
         dt = datetime(2023, 5, 20, 15, 30, 0)
         result = renderer._format_time(dt, "%H:%M")
         assert result == "15:30"
+
+    @pytest.mark.asyncio()
+    @patch("pathlib.Path.exists")
+    @patch("builtins.open")
+    @patch("json.loads")
+    async def test_get_daily_max_uvi_new_day(
+        self,
+        mock_json_loads: MagicMock,
+        mock_open: MagicMock,
+        mock_exists: MagicMock,
+        renderer: WeatherRenderer,
+    ) -> None:
+        """Test the _get_daily_max_uvi method when it's a new day (resets cache)."""
+        # Mock file exists and reading from file
+        mock_exists.return_value = True
+        mock_json_loads.return_value = {
+            "max_uvi": 8.5,
+            "timestamp": int(datetime(2023, 5, 19, 14, 30).timestamp()),  # Yesterday
+            "date": "2023-05-19",  # Yesterday's date
+        }
+
+        # Mock file open for read and write
+        mock_file_read = MagicMock()
+        mock_file_read.read.return_value = "{}"
+        mock_file_write = MagicMock()
+        mock_open.side_effect = [mock_file_read, mock_file_write]
+
+        # Create test weather data
+        weather_data = MagicMock(spec=WeatherData)
+        weather_data.current = MagicMock(spec=CurrentWeather)
+        weather_data.current.uvi = 6.2
+
+        # Create hourly forecast with a higher UVI
+        hour = MagicMock(spec=HourlyWeather)
+        hour.dt = int(datetime(2023, 5, 20, 13, 0).timestamp())  # Today at 1 PM
+        hour.uvi = 7.8
+        weather_data.hourly = [hour]
+
+        # Set test date to today
+        now = datetime(2023, 5, 20, 10, 0)  # Today at 10 AM
+
+        # Call the method
+        max_uvi, max_uvi_timestamp = renderer._get_daily_max_uvi(weather_data, now)
+
+        # Assert we use today's higher UVI even though yesterday's was higher
+        assert max_uvi == 7.8
+        assert max_uvi_timestamp == hour.dt
+
+        # Verify we wrote the new max to the file
+        assert mock_open.call_count == 2  # Once for read, once for write
+        assert mock_file_write.__enter__.called
+
+    @pytest.mark.asyncio()
+    @patch("pathlib.Path.exists")
+    @patch("builtins.open")
+    @patch("json.loads")
+    async def test_get_daily_max_uvi_same_day_higher_cached(
+        self,
+        mock_json_loads: MagicMock,
+        mock_open: MagicMock,
+        mock_exists: MagicMock,
+        renderer: WeatherRenderer,
+    ) -> None:
+        """Test using the cached UVI max when it's higher than the current API data."""
+        # Today's date
+        today = datetime(2023, 5, 20, 16, 0)  # 4 PM
+        today_str = today.strftime("%Y-%m-%d")
+
+        # Mock file exists and reading cached value higher than current
+        mock_exists.return_value = True
+        cached_timestamp = int(datetime(2023, 5, 20, 13, 30).timestamp())  # Today at 1:30 PM
+        mock_json_loads.return_value = {
+            "max_uvi": 9.5,  # Higher value from earlier today
+            "timestamp": cached_timestamp,
+            "date": today_str,
+        }
+
+        # Mock file open
+        mock_file_read = MagicMock()
+        mock_file_read.read.return_value = "{}"
+        mock_open.return_value = mock_file_read
+
+        # Create test weather data with lower current UVI
+        weather_data = MagicMock(spec=WeatherData)
+        weather_data.current = MagicMock(spec=CurrentWeather)
+        weather_data.current.uvi = 4.8  # Lower than cached
+
+        # Create hourly forecast with value lower than cached
+        hour = MagicMock(spec=HourlyWeather)
+        hour.dt = int(datetime(2023, 5, 20, 17, 0).timestamp())  # Today at 5 PM
+        hour.uvi = 3.2  # Lower than cached
+        weather_data.hourly = [hour]
+
+        # Call the method
+        max_uvi, max_uvi_timestamp = renderer._get_daily_max_uvi(weather_data, today)
+
+        # Verify we use the higher cached value
+        assert max_uvi == 9.5
+        assert max_uvi_timestamp == cached_timestamp
+
+        # Verify we did not write to the file again
+        assert mock_open.call_count == 1  # Only for reading
+
+    @pytest.mark.asyncio()
+    @patch("pathlib.Path.exists")
+    @patch("builtins.open")
+    @patch("json.loads")
+    async def test_get_daily_max_uvi_same_day_higher_current(
+        self,
+        mock_json_loads: MagicMock,
+        mock_open: MagicMock,
+        mock_exists: MagicMock,
+        renderer: WeatherRenderer,
+    ) -> None:
+        """Test updating the cached UVI max when current API data is higher."""
+        # Today's date
+        today = datetime(2023, 5, 20, 14, 0)  # 2 PM
+        today_str = today.strftime("%Y-%m-%d")
+
+        # Mock file exists and reading cached value lower than current
+        mock_exists.return_value = True
+        cached_timestamp = int(datetime(2023, 5, 20, 10, 30).timestamp())  # Today at 10:30 AM
+        mock_json_loads.return_value = {
+            "max_uvi": 6.5,  # Lower value from earlier today
+            "timestamp": cached_timestamp,
+            "date": today_str,
+        }
+
+        # Mock file open for read and write
+        mock_file_read = MagicMock()
+        mock_file_read.read.return_value = "{}"
+        mock_file_write = MagicMock()
+        mock_open.side_effect = [mock_file_read, mock_file_write]
+
+        # Create test weather data with higher current UVI
+        weather_data = MagicMock(spec=WeatherData)
+        weather_data.current = MagicMock(spec=CurrentWeather)
+        weather_data.current.uvi = 8.2  # Higher than cached
+        current_timestamp = int(today.timestamp())
+
+        # Create hourly forecast with value lower than current
+        hour = MagicMock(spec=HourlyWeather)
+        hour.dt = int(datetime(2023, 5, 20, 15, 0).timestamp())  # Today at 3 PM
+        hour.uvi = 7.5  # Lower than current, higher than cached
+        weather_data.hourly = [hour]
+
+        # Call the method
+        max_uvi, max_uvi_timestamp = renderer._get_daily_max_uvi(weather_data, today)
+
+        # Verify we use the higher current value
+        assert max_uvi == 8.2
+        assert max_uvi_timestamp == current_timestamp
+
+        # Verify we wrote the new max to the file
+        assert mock_open.call_count == 2  # Once for read, once for write
+        assert mock_file_write.__enter__.called
+
+    @pytest.mark.asyncio()
+    @patch("pathlib.Path.exists")
+    @patch("builtins.open")
+    async def test_get_daily_max_uvi_file_error(
+        self, mock_open: MagicMock, mock_exists: MagicMock, renderer: WeatherRenderer
+    ) -> None:
+        """Test handling file read errors in the _get_daily_max_uvi method."""
+        # Mock file exists but error when opening
+        mock_exists.return_value = True
+        mock_open.side_effect = OSError("Test file error")
+
+        # Create test weather data
+        weather_data = MagicMock(spec=WeatherData)
+        weather_data.current = MagicMock(spec=CurrentWeather)
+        weather_data.current.uvi = 5.6
+
+        # Create hourly forecast with a higher UVI
+        hour = MagicMock(spec=HourlyWeather)
+        hour.dt = int(datetime.now().timestamp()) + 3600  # 1 hour from now
+        hour.uvi = 6.3
+        weather_data.hourly = [hour]
+
+        # Call the method - should handle the error gracefully
+        max_uvi, max_uvi_timestamp = renderer._get_daily_max_uvi(weather_data, datetime.now())
+
+        # Verify we use the calculated max despite the file error
+        assert max_uvi == 6.3
+        assert max_uvi_timestamp == hour.dt
+
+    @pytest.mark.asyncio()
+    @patch("pathlib.Path.exists")
+    async def test_get_daily_max_uvi_no_file(
+        self, mock_exists: MagicMock, renderer: WeatherRenderer
+    ) -> None:
+        """Test behavior when the cache file doesn't exist."""
+        # Mock file doesn't exist
+        mock_exists.return_value = False
+
+        # Create test weather data with UVI values
+        weather_data = MagicMock(spec=WeatherData)
+        weather_data.current = MagicMock(spec=CurrentWeather)
+        weather_data.current.uvi = 4.2
+        current_timestamp = int(datetime.now().timestamp())
+
+        # No hourly forecast (use current only)
+        weather_data.hourly = []
+
+        # Call the method
+        with patch("builtins.open", mock_open()) as mock_file:
+            max_uvi, max_uvi_timestamp = renderer._get_daily_max_uvi(weather_data, datetime.now())
+
+        # Verify we use the current UVI
+        assert max_uvi == 4.2
+        assert max_uvi_timestamp == current_timestamp
+
+        # Verify we tried to write the file
+        mock_file.assert_called_once()
+
+    @pytest.mark.asyncio()
+    async def test_get_daily_max_uvi_integration(
+        self, renderer: WeatherRenderer, tmp_path: Path
+    ) -> None:
+        """Test the _get_daily_max_uvi method with real file operations."""
+        # Create a temporary cache file
+        cache_file = tmp_path / "uvi_max_cache.json"
+
+        # Use today's date
+        now = datetime.now()
+        today_str = now.date().strftime("%Y-%m-%d")
+
+        # Create test weather data
+        weather_data = MagicMock(spec=WeatherData)
+        weather_data.current = MagicMock(spec=CurrentWeather)
+        weather_data.current.uvi = 5.0
+        current_timestamp = int(now.timestamp())
+
+        # Create hourly forecast
+        hour = MagicMock(spec=HourlyWeather)
+        hour.dt = current_timestamp + 3600  # 1 hour from now
+        hour.uvi = 6.5  # Higher than current
+        weather_data.hourly = [hour]
+
+        # Patch just the cache file path to use our temp file
+        with patch.object(Path, "__new__", return_value=cache_file):
+            # First call should create the file with the higher UVI from hourly
+            max_uvi1, max_timestamp1 = renderer._get_daily_max_uvi(weather_data, now)
+
+            # Verify first result
+            assert max_uvi1 == 6.5
+            assert max_timestamp1 == hour.dt
+
+            # Manually check the file was created
+            assert cache_file.exists()
+            with open(cache_file) as f:
+                data = json.loads(f.read())
+                assert data["max_uvi"] == 6.5
+                assert data["timestamp"] == hour.dt
+                assert data["date"] == today_str
+
+            # Create new data with higher UVI
+            weather_data.current.uvi = 8.0
+
+            # Second call should update the cache with the new higher value
+            max_uvi2, max_timestamp2 = renderer._get_daily_max_uvi(weather_data, now)
+
+            # Verify second result
+            assert max_uvi2 == 8.0
+            assert max_timestamp2 == current_timestamp
+
+            # Manually check the file was updated
+            with open(cache_file) as f:
+                data = json.loads(f.read())
+                assert data["max_uvi"] == 8.0
+                assert data["timestamp"] == current_timestamp
+                assert data["date"] == today_str
+
+    @pytest.mark.asyncio()
+    async def test_uvi_max_calculation_uses_cached_values(self, renderer: WeatherRenderer) -> None:
+        """Test that the generate_html method uses the _get_daily_max_uvi method for UV calculation."""  # noqa: E501
+        # Create test weather data
+        weather_data = MagicMock(spec=WeatherData)
+        weather_data.current = MagicMock(spec=CurrentWeather)
+        weather_data.current.weather = [MagicMock(spec=WeatherCondition)]
+        weather_data.current.weather[0].id = 800
+        weather_data.current.weather[0].icon = "01d"
+        weather_data.current.pressure = 1013
+        weather_data.current.wind_speed = 3.0
+        weather_data.hourly = [MagicMock()]  # Non-empty hourly list to trigger UVI code path
+        weather_data.daily = []
+
+        # Create battery status
+        battery_status = BatteryStatus(
+            level=80, voltage=3.9, current=0.0, temperature=25.0, state=BatteryState.DISCHARGING
+        )
+
+        # Mock the _get_daily_max_uvi method to return known values
+        mock_uvi = 7.6
+        mock_timestamp = int(datetime.now().timestamp())
+        mock_get_daily_max_uvi = MagicMock(return_value=(mock_uvi, mock_timestamp))
+
+        # Mock template
+        mock_template = MagicMock()
+        mock_template.render.return_value = "<html>UV Max Cache Test</html>"
+
+        with (
+            patch.object(renderer, "_get_daily_max_uvi", mock_get_daily_max_uvi),
+            patch.object(renderer.jinja_env, "get_template", return_value=mock_template),
+        ):
+            # Generate HTML
+            await renderer.generate_html(weather_data, battery_status)
+
+            # Verify the _get_daily_max_uvi method was called
+            assert mock_get_daily_max_uvi.called
+
+            # Verify the template context has the expected UV values
+            context = mock_template.render.call_args[1]
+            assert context["uvi_max"] == f"{mock_uvi:.1f}"
+            assert context["uvi_time"] == renderer._format_time(
+                datetime.fromtimestamp(mock_timestamp), context["config"].display.time_format
+            )

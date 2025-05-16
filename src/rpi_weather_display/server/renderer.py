@@ -4,6 +4,7 @@ Provides functionality to render weather data into HTML and convert it to
 images suitable for display on the e-paper screen using Playwright.
 """
 
+import json
 import logging
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -222,26 +223,7 @@ class WeatherRenderer:
 
             if weather_data.hourly:
                 # Start with current conditions
-                max_uvi = 0.0
-                max_uvi_timestamp = 0
-
-                # Check current UV index if available
-                if hasattr(weather_data.current, "uvi"):
-                    max_uvi = weather_data.current.uvi
-                    max_uvi_timestamp = int(now.timestamp())
-
-                # Get today's date range
-                today = now.replace(hour=0, minute=0, second=0, microsecond=0)
-                tomorrow = today + timedelta(days=1)
-                today_start = int(today.timestamp())
-                today_end = int(tomorrow.timestamp()) - 1
-
-                # Find max UV index within today's remaining hours
-                for hour in weather_data.hourly:
-                    if (today_start <= hour.dt <= today_end) and hasattr(hour, "uvi"):
-                        if hour.uvi > max_uvi:
-                            max_uvi = hour.uvi
-                            max_uvi_timestamp = hour.dt
+                max_uvi, max_uvi_timestamp = self._get_daily_max_uvi(weather_data, now)
 
                 if max_uvi > 0.0:
                     uvi_max = f"{max_uvi:.1f}"
@@ -664,3 +646,77 @@ class WeatherRenderer:
                 # Fall back to the default mapping
                 self._weather_icon_map = {}
                 self._weather_id_to_icon = {}
+
+    def _get_daily_max_uvi(self, weather_data: WeatherData, now: datetime) -> tuple[float, int]:
+        """Calculate the max UVI for today, persisting between API calls.
+
+        Args:
+            weather_data: Current weather data
+            now: Current datetime
+
+        Returns:
+            Tuple of (max_uvi, max_uvi_timestamp)
+        """
+        cache_file = Path("uvi_max_cache.json")
+        today = now.date()
+
+        # Initialize with current API data
+        max_uvi = 0.0
+        max_uvi_timestamp = 0
+
+        if hasattr(weather_data.current, "uvi"):
+            max_uvi = weather_data.current.uvi
+            max_uvi_timestamp = int(now.timestamp())
+
+        # Get today's date range
+        today_start_dt = datetime.combine(today, datetime.min.time())
+        today_end_dt = datetime.combine(today + timedelta(days=1), datetime.min.time()) - timedelta(
+            seconds=1
+        )
+        today_start = int(today_start_dt.timestamp())
+        today_end = int(today_end_dt.timestamp())
+
+        # Find max UV index within today's remaining hours
+        for hour in weather_data.hourly:
+            if (today_start <= hour.dt <= today_end) and hasattr(hour, "uvi"):
+                if hour.uvi > max_uvi:
+                    max_uvi = hour.uvi
+                    max_uvi_timestamp = hour.dt
+
+        # Try to load the persisted maximum UVI
+        persisted_max_uvi = 0.0
+        persisted_timestamp = 0
+        persisted_date = None
+
+        try:
+            if cache_file.exists():
+                with open(cache_file) as f:
+                    data = json.loads(f.read())
+                    persisted_max_uvi = data.get("max_uvi", 0.0)
+                    persisted_timestamp = data.get("timestamp", 0)
+                    persisted_date_str = data.get("date", "")
+                    if persisted_date_str:
+                        persisted_date = datetime.strptime(persisted_date_str, "%Y-%m-%d").date()
+        except (json.JSONDecodeError, OSError, ValueError) as e:
+            self.logger.warning(f"Error reading UVI cache file: {e}")
+
+        # If persisted data is from today and has higher UVI, use it
+        if persisted_date == today and persisted_max_uvi >= max_uvi:
+            max_uvi = persisted_max_uvi
+            max_uvi_timestamp = persisted_timestamp
+        else:
+            # Otherwise, save the current max (either it's higher or from a different day)
+            try:
+                with open(cache_file, "w") as f:
+                    json.dump(
+                        {
+                            "max_uvi": max_uvi,
+                            "timestamp": max_uvi_timestamp,
+                            "date": today.strftime("%Y-%m-%d"),
+                        },
+                        f,
+                    )
+            except OSError as e:
+                self.logger.warning(f"Error writing UVI cache file: {e}")
+
+        return max_uvi, max_uvi_timestamp

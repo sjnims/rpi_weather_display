@@ -30,6 +30,7 @@ logs/
 preview/
 cache/
 tmp/
+uvi_max_cache.json
 
 # Generated content
 *.png
