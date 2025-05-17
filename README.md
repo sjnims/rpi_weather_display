@@ -8,8 +8,12 @@
 
 A power-optimized weather display solution for Raspberry Pi Zero 2 W with e-paper display, designed to achieve 60-90 days of battery life on a single charge.
 
+![Weather Display Preview](static/images/weather-display-preview.png)
+*The e-paper display shows current weather conditions, forecast, and key metrics in a clean, high-contrast design optimal for e-ink. A preview of an early version of the generated HTML dashboard is shown above.*
+
 ## Table of Contents
 - [Features](#features)
+- [Latest Improvements](#latest-improvements)
 - [User Experience](#user-experience)
 - [Hardware Requirements](#hardware-requirements)
 - [Prerequisites](#prerequisites)
@@ -49,17 +53,35 @@ A power-optimized weather display solution for Raspberry Pi Zero 2 W with e-pape
 - Automatic deep sleep between updates
 - Browser-based preview for easier development
 
+## Latest Improvements
+
+- **Enhanced UI Elements**:
+  - Wind direction shown as cardinal points (N, NE, E, etc.) with correctly oriented icons
+  - Wind direction indicators now properly point to the direction wind is coming from
+  - Air quality index display with descriptive labels based on OpenWeatherMap data
+
+- **User Customization**:
+  - Configurable pressure units (hPa, mmHg, inHg) through the config file
+  - Customizable datetime formats for display elements
+  - Support for multiple time format options (AM/PM or 24-hour)
+
+- **Improved Data Display**:
+  - More accurate high UV time prediction that persists between updates
+  - Improved weather icon mapping for precise conditions visualization
+
 ## User Experience
 
 The weather display shows a comprehensive dashboard including:
 
 - Current weather conditions with temperature and weather icon
 - Daily high and low temperatures
-- Wind speed and direction
-- Humidity and atmospheric pressure
+- Wind speed and direction (shown as cardinal points: N, NE, E, etc.)
+- Barometric pressure (configurable in hPa, mmHg, or inHg units)
+- Air quality index with descriptive labels (Good, Fair, Moderate, etc.)
+- UV index with peak time indication
 - 5-day forecast with icons and temperatures
 - Sunrise and sunset times
-- Last update timestamp
+- Last update timestamp with customizable formatting
 - Battery status indicator showing charge level and state
 
 The display is designed for maximum readability on e-paper, with high contrast and clean layout. The e-paper display only refreshes when necessary to conserve power, with updates typically occurring:
@@ -222,28 +244,39 @@ nano config.yaml  # or use your preferred editor
 ### Configuration Options
 
 ```yaml
-# Example configuration
-api:
-  openweathermap:
-    api_key: "your_api_key_here"  # Required: Your OpenWeatherMap API key
-    lat: 37.7749                  # Required: Latitude of location
-    lon: -122.4194                # Required: Longitude of location
+weather:
+  api_key: "YOUR_OPENWEATHERMAP_API_KEY"  # Required: Your OpenWeatherMap API key
+  city_name: "London"                      # Optional: City name for display
+  units: "metric"                          # Units: "metric", "imperial", "standard"
+  language: "en"                           # Language for weather descriptions
+  update_interval_minutes: 30              # How often to update weather data
+  forecast_days: 5                         # Number of forecast days
+  hourly_forecast_count: 24                # Number of hourly forecasts to show
 
 display:
-  refresh_interval_minutes: 30    # How often to refresh the screen
-  brightness: 50                  # Display brightness (0-100)
-  orientation: 0                  # Display rotation (0, 90, 180, 270)
+  width: 1872                              # Display resolution width
+  height: 1404                             # Display resolution height
+  rotate: 0                                # Display rotation (0, 90, 180, 270)
+  refresh_interval_minutes: 30             # Display refresh interval
+  partial_refresh: true                    # Use partial refresh for display
+  timestamp_format: "%Y-%m-%d %H:%M"       # Format for timestamps in logs
+  time_format: null                        # Format for time display (null = AM/PM)
+  pressure_units: "hPa"                    # Pressure units: "hPa", "mmHg", "inHg"
+  display_datetime_format: null            # Format for displayed dates (null = MM/DD/YYYY HH:MM AM/PM)
 
 power:
-  wake_up_interval_minutes: 30    # How often to wake from sleep
-  quiet_hours_start: "22:00"      # Start of quiet hours (reduced updates)
-  quiet_hours_end: "06:00"        # End of quiet hours
-  low_battery_threshold: 20       # % level to enter power saving mode
-  critical_battery_threshold: 10  # % level to enter critical power saving
+  quiet_hours_start: "23:00"               # Start of quiet hours (reduced updates)
+  quiet_hours_end: "06:00"                 # End of quiet hours
+  low_battery_threshold: 20                # Battery % to enter power saving
+  critical_battery_threshold: 10           # Battery % for critical power saving
+  wake_up_interval_minutes: 60             # How often to wake from sleep
 
 server:
-  url: "http://your-server-ip:8000"  # URL of the server
-  port: 8000                         # Port for the server to listen on
+  url: "http://your-server-ip"             # URL of the server
+  port: 8000                               # Server port
+  timeout_seconds: 10                      # API request timeout
+  retry_attempts: 3                        # Number of retry attempts
+  retry_delay_seconds: 5                   # Delay between retries
 ```
 
 All configuration is managed through this YAML file - the project does not use environment variables or .env files.
@@ -319,20 +352,49 @@ rpi-weather-display/
 ├── src/
 │   └── rpi_weather_display/
 │       ├── client/        # Client code for Raspberry Pi
+│       │   ├── display.py            # E-ink display integration
+│       │   └── main.py               # Client application
 │       ├── server/        # Server code for Docker container
+│       │   ├── api.py                # API endpoints
+│       │   ├── main.py               # Server application
+│       │   └── renderer.py           # HTML and image rendering
 │       ├── models/        # Shared data models
-│       └── utils/         # Utility functions
+│       │   ├── config.py             # Configuration models
+│       │   ├── system.py             # System status models
+│       │   └── weather.py            # Weather data models
+│       └── utils/         # Shared utilities
+│           ├── battery_utils.py      # Battery management
+│           ├── error_utils.py        # Error handling
+│           ├── logging.py            # Structured logging
+│           ├── network.py            # Network utilities
+│           ├── power_manager.py      # Power optimization
+│           └── time_utils.py         # Time-related utilities
 ├── deploy/
 │   └── scripts/
-│       ├── install.sh         # Installation script
-│       └── optimize-power.sh  # Power optimization script
-├── templates/             # HTML templates for weather display
-└── static/                # Static assets including icons and CSS
+│       ├── install.sh              # Installation script
+│       └── optimize-power.sh       # Power optimization script
+├── templates/             # HTML Jinja2 templates for the dashboard
+│   ├── _base.html.j2              # Base template
+│   ├── _current.html.j2           # Current weather section
+│   ├── _forecast_daily.html.j2    # Daily forecast section
+│   ├── _forecast_hourly.html.j2   # Hourly forecast section
+│   ├── _header.html.j2            # Header section
+│   └── dashboard.html.j2          # Main dashboard template
+├── static/                # Static assets
+│   ├── css/                       # Stylesheets
+│   ├── fonts/                     # Custom fonts
+│   ├── icons/                     # Weather and UI icons
+│   └── images/                    # Images for documentation
+└── tests/                 # Comprehensive test suite
+    ├── client/                    # Client tests
+    ├── models/                    # Model tests
+    ├── server/                    # Server tests
+    └── utils/                     # Utility tests
 ```
 
 ### Testing and Code Quality
 
-- **Test Coverage**: 95.75% code coverage with comprehensive tests
+- **Test Coverage**: 94.86% code coverage with comprehensive tests
 - **Type Checking**: Strict typing with Pyright
 - **Linting**: Uses Ruff for code style enforcement
 - **CI/CD**: Automated tests and linting via GitHub Actions
@@ -517,11 +579,21 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 See the [ROADMAP.md](ROADMAP.md) for detailed development plans.
 
-Future development plans include:
+### Recently Completed Roadmap Items
+
+- ✅ Moved `is_quiet_hours()` to a common utility function
+- ✅ Centralized battery threshold logic into a shared utility
+- ✅ Created unified power state management interface
+- ✅ Integrated WiFi sleep script with NetworkManager class
+- ✅ Implemented exponential backoff for network retry attempts
+
+### Future Development Plans
 
 - Enhanced power telemetry with battery drain rate calculations
 - Adaptive weather update frequency based on forecast stability
-- Integration with additional weather data sources
+- Battery-level-aware WiFi power state transitions
+- PiJuice integration for power events
+- Dynamic display refresh rates based on battery state
 - More aggressive memory and processing optimizations
 - Expanded hardware support for different e-paper displays
 

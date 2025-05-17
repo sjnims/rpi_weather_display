@@ -39,7 +39,7 @@ Priority is indicated as:
 ## Phase 2: Code Optimization (Target: v0.3.0)
 
 ### 2.1 Convention Improvements
-- [ ] 🟠 2.1.1 Create centralized constants module for default values [PLANNED]
+- [ ] 🔴 2.1.1 Create centralized constants module for default values [PLANNED]
 - [ ] 🟠 2.1.2 Standardize path resolution across client and server [PLANNED]
 - [ ] 🟢 2.1.3 Implement consistent file system abstraction project-wide [PLANNED]
 
@@ -57,6 +57,11 @@ Priority is indicated as:
 - [ ] 🔴 2.4.1 Optimize image processing for memory efficiency [PLANNED]
 - [ ] 🟠 2.4.2 Implement memory-aware caching with size limits [PLANNED]
 - [ ] 🟢 2.4.3 Add memory profiling and reporting [PLANNED]
+
+### 2.5 Code Refactoring (New)
+- [ ] 🔴 2.5.1 Modularize large files (power_manager.py, renderer.py) [PLANNED]
+- [ ] 🟠 2.5.2 Create custom exception hierarchy for better error handling [PLANNED]
+- [ ] 🟠 2.5.3 Standardize callback patterns across the codebase [PLANNED]
 
 ## Phase 3: Telemetry and Monitoring (Target: v0.4.0)
 
@@ -124,13 +129,36 @@ Priority is indicated as:
 - [ ] 🟠 5.4.2 Update code documentation to reflect optimization patterns [PLANNED]
 - [ ] 🟠 5.4.3 Add battery life estimates based on usage patterns [PLANNED]
 
+### 5.5 Deployment Improvements (New)
+- [ ] 🔴 5.5.1 Implement automatic update mechanism for client [PLANNED]
+- [ ] 🟠 5.5.2 Create comprehensive CI/CD pipeline for deployment [PLANNED]
+- [ ] 🟢 5.5.3 Add rollback capability for failed updates [PLANNED]
+
+## Phase 6: Enhanced User Experience (New)
+
+### 6.1 Template Optimization
+- [ ] 🟠 6.1.1 Refactor templates to reduce duplication [PLANNED]
+- [ ] 🟠 6.1.2 Add template documentation for complex components [PLANNED]
+- [ ] 🟢 6.1.3 Create themeable layout with configurable sections [PLANNED]
+
+### 6.2 Preview & Development Experience
+- [ ] 🟠 6.2.1 Enhance browser-based preview with live reload capability [PLANNED]
+- [ ] 🟠 6.2.2 Add configurator UI for display settings [PLANNED]
+- [ ] 🟢 6.2.3 Implement template validation during development [PLANNED]
+
+### 6.3 Advanced Customization
+- [ ] 🟠 6.3.1 Support for additional weather data providers [PLANNED]
+- [ ] 🟠 6.3.2 Add plugin architecture for custom data sources [PLANNED]
+- [ ] 🟢 6.3.3 Create user-friendly configuration web interface [PLANNED]
+
 ## Progress Summary
 
 | Phase | Not Started | In Progress | Completed | Total |
 |-------|------------|-------------|-----------|-------|
-| 1     | 9          | 0           | 3         | 12    |
-| 2     | 12         | 0           | 0         | 12    |
+| 1     | 9          | 0           | 5         | 14    |
+| 2     | 15         | 0           | 0         | 15    |
 | 3     | 12         | 0           | 0         | 12    |
 | 4     | 12         | 0           | 0         | 12    |
-| 5     | 12         | 0           | 0         | 12    |
-| Total | 57         | 0           | 3         | 60    |
+| 5     | 15         | 0           | 0         | 15    |
+| 6     | 9          | 0           | 0         | 9     |
+| Total | 72         | 0           | 5         | 77    |
