@@ -308,6 +308,7 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: Set up Docker Buildx
+        id: buildx
         uses: docker/setup-buildx-action@v2
 
       - name: Login to GitHub Container Registry
@@ -328,11 +329,11 @@ jobs:
             type=semver,pattern={{version}}
             latest
 
-      # Cache Docker layers
-      - name: Cache Docker layers
+      # Cache Docker layers - use paths that exist with buildx
+      - name: Setup Docker buildx cache
         uses: actions/cache@v3
         with:
-          path: /tmp/.buildx-cache
+          path: /home/runner/.docker/buildx
           key: ${{ runner.os }}-buildx-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-buildx-
@@ -344,8 +345,14 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # Use GitHub cache
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          # Enable BuildKit
+          builder: ${{ steps.buildx.outputs.name }}
+          # Additional optimizations
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
 
   deploy:
     runs-on: ubuntu-latest
