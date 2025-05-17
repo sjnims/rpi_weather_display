@@ -239,8 +239,12 @@ jobs:
 
       - name: Run tests for ${{ matrix.test-group }}
         run: |
-          # Skip coverage threshold check for individual test groups
-          poetry run pytest tests/${{ matrix.test-group }}/ --cov=src/ --cov-branch --cov-report=xml -v --no-cov-on-fail
+          # Create a temporary .coveragerc to override the fail_under setting
+          echo "[report]
+          fail_under = 0" > .coveragerc
+          
+          # Run tests with the local .coveragerc to override the settings in pyproject.toml
+          poetry run pytest tests/${{ matrix.test-group }}/ --cov=src/ --cov-branch --cov-report=xml -v
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5
@@ -284,7 +288,10 @@ jobs:
             
       - name: Run all tests with coverage and JUnit report
         run: |
-          # Here we include the global coverage check (94% minimum)
+          # Remove any .coveragerc file that might have been created
+          rm -f .coveragerc
+          
+          # Run with the settings from pyproject.toml (94% minimum)
           poetry run pytest --cov=src/ --cov-branch --cov-report=xml --junitxml=junit.xml -o junit_family=legacy
             
       - name: Upload JUnit test results to Codecov
