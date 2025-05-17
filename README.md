@@ -602,7 +602,7 @@ See the [ROADMAP.md](ROADMAP.md) for detailed development plans.
 This project makes use of several excellent open-source libraries and tools:
 
 - [Weather Icons](https://erikflowers.github.io/weather-icons/) for the beautiful weather icons
-- [Phosphor Icons](https://phosphoricons.com) – for the excellent battery icons (bold style variant)
+- [Phosphor Icons](https://phosphoricons.com) for the excellent battery icons (bold style variant)
 - [OpenWeatherMap](https://openweathermap.org/) for weather data
 - [Braille Institute](https://brailleinstitute.org/freefont) for the Atkinson Hyperlegible Next font
 - [PiJuice](https://github.com/PiSupply/PiJuice) for battery management

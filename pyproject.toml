@@ -1,11 +1,17 @@
-[tool.poetry]
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[project]
 name = "rpi_weather_display"
 version = "0.1.0"
 description = "Ultra-Low-Power Weather Display for Raspberry Pi"
-authors = ["Steve Nims <sjnims@gmail.com>"]
+authors = [
+    {name = "Steve Nims", email = "sjnims@gmail.com"}
+]
 readme = "README.md"
-license = "MIT"
-packages = [{include = "rpi_weather_display", from = "src"}]
+license = {text = "MIT"}
+requires-python = "~=3.11.12"
 keywords = ["raspberry-pi", "weather", "e-ink", "display", "low-power"]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -15,6 +21,32 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
+dependencies = [
+    "pydantic>=2.5.0",
+    "typing-extensions>=4.8.0",
+    "pyyaml>=6.0.1",
+    "requests>=2.31.0",
+    "pillow>=10.1.0",
+    "jinja2>=3.1.2",
+    "httpx>=0.25.1",
+    "structlog>=23.2.0",
+]
+
+[project.scripts]
+client = "rpi_weather_display.client.main:main"
+server = "rpi_weather_display.server.main:main"
+pre-commit-hooks = "pre_commit_hooks.main:main"
+
+[project.optional-dependencies]
+server = [
+    "fastapi>=0.104.1",
+    "uvicorn>=0.23.2",
+    "playwright>=1.40.0",
+]
+
+[tool.poetry]
+# Maintaining this section for backward compatibility
+packages = [{include = "rpi_weather_display", from = "src"}]
 
 [tool.poetry.dependencies]
 python = "~3.11.12"
@@ -56,18 +88,6 @@ sphinx-autodoc-typehints = "^1.24.0"
 myst-parser = "^2.0.0"
 
 # No Raspberry Pi specific dependencies in the Poetry configuration
-
-[tool.poetry.extras]
-server = ["fastapi", "uvicorn", "playwright"]
-
-[tool.poetry.scripts]
-client = "rpi_weather_display.client.main:main"
-server = "rpi_weather_display.server.main:main"
-pre-commit-hooks = "pre_commit_hooks.main:main"
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
 
 [tool.pyright]
 include = ["src", "tests"]
