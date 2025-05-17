@@ -49,7 +49,7 @@ server = [
 packages = [{include = "rpi_weather_display", from = "src"}]
 
 [tool.poetry.dependencies]
-python = "~3.11.12"
+python = "~=3.11.12"
 pydantic = "^2.5.0"
 typing-extensions = "^4.8.0"
 pyyaml = "^6.0.1"
