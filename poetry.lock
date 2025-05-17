@@ -1877,5 +1877,5 @@ server = ["fastapi", "playwright", "uvicorn"]
 
 [metadata]
 lock-version = "2.1"
-python-versions = "~3.11.12"
-content-hash = "ef34c213213f29cb18196cde60dc81c09d2c5475e0c3974054bcf669eff3da15"
+python-versions = "~=3.11.12"
+content-hash = "e26fae9058d6819c0c6f9bb64230bfa0b212c5ec66ec8f1fa379280530266667"
