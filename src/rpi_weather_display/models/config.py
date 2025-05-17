@@ -77,6 +77,8 @@ class PowerConfig(BaseModel):
     critical_battery_threshold: int = 10
     wake_up_interval_minutes: int = 60
     wifi_timeout_seconds: int = 30
+    enable_battery_aware_wifi: bool = True
+    wifi_power_save_mode: str = "auto"  # Options: "auto", "off", "on", "aggressive"
     retry_initial_delay_seconds: float = 1.0
     retry_max_delay_seconds: float = 300.0  # 5 minutes max delay
     retry_backoff_factor: float = 2.0
@@ -88,6 +90,15 @@ class PowerConfig(BaseModel):
     enable_temp_fs: bool = True
     cpu_governor: str = "powersave"
     cpu_max_freq_mhz: int = 700
+    
+    @field_validator("wifi_power_save_mode")
+    @classmethod
+    def validate_wifi_power_save_mode(cls, v: str) -> str:
+        """Validate WiFi power save mode is one of the supported types."""
+        valid_modes = ["auto", "off", "on", "aggressive"]
+        if v not in valid_modes:
+            raise ValueError(f"WiFi power save mode must be one of: {', '.join(valid_modes)}")
+        return v
 
 
 class ServerConfig(BaseModel):

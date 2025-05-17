@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from rpi_weather_display.models.config import AppConfig, PowerConfig
-from rpi_weather_display.models.system import NetworkState, NetworkStatus
+from rpi_weather_display.models.system import BatteryStatus, NetworkState, NetworkStatus
 
 # Define absolute paths for executables to avoid partial path security issues
 IWGETID_PATH = "/sbin/iwgetid"
@@ -27,6 +27,7 @@ IWCONFIG_PATH = "/sbin/iwconfig"
 IFCONFIG_PATH = "/sbin/ifconfig"
 SUDO_PATH = "/usr/bin/sudo"
 WIFI_SLEEP_SCRIPT = "/usr/local/bin/wifi-sleep.sh"
+IW_PATH = "/sbin/iw"
 
 
 class NetworkManager:
@@ -41,6 +42,7 @@ class NetworkManager:
         self.config = config
         self.logger = logging.getLogger(__name__)
         self.app_config = None  # Will hold reference to AppConfig if available
+        self.current_battery_status = None  # Will hold current battery status if available
 
     def set_app_config(self, app_config: AppConfig) -> None:
         """Set reference to the app config for debug mode check.
@@ -49,6 +51,14 @@ class NetworkManager:
             app_config: The application configuration.
         """
         self.app_config = app_config
+        
+    def update_battery_status(self, battery_status: BatteryStatus) -> None:
+        """Update the current battery status for battery-aware WiFi management.
+        
+        Args:
+            battery_status: Current battery status information
+        """
+        self.current_battery_status = battery_status
 
     def get_network_status(self) -> NetworkStatus:
         """Get current network status.
@@ -283,6 +293,7 @@ class NetworkManager:
                 self._enable_wifi_legacy()
                 return
 
+            # Call the wifi-sleep.sh script to enable WiFi
             subprocess.run(  # nosec # noqa: S603
                 [str(sudo_path), str(wifi_script), "on"],
                 check=True,
@@ -290,6 +301,11 @@ class NetworkManager:
                 shell=False,  # Explicitly disable shell
             )
             self.logger.info("WiFi interface enabled with power saving")
+            
+            # Apply battery-aware power save mode if enabled
+            # We do this in a separate method call to avoid test failures
+            self._apply_power_save_mode()
+                
         except subprocess.SubprocessError as e:
             self.logger.error(f"Failed to enable WiFi: {e}")
             # Try legacy method as fallback
@@ -313,8 +329,21 @@ class NetworkManager:
                 shell=False,  # Explicitly disable shell
             )
             self.logger.info("WiFi interface enabled (legacy method)")
+            
+            # Apply battery-aware power save mode if enabled
+            # We do this in a separate method call to avoid test failures
+            self._apply_power_save_mode()
+                
         except subprocess.SubprocessError as e:
             self.logger.error(f"Failed to enable WiFi (legacy method): {e}")
+            
+    def _apply_power_save_mode(self) -> None:
+        """Apply battery-aware power save mode if enabled.
+        
+        This is separated from the enable methods to help with testing.
+        """
+        if self.config.enable_battery_aware_wifi:
+            self.set_wifi_power_save_mode()
 
     def _disable_wifi(self) -> None:
         """Disable WiFi to save power."""
@@ -364,3 +393,86 @@ class NetworkManager:
             self.logger.info("WiFi interface disabled to save power (legacy method)")
         except subprocess.SubprocessError as e:
             self.logger.error(f"Failed to disable WiFi (legacy method): {e}")
+            
+    def set_wifi_power_save_mode(self, mode: str | None = None) -> bool:
+        """Set WiFi power save mode based on battery level.
+        
+        This method configures the power save mode of the WiFi adapter using
+        the iw command. Different power save modes have different power/performance
+        tradeoffs:
+        
+        - "off": Disables power saving (best performance, highest power consumption)
+        - "on": Basic power saving (good performance, medium power consumption)
+        - "aggressive": Aggressive power saving (reduced performance, lowest power consumption)
+        - "auto": Automatically select based on battery status
+        
+        Args:
+            mode: Power save mode to set, or None to use the configured default
+                
+        Returns:
+            True if power save mode was set successfully, False otherwise
+        """
+        # Default to config if not specified
+        if mode is None:
+            mode = self.config.wifi_power_save_mode
+            
+        # If mode is "auto", select appropriate mode based on battery status
+        if mode == "auto" and self.config.enable_battery_aware_wifi:
+            # Default to "on" if battery status is not available
+            if self.current_battery_status is None:
+                mode = "on"
+            # Use aggressive power saving when battery is critically low
+            elif self.current_battery_status.level <= self.config.critical_battery_threshold:
+                mode = "aggressive"
+            # Use regular power saving when battery is low
+            elif self.current_battery_status.level <= self.config.low_battery_threshold:
+                mode = "on"
+            # Disable power saving when battery is good
+            else:
+                mode = "off"
+        
+        # Ensure mode is valid
+        if mode not in ["off", "on", "aggressive"]:
+            self.logger.error(f"Invalid power save mode: {mode}")
+            return False
+            
+        try:
+            # Check if iw command is available
+            iw_path = Path(IW_PATH)
+            sudo_path = Path(SUDO_PATH)
+            
+            if not iw_path.exists() or not sudo_path.exists():
+                self.logger.warning(f"Required commands not found: sudo={sudo_path.exists()}, "
+                              f"iw={iw_path.exists()}")
+                return False
+                
+            # Map modes to iw command arguments
+            mode_arg = "off" if mode == "off" else "on"
+            
+            # Run iw command to set power save mode
+            subprocess.run(  # nosec # noqa: S603
+                [str(sudo_path), str(iw_path), "dev", "wlan0", "set", "power_save", mode_arg],
+                check=True,
+                timeout=self.config.wifi_timeout_seconds,
+                shell=False,  # Explicitly disable shell
+            )
+            
+            # If using aggressive mode, we need additional settings
+            if mode == "aggressive":
+                # Set beacon interval to maximum to reduce wakeups
+                subprocess.run(  # nosec # noqa: S603
+                    [
+                        str(sudo_path), str(IWCONFIG_PATH), "wlan0", 
+                        "power", "timeout", "3600"
+                    ],
+                    check=True,
+                    timeout=self.config.wifi_timeout_seconds,
+                    shell=False,
+                )
+                
+            self.logger.info(f"WiFi power save mode set to '{mode}'")
+            return True
+            
+        except subprocess.SubprocessError as e:
+            self.logger.error(f"Failed to set WiFi power save mode: {e}")
+            return False

@@ -16,9 +16,10 @@ from rpi_weather_display.models.config import (
     ServerConfig,
     WeatherConfig,
 )
-from rpi_weather_display.models.system import NetworkState
+from rpi_weather_display.models.system import BatteryState, BatteryStatus, NetworkState
 from rpi_weather_display.utils.network import (
     IFCONFIG_PATH,
+    IW_PATH,
     IWCONFIG_PATH,
     IWGETID_PATH,
     SUDO_PATH,
@@ -37,6 +38,8 @@ def power_config() -> PowerConfig:
         low_battery_threshold=20,
         critical_battery_threshold=10,
         wifi_timeout_seconds=30,
+        enable_battery_aware_wifi=True,
+        wifi_power_save_mode="auto",
         retry_initial_delay_seconds=1.0,
         retry_max_delay_seconds=300.0,
         retry_backoff_factor=2.0,
@@ -91,6 +94,45 @@ def app_config(
 
 
 @pytest.fixture()
+def normal_battery() -> BatteryStatus:
+    """Create a normal battery status for testing."""
+    return BatteryStatus(
+        level=75,
+        voltage=3.7,
+        current=100.0,
+        temperature=25.0,
+        state=BatteryState.DISCHARGING,
+        time_remaining=1200,
+        timestamp=None,
+    )
+
+@pytest.fixture()
+def low_battery() -> BatteryStatus:
+    """Create a low battery status for testing."""
+    return BatteryStatus(
+        level=15,
+        voltage=3.7,
+        current=100.0,
+        temperature=25.0,
+        state=BatteryState.DISCHARGING,
+        time_remaining=1200,
+        timestamp=None,
+    )
+
+@pytest.fixture()
+def critical_battery() -> BatteryStatus:
+    """Create a critical battery status for testing."""
+    return BatteryStatus(
+        level=5,
+        voltage=3.7,
+        current=100.0,
+        temperature=25.0,
+        state=BatteryState.DISCHARGING,
+        time_remaining=1200,
+        timestamp=None,
+    )
+
+@pytest.fixture()
 def network_manager(power_config: PowerConfig) -> NetworkManager:
     """Create a network manager fixture."""
     return NetworkManager(power_config)
@@ -128,17 +170,19 @@ class TestNetworkManager:
         mock_process = MagicMock()
         mock_process.returncode = 0
         mock_run.return_value = mock_process
+        
+        # Patch the _apply_power_save_mode method to do nothing
+        with patch.object(network_manager, "_apply_power_save_mode"):
+            # Call the method
+            network_manager._enable_wifi()
 
-        # Call the method
-        network_manager._enable_wifi()
-
-        # Verify subprocess was called correctly - now checks for wifi-sleep.sh script
-        mock_run.assert_called_with(
-            [str(Path(SUDO_PATH)), str(Path(WIFI_SLEEP_SCRIPT)), "on"],
-            check=True,
-            timeout=network_manager.config.wifi_timeout_seconds,
-            shell=False,
-        )
+            # Verify subprocess was called correctly - now checks for wifi-sleep.sh script
+            mock_run.assert_called_with(
+                [str(Path(SUDO_PATH)), str(Path(WIFI_SLEEP_SCRIPT)), "on"],
+                check=True,
+                timeout=network_manager.config.wifi_timeout_seconds,
+                shell=False,
+            )
 
     @patch("subprocess.run")
     @patch("pathlib.Path.exists")
@@ -678,42 +722,44 @@ class TestNetworkManager:
         # We need to mock sudo not existing
         mock_exists.return_value = False
 
-        # Call the method
-        network_manager._enable_wifi()
-
-        # Verify subprocess was not called
-        mock_run.assert_not_called()
-
-        # Reset and try with script not found but sudo found
-        mock_exists.reset_mock()
-        mock_run.reset_mock()
-
-        # Create a custom side effect using a dictionary to map paths to return values
-        wifi_script = Path(WIFI_SLEEP_SCRIPT)
-
-        def mock_exists_impl(self: Path) -> bool:
-            # 'self' here is the Path instance being checked
-            if str(self) == str(wifi_script):
-                return False  # WIFI_SLEEP_SCRIPT doesn't exist
-            return True  # All other paths exist
-
-        # Patch the exists method on Path instances
-        with patch.object(Path, "exists", mock_exists_impl):
-            # Configure subprocess to return successfully for the legacy method
-            mock_process = MagicMock()
-            mock_process.returncode = 0
-            mock_run.return_value = mock_process
-
+        # Patch the _apply_power_save_mode method to do nothing
+        with patch.object(network_manager, "_apply_power_save_mode"):
             # Call the method
             network_manager._enable_wifi()
 
-            # Verify the legacy method was called instead
-            mock_run.assert_called_with(
-                [str(Path(SUDO_PATH)), str(Path(IFCONFIG_PATH)), "wlan0", "up"],
-                check=True,
-                timeout=network_manager.config.wifi_timeout_seconds,
-                shell=False,
-            )
+            # Verify subprocess was not called
+            mock_run.assert_not_called()
+
+            # Reset and try with script not found but sudo found
+            mock_exists.reset_mock()
+            mock_run.reset_mock()
+
+            # Create a custom side effect using a dictionary to map paths to return values
+            wifi_script = Path(WIFI_SLEEP_SCRIPT)
+
+            def mock_exists_impl(self: Path) -> bool:
+                # 'self' here is the Path instance being checked
+                if str(self) == str(wifi_script):
+                    return False  # WIFI_SLEEP_SCRIPT doesn't exist
+                return True  # All other paths exist
+
+            # Patch the exists method on Path instances
+            with patch.object(Path, "exists", mock_exists_impl):
+                # Configure subprocess to return successfully for the legacy method
+                mock_process = MagicMock()
+                mock_process.returncode = 0
+                mock_run.return_value = mock_process
+
+                # Call the method
+                network_manager._enable_wifi()
+
+                # Verify the legacy method was called instead
+                mock_run.assert_called_with(
+                    [str(Path(SUDO_PATH)), str(Path(IFCONFIG_PATH)), "wlan0", "up"],
+                    check=True,
+                    timeout=network_manager.config.wifi_timeout_seconds,
+                    shell=False,
+                )
 
     @patch("subprocess.run")
     @patch("pathlib.Path.exists")
@@ -770,18 +816,20 @@ class TestNetworkManager:
         mock_process.returncode = 0
         mock_run.return_value = mock_process
 
-        # Use patch.object to patch the exists method on Path instances
-        with patch.object(Path, "exists", mock_exists_impl):
-            # Call the method
-            network_manager._enable_wifi()
+        # Patch the _apply_power_save_mode method to do nothing
+        with patch.object(network_manager, "_apply_power_save_mode"):
+            # Use patch.object to patch the exists method on Path instances
+            with patch.object(Path, "exists", mock_exists_impl):
+                # Call the method
+                network_manager._enable_wifi()
 
-            # Verify subprocess was called with ifconfig (legacy method)
-            mock_run.assert_called_with(
-                [str(Path(SUDO_PATH)), str(Path(IFCONFIG_PATH)), "wlan0", "up"],
-                check=True,
-                timeout=network_manager.config.wifi_timeout_seconds,
-                shell=False,
-            )
+                # Verify subprocess was called with ifconfig (legacy method)
+                mock_run.assert_called_with(
+                    [str(Path(SUDO_PATH)), str(Path(IFCONFIG_PATH)), "wlan0", "up"],
+                    check=True,
+                    timeout=network_manager.config.wifi_timeout_seconds,
+                    shell=False,
+                )
 
     @patch("subprocess.run")
     def test_disable_wifi_fallback(
@@ -899,6 +947,352 @@ class TestNetworkManager:
 
         # Verify result is None (operation failed)
         assert result is None
+        
+    def test_update_battery_status(
+        self, network_manager: NetworkManager, normal_battery: BatteryStatus
+    ) -> None:
+        """Test update_battery_status method."""
+        # Initially battery_status is None
+        assert network_manager.current_battery_status is None
+        
+        # Update battery status
+        network_manager.update_battery_status(normal_battery)
+        
+        # Verify battery status was updated
+        assert network_manager.current_battery_status is normal_battery
+        
+    @patch("subprocess.run")
+    @patch("pathlib.Path.exists")
+    def test_set_wifi_power_save_mode_off(
+        self, mock_exists: MagicMock, mock_run: MagicMock, network_manager: NetworkManager
+    ) -> None:
+        """Test set_wifi_power_save_mode method with 'off' mode."""
+        # Mock paths exist
+        mock_exists.return_value = True
+        
+        # Configure subprocess to return successfully
+        mock_process = MagicMock()
+        mock_process.returncode = 0
+        mock_run.return_value = mock_process
+        
+        # Call method with explicit 'off' mode
+        result = network_manager.set_wifi_power_save_mode("off")
+        
+        # Verify subprocess was called correctly with 'off' argument
+        mock_run.assert_called_with(
+            [str(Path(SUDO_PATH)), str(Path(IW_PATH)), "dev", "wlan0", "set", "power_save", "off"],
+            check=True,
+            timeout=network_manager.config.wifi_timeout_seconds,
+            shell=False,
+        )
+        
+        # Verify result
+        assert result is True
+
+    @patch("subprocess.run")
+    @patch("pathlib.Path.exists")
+    def test_set_wifi_power_save_mode_on(
+        self, mock_exists: MagicMock, mock_run: MagicMock, network_manager: NetworkManager
+    ) -> None:
+        """Test set_wifi_power_save_mode method with 'on' mode."""
+        # Mock paths exist
+        mock_exists.return_value = True
+        
+        # Configure subprocess to return successfully
+        mock_process = MagicMock()
+        mock_process.returncode = 0
+        mock_run.return_value = mock_process
+        
+        # Call method with explicit 'on' mode
+        result = network_manager.set_wifi_power_save_mode("on")
+        
+        # Verify subprocess was called correctly with 'on' argument
+        mock_run.assert_called_with(
+            [str(Path(SUDO_PATH)), str(Path(IW_PATH)), "dev", "wlan0", "set", "power_save", "on"],
+            check=True,
+            timeout=network_manager.config.wifi_timeout_seconds,
+            shell=False,
+        )
+        
+        # Verify result
+        assert result is True
+        
+    @patch("subprocess.run")
+    @patch("pathlib.Path.exists")
+    def test_set_wifi_power_save_mode_aggressive(
+        self, mock_exists: MagicMock, mock_run: MagicMock, network_manager: NetworkManager
+    ) -> None:
+        """Test set_wifi_power_save_mode method with 'aggressive' mode."""
+        # Mock paths exist
+        mock_exists.return_value = True
+        
+        # Configure subprocess to return successfully
+        mock_process = MagicMock()
+        mock_process.returncode = 0
+        mock_run.return_value = mock_process
+        
+        # Call method with explicit 'aggressive' mode
+        result = network_manager.set_wifi_power_save_mode("aggressive")
+        
+        # Verify subprocess was called with correct arguments
+        assert mock_run.call_count == 2
+        
+        # Create command args separately to avoid long lines
+        sudo = str(Path(SUDO_PATH))
+        iw = str(Path(IW_PATH))
+        iwconfig = str(Path(IWCONFIG_PATH))
+        
+        iw_args = [sudo, iw, "dev", "wlan0", "set", "power_save", "on"]
+        iwconfig_args = [sudo, iwconfig, "wlan0", "power", "timeout", "3600"]
+        
+        mock_run.assert_has_calls([
+            call(
+                iw_args,
+                check=True,
+                timeout=network_manager.config.wifi_timeout_seconds,
+                shell=False,
+            ),
+            call(
+                iwconfig_args,
+                check=True,
+                timeout=network_manager.config.wifi_timeout_seconds,
+                shell=False,
+            )
+        ])
+        
+        # Verify result
+        assert result is True
+        
+    @patch("subprocess.run")
+    @patch("pathlib.Path.exists")
+    def test_set_wifi_power_save_mode_auto_normal_battery(
+        self,
+        mock_exists: MagicMock,
+        mock_run: MagicMock,
+        network_manager: NetworkManager,
+        normal_battery: BatteryStatus,
+    ) -> None:
+        """Test set_wifi_power_save_mode method with 'auto' mode and normal battery."""
+        # Mock paths exist
+        mock_exists.return_value = True
+        
+        # Configure subprocess to return successfully
+        mock_process = MagicMock()
+        mock_process.returncode = 0
+        mock_run.return_value = mock_process
+        
+        # Set battery status
+        network_manager.update_battery_status(normal_battery)
+        
+        # Call method with 'auto' mode
+        result = network_manager.set_wifi_power_save_mode("auto")
+        
+        # With normal battery, should select 'off' mode
+        mock_run.assert_called_with(
+            [str(Path(SUDO_PATH)), str(Path(IW_PATH)), "dev", "wlan0", "set", "power_save", "off"],
+            check=True,
+            timeout=network_manager.config.wifi_timeout_seconds,
+            shell=False,
+        )
+        
+        # Verify result
+        assert result is True
+        
+    @patch("subprocess.run")
+    @patch("pathlib.Path.exists")
+    def test_set_wifi_power_save_mode_auto_low_battery(
+        self,
+        mock_exists: MagicMock,
+        mock_run: MagicMock,
+        network_manager: NetworkManager,
+        low_battery: BatteryStatus,
+    ) -> None:
+        """Test set_wifi_power_save_mode method with 'auto' mode and low battery."""
+        # Mock paths exist
+        mock_exists.return_value = True
+        
+        # Configure subprocess to return successfully
+        mock_process = MagicMock()
+        mock_process.returncode = 0
+        mock_run.return_value = mock_process
+        
+        # Set battery status
+        network_manager.update_battery_status(low_battery)
+        
+        # Call method with 'auto' mode
+        result = network_manager.set_wifi_power_save_mode("auto")
+        
+        # With low battery, should select 'on' mode
+        mock_run.assert_called_with(
+            [str(Path(SUDO_PATH)), str(Path(IW_PATH)), "dev", "wlan0", "set", "power_save", "on"],
+            check=True,
+            timeout=network_manager.config.wifi_timeout_seconds,
+            shell=False,
+        )
+        
+        # Verify result
+        assert result is True
+        
+    @patch("subprocess.run")
+    @patch("pathlib.Path.exists")
+    def test_set_wifi_power_save_mode_auto_critical_battery(
+        self,
+        mock_exists: MagicMock,
+        mock_run: MagicMock,
+        network_manager: NetworkManager,
+        critical_battery: BatteryStatus,
+    ) -> None:
+        """Test set_wifi_power_save_mode method with 'auto' mode and critical battery."""
+        # Mock paths exist
+        mock_exists.return_value = True
+        
+        # Configure subprocess to return successfully
+        mock_process = MagicMock()
+        mock_process.returncode = 0
+        mock_run.return_value = mock_process
+        
+        # Set battery status
+        network_manager.update_battery_status(critical_battery)
+        
+        # Call method with 'auto' mode
+        result = network_manager.set_wifi_power_save_mode("auto")
+        
+        # With critical battery, should select 'aggressive' mode
+        assert mock_run.call_count == 2
+        
+        # Create command args separately to avoid long lines
+        sudo = str(Path(SUDO_PATH))
+        iw = str(Path(IW_PATH))
+        iwconfig = str(Path(IWCONFIG_PATH))
+        
+        iw_args = [sudo, iw, "dev", "wlan0", "set", "power_save", "on"]
+        iwconfig_args = [sudo, iwconfig, "wlan0", "power", "timeout", "3600"]
+        
+        mock_run.assert_has_calls([
+            call(
+                iw_args,
+                check=True,
+                timeout=network_manager.config.wifi_timeout_seconds,
+                shell=False,
+            ),
+            call(
+                iwconfig_args,
+                check=True,
+                timeout=network_manager.config.wifi_timeout_seconds,
+                shell=False,
+            )
+        ])
+        
+        # Verify result
+        assert result is True
+        
+    @patch("subprocess.run")
+    @patch("pathlib.Path.exists")
+    def test_set_wifi_power_save_mode_invalid(
+        self, mock_exists: MagicMock, mock_run: MagicMock, network_manager: NetworkManager
+    ) -> None:
+        """Test set_wifi_power_save_mode method with invalid mode."""
+        # Call method with invalid mode
+        result = network_manager.set_wifi_power_save_mode("invalid")
+        
+        # Verify subprocess was not called
+        mock_run.assert_not_called()
+        
+        # Verify result
+        assert result is False
+        
+    @patch("subprocess.run")
+    @patch("pathlib.Path.exists")
+    def test_set_wifi_power_save_mode_command_not_found(
+        self, mock_exists: MagicMock, mock_run: MagicMock, network_manager: NetworkManager
+    ) -> None:
+        """Test set_wifi_power_save_mode method when command is not found."""
+        # Mock iw not found
+        mock_exists.return_value = False
+        
+        # Call method
+        result = network_manager.set_wifi_power_save_mode("on")
+        
+        # Verify subprocess was not called
+        mock_run.assert_not_called()
+        
+        # Verify result
+        assert result is False
+        
+    @patch("subprocess.run")
+    @patch("pathlib.Path.exists")
+    def test_set_wifi_power_save_mode_subprocess_error(
+        self, mock_exists: MagicMock, mock_run: MagicMock, network_manager: NetworkManager
+    ) -> None:
+        """Test set_wifi_power_save_mode method when subprocess throws an error."""
+        # Mock paths exist
+        mock_exists.return_value = True
+        
+        # Mock subprocess to raise error
+        mock_run.side_effect = subprocess.SubprocessError("Test error")
+        
+        # Call method
+        result = network_manager.set_wifi_power_save_mode("on")
+        
+        # Verify result
+        assert result is False
+        
+    def test_apply_power_save_mode(self, network_manager: NetworkManager) -> None:
+        """Test _apply_power_save_mode method."""
+        # Test with battery-aware WiFi enabled
+        network_manager.config.enable_battery_aware_wifi = True
+        
+        with patch.object(
+            network_manager, "set_wifi_power_save_mode", return_value=True
+        ) as mock_set_power_save:
+            # Call the method
+            network_manager._apply_power_save_mode()
+            
+            # Verify set_wifi_power_save_mode was called
+            mock_set_power_save.assert_called_once()
+            
+        # Test with battery-aware WiFi disabled
+        network_manager.config.enable_battery_aware_wifi = False
+        
+        with patch.object(
+            network_manager, "set_wifi_power_save_mode", return_value=True
+        ) as mock_set_power_save:
+            # Call the method
+            network_manager._apply_power_save_mode()
+            
+            # Verify set_wifi_power_save_mode was not called
+            mock_set_power_save.assert_not_called()
+        
+    @patch("subprocess.run")
+    @patch("pathlib.Path.exists")
+    def test_enable_wifi_applies_power_save(
+        self,
+        mock_exists: MagicMock,
+        mock_run: MagicMock,
+        network_manager: NetworkManager,
+        normal_battery: BatteryStatus,
+    ) -> None:
+        """Test that _enable_wifi applies power save settings."""
+        # Mock paths exist
+        mock_exists.return_value = True
+        
+        # Configure subprocess to return successfully
+        mock_process = MagicMock()
+        mock_process.returncode = 0
+        mock_run.return_value = mock_process
+        
+        # Set battery status
+        network_manager.update_battery_status(normal_battery)
+        
+        # Create patch for _apply_power_save_mode to check if it's called
+        with patch.object(
+            network_manager, "_apply_power_save_mode"
+        ) as mock_apply_power_save:
+            # Call _enable_wifi
+            network_manager._enable_wifi()
+            
+            # Verify _apply_power_save_mode was called
+            mock_apply_power_save.assert_called_once()
 
     @patch("time.sleep")
     @patch("socket.create_connection")

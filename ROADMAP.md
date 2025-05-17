@@ -24,7 +24,7 @@ Priority is indicated as:
 ### 1.2 WiFi Management Enhancement
 - [x] 🔴 1.2.1 Integrate `wifi-sleep.sh` script with `NetworkManager` class [COMPLETED 2025-05-16]
 - [x] 🟠 1.2.2 Implement exponential backoff for network retry attempts [COMPLETED 2025-05-16]
-- [ ] 🟠 1.2.3 Add battery-level-aware WiFi power state transitions [PLANNED]
+- [x] 🟠 1.2.3 Add battery-level-aware WiFi power state transitions [COMPLETED 2025-05-17]
 
 ### 1.3 PiJuice Integration
 - [ ] 🔴 1.3.1 Add support for all PiJuice events (LOW_CHARGE, button press) [PLANNED]
@@ -155,10 +155,10 @@ Priority is indicated as:
 
 | Phase | Not Started | In Progress | Completed | Total |
 |-------|------------|-------------|-----------|-------|
-| 1     | 9          | 0           | 5         | 14    |
+| 1     | 8          | 0           | 6         | 14    |
 | 2     | 15         | 0           | 0         | 15    |
 | 3     | 12         | 0           | 0         | 12    |
 | 4     | 12         | 0           | 0         | 12    |
 | 5     | 15         | 0           | 0         | 15    |
 | 6     | 9          | 0           | 0         | 9     |
-| Total | 72         | 0           | 5         | 77    |
+| Total | 71         | 0           | 6         | 77    |
