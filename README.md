@@ -330,7 +330,7 @@ All dependencies and dev tools are defined in [pyproject.toml](pyproject.toml).
    ```
    This provides a live view of the dashboard for easier development and iteration.
 
-4. Modify the HTML template in [templates/weather.html.j2](templates/weather.html.j2) and refresh the browser to see changes immediately.
+4. Modify the HTML template in [templates/dashboard.html.j2](templates/dashboard.html.j2) and refresh the browser to see changes immediately. Partials are located in the same directory, and are split logically by area of focus: header, current weather, daily forecast, and hourly forecast.
 
 ### Development Best Practices
 
