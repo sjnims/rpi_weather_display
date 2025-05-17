@@ -4,7 +4,7 @@ FROM python:3.11-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=off \
-    POETRY_VERSION=1.5.1 \
+    POETRY_VERSION=2.1.3 \
     POETRY_VIRTUALENVS_CREATE=false
 
 # Install essential packages and Poetry
@@ -48,7 +48,7 @@ COPY pyproject.toml poetry.lock* ./
 COPY . .
 
 # Install dependencies with Poetry
-RUN poetry install --no-interaction --no-dev --extras server
+RUN poetry install --no-interaction --only main --extras server
 
 # Install Playwright browsers for rendering
 RUN poetry run playwright install chromium
