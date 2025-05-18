@@ -77,6 +77,26 @@ class TestWeatherConfig:
 
         error_details = str(excinfo.value)
         assert "Update interval must be at least 15 minutes" in error_details
+        
+    def test_hourly_forecast_count_validator(self) -> None:
+        """Test validator for hourly_forecast_count."""
+        # Valid counts
+        min_count = WeatherConfig(api_key="test_key", hourly_forecast_count=1)
+        assert min_count.hourly_forecast_count == 1
+        
+        max_count = WeatherConfig(api_key="test_key", hourly_forecast_count=48)
+        assert max_count.hourly_forecast_count == 48
+        
+        # Invalid counts
+        with pytest.raises(ValidationError) as excinfo:
+            WeatherConfig(api_key="test_key", hourly_forecast_count=0)
+        error_details = str(excinfo.value)
+        assert "Hourly forecast count must be between 1 and 48" in error_details
+        
+        with pytest.raises(ValidationError) as excinfo:
+            WeatherConfig(api_key="test_key", hourly_forecast_count=49)
+        error_details = str(excinfo.value)
+        assert "Hourly forecast count must be between 1 and 48" in error_details
 
 
 class TestDisplayConfig:
@@ -133,12 +153,24 @@ class TestPowerConfig:
         assert power_config.critical_battery_threshold == 10
         assert power_config.wake_up_interval_minutes == 60
         assert power_config.wifi_timeout_seconds == 30
+        assert power_config.enable_battery_aware_wifi is True
+        assert power_config.wifi_power_save_mode == "auto"
+        assert power_config.retry_initial_delay_seconds == 1.0
+        assert power_config.retry_max_delay_seconds == 300.0
+        assert power_config.retry_backoff_factor == 2.0
+        assert power_config.retry_jitter_factor == 0.1
+        assert power_config.retry_max_attempts == 5
         assert power_config.disable_hdmi is True
         assert power_config.disable_bluetooth is True
         assert power_config.disable_leds is True
         assert power_config.enable_temp_fs is True
         assert power_config.cpu_governor == "powersave"
         assert power_config.cpu_max_freq_mhz == 700
+        assert power_config.enable_pijuice_events is True
+        assert power_config.low_charge_action == "SYSTEM_HALT"
+        assert power_config.low_charge_delay == 5
+        assert power_config.button_press_action == "SYSDOWN"
+        assert power_config.button_press_delay == 180
 
     def test_custom_values(self) -> None:
         """Test PowerConfig with custom values."""
@@ -149,12 +181,24 @@ class TestPowerConfig:
             critical_battery_threshold=15,
             wake_up_interval_minutes=120,
             wifi_timeout_seconds=45,
+            enable_battery_aware_wifi=False,
+            wifi_power_save_mode="off",
+            retry_initial_delay_seconds=2.0,
+            retry_max_delay_seconds=60.0,
+            retry_backoff_factor=1.5,
+            retry_jitter_factor=0.2,
+            retry_max_attempts=3,
             disable_hdmi=False,
             disable_bluetooth=False,
             disable_leds=False,
             enable_temp_fs=False,
             cpu_governor="performance",
             cpu_max_freq_mhz=1000,
+            enable_pijuice_events=False,
+            low_charge_action="NO_ACTION",
+            low_charge_delay=10,
+            button_press_action="SYSTEM_POWER_OFF",
+            button_press_delay=60,
         )
 
         assert power_config.quiet_hours_start == "22:00"
@@ -163,12 +207,58 @@ class TestPowerConfig:
         assert power_config.critical_battery_threshold == 15
         assert power_config.wake_up_interval_minutes == 120
         assert power_config.wifi_timeout_seconds == 45
+        assert power_config.enable_battery_aware_wifi is False
+        assert power_config.wifi_power_save_mode == "off"
+        assert power_config.retry_initial_delay_seconds == 2.0
+        assert power_config.retry_max_delay_seconds == 60.0
+        assert power_config.retry_backoff_factor == 1.5
+        assert power_config.retry_jitter_factor == 0.2
+        assert power_config.retry_max_attempts == 3
         assert power_config.disable_hdmi is False
         assert power_config.disable_bluetooth is False
         assert power_config.disable_leds is False
         assert power_config.enable_temp_fs is False
         assert power_config.cpu_governor == "performance"
         assert power_config.cpu_max_freq_mhz == 1000
+        assert power_config.enable_pijuice_events is False
+        assert power_config.low_charge_action == "NO_ACTION"
+        assert power_config.low_charge_delay == 10
+        assert power_config.button_press_action == "SYSTEM_POWER_OFF"
+        assert power_config.button_press_delay == 60
+        
+    def test_wifi_power_save_mode_validator(self) -> None:
+        """Test validation of WiFi power save mode."""
+        # Valid modes
+        for mode in ["auto", "off", "on", "aggressive"]:
+            config = PowerConfig(wifi_power_save_mode=mode)
+            assert config.wifi_power_save_mode == mode
+            
+        # Invalid mode
+        with pytest.raises(ValidationError) as excinfo:
+            PowerConfig(wifi_power_save_mode="invalid_mode")
+        
+        error_details = str(excinfo.value)
+        assert "WiFi power save mode must be one of" in error_details
+        
+    def test_low_charge_action_validator(self) -> None:
+        """Test validation of low charge action."""
+        # Valid actions
+        valid_actions = [
+            "NO_ACTION", "SYSTEM_HALT", "SYSTEM_HALT_POW_OFF", 
+            "SYSTEM_POWER_OFF", "SYSTEM_POWER_ON", "SYSTEM_REBOOT", 
+            "SYSTEM_WAKEUP"
+        ]
+        
+        for action in valid_actions:
+            config = PowerConfig(low_charge_action=action)
+            assert config.low_charge_action == action
+            
+        # Invalid action
+        with pytest.raises(ValidationError) as excinfo:
+            PowerConfig(low_charge_action="INVALID_ACTION")
+        
+        error_details = str(excinfo.value)
+        assert "Low charge action must be one of" in error_details
 
 
 class TestServerConfig:

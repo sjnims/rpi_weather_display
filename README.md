@@ -394,7 +394,7 @@ rpi-weather-display/
 
 ### Testing and Code Quality
 
-- **Test Coverage**: 94.86% code coverage with comprehensive tests
+- **Test Coverage**: 97.20% code coverage with comprehensive tests
 - **Type Checking**: Strict typing with Pyright
 - **Linting**: Uses Ruff for code style enforcement
 - **CI/CD**: Automated tests and linting via GitHub Actions
