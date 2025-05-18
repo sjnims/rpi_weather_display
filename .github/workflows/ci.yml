@@ -217,12 +217,12 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-poetry-
             
-      # Playwright browsers cache
+      # Playwright browsers cache - use the correct path for Ubuntu
       - name: Cache Playwright browsers
         uses: actions/cache@v3
         with:
           path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ hashFiles('**/poetry.lock') }}
+          key: ${{ runner.os }}-playwright-${{ hashFiles('**/poetry.lock') }}-v1
           restore-keys: |
             ${{ runner.os }}-playwright-
 
@@ -236,6 +236,10 @@ jobs:
       - name: Install dependencies
         run: |
           poetry install --no-interaction --all-extras
+          
+      - name: Install Playwright browsers
+        run: |
+          poetry run playwright install chromium
 
       - name: Run tests for ${{ matrix.test-group }}
         run: |
