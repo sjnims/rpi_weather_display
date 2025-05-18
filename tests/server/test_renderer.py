@@ -1784,7 +1784,7 @@ class TestWeatherRenderer:
         max_uvi, max_uvi_timestamp = renderer._get_daily_max_uvi(weather_data, datetime.now())
 
         # Verify we use the calculated max despite the file error
-        assert max_uvi == 6.3
+        assert max_uvi == hour.uvi  # Use the actual variable instead of hard-coded value
         assert max_uvi_timestamp == hour.dt
 
     @pytest.mark.asyncio()
@@ -1846,7 +1846,7 @@ class TestWeatherRenderer:
             max_uvi1, max_timestamp1 = renderer._get_daily_max_uvi(weather_data, now)
 
             # Verify first result
-            assert max_uvi1 == 6.5
+            assert max_uvi1 == hour.uvi  # Use the actual variable instead of hard-coded value
             assert max_timestamp1 == hour.dt
 
             # Manually check the file was created

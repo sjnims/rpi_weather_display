@@ -150,7 +150,8 @@ class TestTimeUntilQuietChangeEdgeCases:
             # Call calculate_sleep_time which uses _time_until_quiet_change
             sleep_time = power_manager.calculate_sleep_time()
             
-            # Verify the result - we expect sleep_time to be min(60, 15*3600) = 60
+            # Verify the result - the actual sleep time is 60 seconds based on internal logic
+            # even though wake_up_interval_minutes is 60 minutes
             assert sleep_time == 60
             
         finally:
