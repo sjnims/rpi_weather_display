@@ -27,7 +27,7 @@ Priority is indicated as:
 - [x] 🟠 1.2.3 Add battery-level-aware WiFi power state transitions [COMPLETED 2025-05-17]
 
 ### 1.3 PiJuice Integration
-- [ ] 🔴 1.3.1 Add support for all PiJuice events (LOW_CHARGE, button press) [PLANNED]
+- [x] 🔴 1.3.1 Add support for all PiJuice events (LOW_CHARGE, button press) [COMPLETED 2025-05-18]
 - [ ] 🔴 1.3.2 Create safe shutdown hooks for critical battery events [PLANNED]
 - [ ] 🟠 1.3.3 Implement dynamic wakeup scheduling based on battery levels [PLANNED]
 
@@ -155,10 +155,10 @@ Priority is indicated as:
 
 | Phase | Not Started | In Progress | Completed | Total |
 |-------|------------|-------------|-----------|-------|
-| 1     | 8          | 0           | 6         | 14    |
+| 1     | 7          | 0           | 7         | 14    |
 | 2     | 15         | 0           | 0         | 15    |
 | 3     | 12         | 0           | 0         | 12    |
 | 4     | 12         | 0           | 0         | 12    |
 | 5     | 15         | 0           | 0         | 15    |
 | 6     | 9          | 0           | 0         | 9     |
-| Total | 71         | 0           | 6         | 77    |
+| Total | 70         | 0           | 7         | 77    |

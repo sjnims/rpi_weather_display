@@ -325,17 +325,46 @@ class TestPowerStateManagerAdvanced:
         mock_pijuice_instance = MagicMock()
         mock_pijuice_class.return_value = mock_pijuice_instance
         mock_pijuice_instance.status.GetStatus.return_value = {"error": "NO_ERROR", "data": {}}
+        # Mock the event configuration responses
+        mock_pijuice_instance.config.SetSystemTaskParameters.return_value = {
+            "error": "NO_ERROR", 
+            "data": {}
+        }
+        mock_pijuice_instance.config.SetButtonConfiguration.return_value = {
+            "error": "NO_ERROR", 
+            "data": {}
+        }
 
         # Patch the import inside the initialize method
         with (
             patch.dict("sys.modules", {"pijuice": MagicMock(PiJuice=mock_pijuice_class)}),
             patch.object(power_manager, "_update_power_state"),
         ):
+            # Make sure events are enabled in config
+            power_manager.config.power.enable_pijuice_events = True
+            
+            # Initialize PiJuice
             power_manager.initialize()
 
+            # Check initialization result
             assert power_manager.get_initialization_status_for_testing()
+            
             # Verify the PiJuice was initialized correctly
             mock_pijuice_class.assert_called_once_with(1, 0x14)
+            
+            # Verify event handlers were configured
+            mock_pijuice_instance.config.SetSystemTaskParameters.assert_called_once_with(
+                "LOW_CHARGE", 
+                power_manager.config.power.low_charge_action,
+                power_manager.config.power.low_charge_delay
+            )
+            
+            mock_pijuice_instance.config.SetButtonConfiguration.assert_called_once_with(
+                "SW1", 
+                "SINGLE_PRESS",
+                {"function": power_manager.config.power.button_press_action, 
+                 "parameter": power_manager.config.power.button_press_delay}
+            )
 
     def test_initialize_with_pijuice_exception(self, power_manager: PowerStateManager) -> None:
         """Test initialization with PiJuice throwing an exception."""
@@ -375,6 +404,140 @@ class TestPowerStateManagerAdvanced:
         with patch.dict("sys.modules", {"pijuice": MagicMock(PiJuice=mock_pijuice_class)}):
             power_manager.initialize()
             assert not power_manager.get_initialization_status_for_testing()
+            
+    def test_configure_pijuice_events_not_initialized(
+        self, power_manager: PowerStateManager
+    ) -> None:
+        """Test _configure_pijuice_events when PiJuice is not initialized."""
+        # Ensure PiJuice is not initialized
+        power_manager._initialized = False
+        power_manager._pijuice = None
+        
+        # Should not raise any exceptions
+        power_manager._configure_pijuice_events()
+        
+        # No assertions needed, just checking it doesn't raise exceptions
+        
+    def test_configure_pijuice_events_with_errors(self, power_manager: PowerStateManager) -> None:
+        """Test _configure_pijuice_events handling API errors."""
+        # Create mock PiJuice instance
+        mock_pijuice = MagicMock()
+        power_manager._pijuice = mock_pijuice
+        power_manager._initialized = True
+        
+        # Configure mocks to return errors
+        mock_pijuice.config.SetSystemTaskParameters.return_value = {"error": "ERROR", "data": {}}
+        mock_pijuice.config.SetButtonConfiguration.return_value = {"error": "ERROR", "data": {}}
+        
+        # Should log errors but not raise exceptions
+        power_manager._configure_pijuice_events()
+        
+        # Verify method calls
+        mock_pijuice.config.SetSystemTaskParameters.assert_called_once()
+        mock_pijuice.config.SetButtonConfiguration.assert_called_once()
+        
+    def test_configure_pijuice_events_with_exception(
+        self, power_manager: PowerStateManager
+    ) -> None:
+        """Test _configure_pijuice_events handling exceptions."""
+        # Create mock PiJuice instance
+        mock_pijuice = MagicMock()
+        power_manager._pijuice = mock_pijuice
+        power_manager._initialized = True
+        
+        # Configure mock to raise an exception
+        mock_pijuice.config.SetSystemTaskParameters.side_effect = Exception("Test exception")
+        
+        # Should catch exception and log error
+        power_manager._configure_pijuice_events()
+        
+        # Verify method was called despite exception
+        mock_pijuice.config.SetSystemTaskParameters.assert_called_once()
+        
+    def test_get_event_configuration(self, power_manager: PowerStateManager) -> None:
+        """Test get_event_configuration with different event types."""
+        from rpi_weather_display.utils.power_manager import PiJuiceEvent
+        
+        # Create mock PiJuice instance
+        mock_pijuice = MagicMock()
+        power_manager._pijuice = mock_pijuice
+        power_manager._initialized = True
+        
+        # Configure mocks to return valid responses
+        mock_pijuice.config.GetSystemTaskParameters.return_value = {
+            "error": "NO_ERROR", 
+            "data": {"function": "SYSTEM_HALT", "delay": 5}
+        }
+        mock_pijuice.config.GetButtonConfiguration.return_value = {
+            "error": "NO_ERROR", 
+            "data": {"function": "SYSDOWN", "parameter": 180}
+        }
+        
+        # Test LOW_CHARGE event
+        result = power_manager.get_event_configuration(PiJuiceEvent.LOW_CHARGE)
+        assert result == {"function": "SYSTEM_HALT", "delay": 5}
+        
+        # Test button press event
+        result = power_manager.get_event_configuration(PiJuiceEvent.BUTTON_SW1_PRESS)
+        assert result == {"function": "SYSDOWN", "parameter": 180}
+        
+        # Test unsupported event type
+        result = power_manager.get_event_configuration(PiJuiceEvent.SYSTEM_WAKEUP)
+        assert result == {}
+        
+    def test_get_event_configuration_errors(self, power_manager: PowerStateManager) -> None:
+        """Test get_event_configuration error handling."""
+        from rpi_weather_display.utils.power_manager import PiJuiceEvent
+        
+        # Test not initialized case
+        power_manager._initialized = False
+        power_manager._pijuice = None
+        result = power_manager.get_event_configuration(PiJuiceEvent.LOW_CHARGE)
+        assert result == {}
+        
+        # Test API error responses
+        power_manager._initialized = True
+        mock_pijuice = MagicMock()
+        power_manager._pijuice = mock_pijuice
+        
+        # Configure mocks to return error responses
+        mock_pijuice.config.GetSystemTaskParameters.return_value = {
+            "error": "ERROR", 
+            "data": {}
+        }
+        mock_pijuice.config.GetButtonConfiguration.return_value = {
+            "error": "ERROR", 
+            "data": {}
+        }
+        
+        # Test LOW_CHARGE event with error
+        result = power_manager.get_event_configuration(PiJuiceEvent.LOW_CHARGE)
+        assert result == {}
+        
+        # Test button press event with error
+        result = power_manager.get_event_configuration(PiJuiceEvent.BUTTON_SW1_PRESS)
+        assert result == {}
+        
+    def test_get_event_configuration_exceptions(self, power_manager: PowerStateManager) -> None:
+        """Test get_event_configuration exception handling."""
+        from rpi_weather_display.utils.power_manager import PiJuiceEvent
+        
+        # Setup manager with mock that raises exceptions
+        power_manager._initialized = True
+        mock_pijuice = MagicMock()
+        power_manager._pijuice = mock_pijuice
+        
+        # Configure mocks to raise exceptions
+        mock_pijuice.config.GetSystemTaskParameters.side_effect = Exception("Test exception")
+        mock_pijuice.config.GetButtonConfiguration.side_effect = Exception("Test exception")
+        
+        # Test LOW_CHARGE event with exception
+        result = power_manager.get_event_configuration(PiJuiceEvent.LOW_CHARGE)
+        assert result == {}
+        
+        # Test button press event with exception
+        result = power_manager.get_event_configuration(PiJuiceEvent.BUTTON_SW1_PRESS)
+        assert result == {}
 
     def test_notify_callback_errors(self, power_manager: PowerStateManager) -> None:
         """Test error handling in the callback notifications."""
@@ -434,6 +597,50 @@ class TestPowerStateManagerAdvanced:
             {"second": 0, "minute": 0, "hour": 0, "day": 1, "month": 1, "year": 23}
         )
         interface.rtcAlarm.SetWakeupEnabled(True)
+        
+        # Test the new power class methods
+        power_result = interface.power.SetSystemPowerSwitch(1)
+        assert isinstance(power_result, dict)
+        assert "error" in power_result
+        assert "data" in power_result
+        
+        # Test the new config class methods
+        sys_task_result = interface.config.SetSystemTaskParameters("LOW_CHARGE", "SYSTEM_HALT", 5)
+        assert isinstance(sys_task_result, dict)
+        assert "error" in sys_task_result
+        assert "data" in sys_task_result
+        
+        get_sys_task_result = interface.config.GetSystemTaskParameters("LOW_CHARGE")
+        assert isinstance(get_sys_task_result, dict)
+        assert "error" in get_sys_task_result
+        assert "data" in get_sys_task_result
+        
+        button_config_result = interface.config.SetButtonConfiguration(
+            "SW1", "SINGLE_PRESS", {"function": "SYSDOWN", "parameter": 180}
+        )
+        assert isinstance(button_config_result, dict)
+        assert "error" in button_config_result
+        assert "data" in button_config_result
+        
+        get_button_config_result = interface.config.GetButtonConfiguration("SW1", "SINGLE_PRESS")
+        assert isinstance(get_button_config_result, dict)
+        assert "error" in get_button_config_result
+        assert "data" in get_button_config_result
+        
+        # Test wakeupalarm class methods
+        wakeup_result = interface.wakeupalarm.SetWakeupEnabled(True)
+        assert isinstance(wakeup_result, dict)
+        assert "error" in wakeup_result
+        assert "data" in wakeup_result
+        
+        # Test convenience methods
+        status = interface.get_status()
+        assert isinstance(status, dict)
+        assert "error" in status
+        assert "data" in status
+        
+        level = interface.get_charge_level()
+        assert level == 0
 
     def test_power_state_callback_class(self) -> None:
         """Test the PowerStateCallback class for coverage."""

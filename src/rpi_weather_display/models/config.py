@@ -91,6 +91,13 @@ class PowerConfig(BaseModel):
     cpu_governor: str = "powersave"
     cpu_max_freq_mhz: int = 700
     
+    # PiJuice event handlers configuration
+    enable_pijuice_events: bool = True
+    low_charge_action: str = "SYSTEM_HALT"  # Action to take on LOW_CHARGE event
+    low_charge_delay: int = 5  # Delay in seconds before taking action
+    button_press_action: str = "SYSDOWN"  # Action for button press (SW1)
+    button_press_delay: int = 180  # Delay in seconds for button press (SW1)
+    
     @field_validator("wifi_power_save_mode")
     @classmethod
     def validate_wifi_power_save_mode(cls, v: str) -> str:
@@ -98,6 +105,19 @@ class PowerConfig(BaseModel):
         valid_modes = ["auto", "off", "on", "aggressive"]
         if v not in valid_modes:
             raise ValueError(f"WiFi power save mode must be one of: {', '.join(valid_modes)}")
+        return v
+        
+    @field_validator("low_charge_action")
+    @classmethod
+    def validate_low_charge_action(cls, v: str) -> str:
+        """Validate low charge action is valid."""
+        valid_actions = [
+            "NO_ACTION", "SYSTEM_HALT", "SYSTEM_HALT_POW_OFF", 
+            "SYSTEM_POWER_OFF", "SYSTEM_POWER_ON", "SYSTEM_REBOOT", 
+            "SYSTEM_WAKEUP"
+        ]
+        if v not in valid_actions:
+            raise ValueError(f"Low charge action must be one of: {', '.join(valid_actions)}")
         return v
 
 

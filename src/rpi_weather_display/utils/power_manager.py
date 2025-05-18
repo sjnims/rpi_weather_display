@@ -56,6 +56,38 @@ class PiJuiceResponse(TypedDict):
     data: Any  # Using Any to allow for different data types
 
 
+# Define event types for PiJuice
+class PiJuiceEvent(str, Enum):
+    """PiJuice event types."""
+
+    LOW_CHARGE = "LOW_CHARGE"
+    LOW_BATTERY = "LOW_BATTERY"
+    NO_BATTERY = "NO_BATTERY"
+    BUTTON_SW1_PRESS = "BUTTON_SW1_PRESS"
+    BUTTON_SW2_PRESS = "BUTTON_SW2_PRESS"
+    BUTTON_SW3_PRESS = "BUTTON_SW3_PRESS"
+    BUTTON_SW1_RELEASE = "BUTTON_SW1_RELEASE"
+    BUTTON_SW2_RELEASE = "BUTTON_SW2_RELEASE"
+    BUTTON_SW3_RELEASE = "BUTTON_SW3_RELEASE"
+    BUTTON_SW1_LONG_PRESS = "BUTTON_SW1_LONG_PRESS"
+    BUTTON_SW2_LONG_PRESS = "BUTTON_SW2_LONG_PRESS"
+    BUTTON_SW3_LONG_PRESS = "BUTTON_SW3_LONG_PRESS"
+    SYSTEM_WAKEUP = "SYSTEM_WAKEUP"
+
+
+# Define actions for PiJuice events
+class PiJuiceAction(str, Enum):
+    """PiJuice actions for events."""
+
+    NO_ACTION = "NO_ACTION"
+    SYSTEM_HALT = "SYSTEM_HALT"
+    SYSTEM_HALT_POW_OFF = "SYSTEM_HALT_POW_OFF"
+    SYSTEM_POWER_OFF = "SYSTEM_POWER_OFF"
+    SYSTEM_POWER_ON = "SYSTEM_POWER_ON"
+    SYSTEM_REBOOT = "SYSTEM_REBOOT"
+    SYSTEM_WAKEUP = "SYSTEM_WAKEUP"
+
+
 # Define a type for PiJuice class for type checking
 class PiJuiceInterface:
     """Type stub for the PiJuice class."""
@@ -117,6 +149,93 @@ class PiJuiceInterface:
                 enabled: Whether to enable wakeup
             """
             pass
+    
+    class power:  # noqa: N801  # Name matches PiJuice API
+        """PiJuice power interface."""
+        
+        @staticmethod
+        def SetSystemPowerSwitch(state: int) -> PiJuiceResponse:  # noqa: N802  # Name matches PiJuice API
+            """Set system power switch state.
+            
+            Args:
+                state: Power switch state (0=off, 1=on)
+            """
+            return {"error": "NO_ERROR", "data": {}}
+            
+    class config:  # noqa: N801  # Name matches PiJuice API
+        """PiJuice configuration interface."""
+        
+        @staticmethod
+        def SetSystemTaskParameters(  # noqa: N802
+            task: str, param1: str, param2: int
+        ) -> PiJuiceResponse:  # Name matches PiJuice API
+            """Set system task parameters.
+            
+            Args:
+                task: Task name (e.g., 'LOW_CHARGE')
+                param1: Action to perform (e.g., 'SYSTEM_HALT')
+                param2: Delay in seconds before action
+            """
+            return {"error": "NO_ERROR", "data": {}}
+            
+        @staticmethod
+        def GetSystemTaskParameters(  # noqa: N802
+            task: str
+        ) -> PiJuiceResponse:  # Name matches PiJuice API
+            """Get system task parameters.
+            
+            Args:
+                task: Task name to query
+            """
+            return {"error": "NO_ERROR", "data": {"function": "SYSTEM_HALT", "delay": 5}}
+            
+        @staticmethod
+        def SetButtonConfiguration(  # noqa: N802
+            button: str, function: str, parameter: int | dict[str, str | int]
+        ) -> PiJuiceResponse:  # Name matches PiJuice API
+            """Set button configuration.
+            
+            Args:
+                button: Button name (e.g., 'SW1')
+                function: Event type (e.g., 'SINGLE_PRESS')
+                parameter: Action delay in seconds or configuration dict
+            """
+            return {"error": "NO_ERROR", "data": {}}
+            
+        @staticmethod
+        def GetButtonConfiguration(  # noqa: N802
+            button: str, function: str
+        ) -> PiJuiceResponse:  # Name matches PiJuice API
+            """Get button configuration.
+            
+            Args:
+                button: Button name
+                function: Event type
+            """
+            return {"error": "NO_ERROR", "data": {"function": "SYSDOWN", "parameter": 180}}
+            
+    class wakeupalarm:  # noqa: N801  # Name matches PiJuice API
+        """PiJuice wakeup alarm interface."""
+        
+        @staticmethod
+        def SetWakeupEnabled(enabled: bool) -> PiJuiceResponse:  # noqa: N802  # Name matches PiJuice API
+            """Enable or disable wakeup alarm.
+            
+            Args:
+                enabled: Whether to enable wakeup
+            """
+            return {"error": "NO_ERROR", "data": {}}
+            
+    def get_status(self) -> PiJuiceStatus:
+        """Get PiJuice status (convenience method)."""
+        return self.status.GetStatus()
+        
+    def get_charge_level(self) -> int:
+        """Get charge level (convenience method)."""
+        response = self.status.GetChargeLevel()
+        if response["error"] == "NO_ERROR" and isinstance(response["data"], int | float):
+            return int(response["data"])
+        return 0
 
 
 class PowerStateCallback:
@@ -184,6 +303,10 @@ class PowerStateManager:
             else:
                 self._initialized = True
                 self.logger.info("PiJuice initialized successfully")
+                
+                # Configure PiJuice events if enabled
+                if self.config.power.enable_pijuice_events:
+                    self._configure_pijuice_events()
         except ImportError:
             # When running on development machine, print message
             self.logger.warning("PiJuice library not available. Using mock PiJuice.")
@@ -194,6 +317,80 @@ class PowerStateManager:
 
         # Initialize power state based on current battery status
         self._update_power_state()
+        
+    def _configure_pijuice_events(self) -> None:
+        """Configure PiJuice events from settings in configuration.
+        
+        Sets up handlers for LOW_CHARGE and button press events based on config.
+        """
+        if not self._initialized or not self._pijuice:
+            self.logger.warning("Cannot configure PiJuice events: PiJuice not initialized")
+            return
+            
+        try:
+            # Configure LOW_CHARGE event
+            self.logger.info(
+                f"Configuring LOW_CHARGE event with action {self.config.power.low_charge_action} "
+                f"and delay {self.config.power.low_charge_delay}s"
+            )
+            response = self._pijuice.config.SetSystemTaskParameters(
+                "LOW_CHARGE", 
+                self.config.power.low_charge_action,
+                self.config.power.low_charge_delay
+            )
+            
+            if response["error"] != "NO_ERROR":
+                self.logger.error(f"Error configuring LOW_CHARGE event: {response['error']}")
+            else:
+                self.logger.info("LOW_CHARGE event configured successfully")
+                
+            # Configure button press events (SW1)
+            self.logger.info(
+                f"Configuring SW1 button press with action {self.config.power.button_press_action} "
+                f"and delay {self.config.power.button_press_delay}s"
+            )
+            response = self._pijuice.config.SetButtonConfiguration(
+                "SW1", 
+                "SINGLE_PRESS",
+                {"function": self.config.power.button_press_action,
+                 "parameter": self.config.power.button_press_delay}
+            )
+            
+            if response["error"] != "NO_ERROR":
+                self.logger.error(f"Error configuring button press event: {response['error']}")
+            else:
+                self.logger.info("Button press event configured successfully")
+                
+        except Exception as e:
+            self.logger.error(f"Error configuring PiJuice events: {e}")
+            
+    def get_event_configuration(self, event_type: PiJuiceEvent) -> dict[str, Any]:
+        """Get the current configuration for a PiJuice event.
+        
+        Args:
+            event_type: The event type to query
+            
+        Returns:
+            Dictionary with event configuration or empty dict if not available
+        """
+        if not self._initialized or not self._pijuice:
+            return {}
+            
+        try:
+            if event_type == PiJuiceEvent.LOW_CHARGE:
+                response = self._pijuice.config.GetSystemTaskParameters("LOW_CHARGE")
+                if response["error"] == "NO_ERROR":
+                    return response["data"]
+                    
+            elif event_type == PiJuiceEvent.BUTTON_SW1_PRESS:
+                response = self._pijuice.config.GetButtonConfiguration("SW1", "SINGLE_PRESS")
+                if response["error"] == "NO_ERROR":
+                    return response["data"]
+                    
+            return {}
+        except Exception as e:
+            self.logger.error(f"Error getting event configuration: {e}")
+            return {}
 
     def _update_power_state(self) -> None:
         """Update the current power state based on battery status and time."""
