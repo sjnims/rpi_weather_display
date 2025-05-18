@@ -1769,7 +1769,7 @@ class TestWeatherRenderer:
         mock_exists.return_value = True
         mock_open.side_effect = OSError("Test file error")
 
-        # Create test weather data
+        # Create test weather data with specific values
         weather_data = MagicMock(spec=WeatherData)
         weather_data.current = MagicMock(spec=CurrentWeather)
         weather_data.current.uvi = 5.6
@@ -1783,8 +1783,8 @@ class TestWeatherRenderer:
         # Call the method - should handle the error gracefully
         max_uvi, max_uvi_timestamp = renderer._get_daily_max_uvi(weather_data, datetime.now())
 
-        # Verify we use the calculated max despite the file error
-        assert max_uvi == hour.uvi  # Use the actual variable instead of hard-coded value
+        # Explicit assertion with specific values for CI/CD tests
+        assert max_uvi == 6.3
         assert max_uvi_timestamp == hour.dt
 
     @pytest.mark.asyncio()
@@ -1828,13 +1828,13 @@ class TestWeatherRenderer:
         now = datetime.now()
         today_str = now.date().strftime("%Y-%m-%d")
 
-        # Create test weather data
+        # Create test weather data with fixed values for consistent CI/CD testing
         weather_data = MagicMock(spec=WeatherData)
         weather_data.current = MagicMock(spec=CurrentWeather)
         weather_data.current.uvi = 5.0
         current_timestamp = int(now.timestamp())
 
-        # Create hourly forecast
+        # Create hourly forecast with fixed value
         hour = MagicMock(spec=HourlyWeather)
         hour.dt = current_timestamp + 3600  # 1 hour from now
         hour.uvi = 6.5  # Higher than current
@@ -1845,8 +1845,8 @@ class TestWeatherRenderer:
             # First call should create the file with the higher UVI from hourly
             max_uvi1, max_timestamp1 = renderer._get_daily_max_uvi(weather_data, now)
 
-            # Verify first result
-            assert max_uvi1 == hour.uvi  # Use the actual variable instead of hard-coded value
+            # Verify first result with explicit value for CI/CD tests
+            assert max_uvi1 == 6.5
             assert max_timestamp1 == hour.dt
 
             # Manually check the file was created
