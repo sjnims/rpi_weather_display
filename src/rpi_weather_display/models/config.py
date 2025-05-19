@@ -48,10 +48,17 @@ class DisplayConfig(BaseModel):
     rotate: int = 0  # 0, 90, 180, 270
     refresh_interval_minutes: int = 30
     partial_refresh: bool = True
+    pixel_diff_threshold: int = 10  # Threshold for considering a pixel changed
+    pixel_diff_threshold_low_battery: int = 20  # Threshold when battery is low
+    pixel_diff_threshold_critical_battery: int = 30  # Threshold when battery is critical
+    min_changed_pixels: int = 100  # Minimum number of changed pixels to trigger refresh
+    min_changed_pixels_low_battery: int = 250  # Minimum when battery is low
+    min_changed_pixels_critical_battery: int = 500  # Minimum when battery is critical
     timestamp_format: str = "%Y-%m-%d %H:%M"
     time_format: str | None = None  # When None, will use AM/PM without leading zeros
     pressure_units: str = "hPa"  # Options: "hPa", "mmHg", "inHg"
     display_datetime_format: str | None = None  # Format for displayed dates and times
+    battery_aware_threshold: bool = True  # Whether to adjust thresholds based on battery
 
     @field_validator("pressure_units")
     @classmethod

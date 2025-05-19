@@ -32,7 +32,7 @@ Priority is indicated as:
 - [x] 🟠 1.3.3 Implement dynamic wakeup scheduling based on battery levels [COMPLETED 2025-05-19]
 
 ### 1.4 Dynamic Display Management
-- [ ] 🔴 1.4.1 Make image difference threshold configurable and battery-aware [PLANNED]
+- [x] 🔴 1.4.1 Make image difference threshold configurable and battery-aware [COMPLETED 2025-05-19]
 - [ ] 🟠 1.4.2 Implement variable refresh rates based on battery state [PLANNED]
 - [ ] 🟢 1.4.3 Add quiet hours display sleep mode [PLANNED]
 
@@ -155,10 +155,10 @@ Priority is indicated as:
 
 | Phase | Not Started | In Progress | Completed | Total |
 |-------|------------|-------------|-----------|-------|
-| 1     | 5          | 0           | 9         | 14    |
+| 1     | 4          | 0           | 10        | 14    |
 | 2     | 15         | 0           | 0         | 15    |
 | 3     | 12         | 0           | 0         | 12    |
 | 4     | 12         | 0           | 0         | 12    |
 | 5     | 15         | 0           | 0         | 15    |
 | 6     | 9          | 0           | 0         | 9     |
-| Total | 68         | 0           | 9         | 77    |
+| Total | 67         | 0           | 10        | 77    |

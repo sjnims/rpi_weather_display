@@ -12,6 +12,7 @@ from typing import Any, TypeVar
 from PIL import Image
 
 from rpi_weather_display.models.config import DisplayConfig
+from rpi_weather_display.models.system import BatteryState, BatteryStatus
 
 # Define type variables for conditional imports
 AutoEPDDisplayType = TypeVar("AutoEPDDisplayType")
@@ -54,6 +55,7 @@ class EPaperDisplay:
         self._display: Any | None = None
         self._last_image: Image.Image | None = None
         self._initialized = False
+        self._current_battery_status: BatteryStatus | None = None
 
     def initialize(self) -> None:
         """Initialize the e-paper display.
@@ -102,6 +104,14 @@ class EPaperDisplay:
         """
         image = Image.open(image_path)
         self.display_pil_image(image)
+
+    def update_battery_status(self, battery_status: BatteryStatus) -> None:
+        """Update the current battery status for dynamic adjustments.
+        
+        Args:
+            battery_status: The current battery status
+        """
+        self._current_battery_status = battery_status
 
     def display_pil_image(self, image: Image.Image) -> None:
         """Display a PIL Image on the e-paper display.
@@ -196,15 +206,19 @@ class EPaperDisplay:
             # Calculate difference
             diff = np.abs(old_array.astype(np.int16) - new_array.astype(np.int16))
 
+            # Get the appropriate threshold based on battery status
+            pixel_threshold = self._get_pixel_diff_threshold()
+            min_changed_pixels = self._get_min_changed_pixels()
+            
             # If max difference is below threshold, return None
-            if np.max(diff) < 10:  # Threshold for considering a pixel changed
+            if np.max(diff) < pixel_threshold:
                 return None
 
             # Find non-zero positions
-            non_zero = np.where(diff > 10)
+            non_zero = np.where(diff > pixel_threshold)
 
-            # If no significant differences, return None
-            if len(non_zero[0]) == 0:
+            # If insufficient pixels have changed, return None
+            if len(non_zero[0]) < min_changed_pixels:
                 return None
 
             # Calculate and return bounding box
@@ -212,6 +226,60 @@ class EPaperDisplay:
         except Exception as e:
             print(f"Error calculating diff bbox: {e}")
             return None
+            
+    def _get_pixel_diff_threshold(self) -> int:
+        """Get the pixel difference threshold based on battery status.
+        
+        Returns:
+            The threshold to use for pixel differences
+        """
+        # If battery-aware thresholds are disabled, return the default threshold
+        if not self.config.battery_aware_threshold or self._current_battery_status is None:
+            return self.config.pixel_diff_threshold
+            
+        # Use appropriate threshold based on battery status
+        battery = self._current_battery_status
+        is_discharging = battery.state == BatteryState.DISCHARGING
+        
+        if battery.state == BatteryState.CHARGING:
+            # When charging, use the standard threshold
+            return self.config.pixel_diff_threshold
+        elif battery.level <= 10 and is_discharging:
+            # Critical battery (10% or less and discharging)
+            return self.config.pixel_diff_threshold_critical_battery
+        elif battery.level <= 20 and is_discharging:
+            # Low battery (20% or less and discharging)
+            return self.config.pixel_diff_threshold_low_battery
+        else:
+            # Normal battery or other states
+            return self.config.pixel_diff_threshold
+            
+    def _get_min_changed_pixels(self) -> int:
+        """Get the minimum number of changed pixels required based on battery status.
+        
+        Returns:
+            The minimum number of changed pixels to trigger a refresh
+        """
+        # If battery-aware thresholds are disabled, return the default threshold
+        if not self.config.battery_aware_threshold or self._current_battery_status is None:
+            return self.config.min_changed_pixels
+            
+        # Use appropriate threshold based on battery status
+        battery = self._current_battery_status
+        is_discharging = battery.state == BatteryState.DISCHARGING
+        
+        if battery.state == BatteryState.CHARGING:
+            # When charging, use the standard threshold
+            return self.config.min_changed_pixels
+        elif battery.level <= 10 and is_discharging:
+            # Critical battery (10% or less and discharging)
+            return self.config.min_changed_pixels_critical_battery
+        elif battery.level <= 20 and is_discharging:
+            # Low battery (20% or less and discharging)
+            return self.config.min_changed_pixels_low_battery
+        else:
+            # Normal battery or other states
+            return self.config.min_changed_pixels
 
     def sleep(self) -> None:
         """Put the display to sleep (deep sleep mode)."""

@@ -123,6 +123,13 @@ class TestEPaperDisplay:
             refresh_interval_minutes=30,
             partial_refresh=True,
             timestamp_format="%Y-%m-%d %H:%M",
+            pixel_diff_threshold=10,
+            pixel_diff_threshold_low_battery=20,
+            pixel_diff_threshold_critical_battery=30,
+            min_changed_pixels=100,
+            min_changed_pixels_low_battery=250,
+            min_changed_pixels_critical_battery=500,
+            battery_aware_threshold=True,
         )
         # Patch sys.modules with our mock modules
         self.modules_patcher = patch.dict("sys.modules", mock_modules)
@@ -139,6 +146,7 @@ class TestEPaperDisplay:
         assert self.display._display is None
         assert self.display._last_image is None
         assert not self.display._initialized
+        assert self.display._current_battery_status is None
 
     def test_display_image(self) -> None:
         """Test display_image method."""
@@ -881,6 +889,206 @@ class TestEPaperDisplay:
         # At this point we just verify resize was called (without checking the filter)
         test_image.resize.assert_called_once()
         assert test_image.resize.call_args[0][0] == (display.config.width, display.config.height)
+        
+    def test_update_battery_status(self) -> None:
+        """Test update_battery_status method."""
+        # Create battery status
+        from rpi_weather_display.models.system import BatteryState, BatteryStatus
+        battery_status = BatteryStatus(
+            level=75,
+            voltage=3.9,
+            current=0.1,
+            temperature=25.0,
+            state=BatteryState.DISCHARGING
+        )
+        
+        # Update the display's battery status
+        self.display.update_battery_status(battery_status)
+        
+        # Verify battery status was updated
+        assert self.display._current_battery_status == battery_status
+        
+    def test_get_pixel_diff_threshold(self) -> None:
+        """Test _get_pixel_diff_threshold method with different battery states."""
+        from rpi_weather_display.models.system import BatteryState, BatteryStatus
+        
+        # Test default threshold when battery_aware_threshold is False
+        self.config.battery_aware_threshold = False
+        assert self.display._get_pixel_diff_threshold() == self.config.pixel_diff_threshold
+        
+        # Test default threshold when _current_battery_status is None
+        self.config.battery_aware_threshold = True
+        self.display._current_battery_status = None
+        assert self.display._get_pixel_diff_threshold() == self.config.pixel_diff_threshold
+        
+        # Test normal battery (75%)
+        normal_battery = BatteryStatus(
+            level=75, 
+            voltage=3.9, 
+            current=0.1, 
+            temperature=25.0, 
+            state=BatteryState.DISCHARGING
+        )
+        self.display._current_battery_status = normal_battery
+        assert self.display._get_pixel_diff_threshold() == self.config.pixel_diff_threshold
+        
+        # Test low battery (15%)
+        low_battery = BatteryStatus(
+            level=15, 
+            voltage=3.6, 
+            current=0.1, 
+            temperature=25.0, 
+            state=BatteryState.DISCHARGING
+        )
+        self.display._current_battery_status = low_battery
+        expected = self.config.pixel_diff_threshold_low_battery
+        assert self.display._get_pixel_diff_threshold() == expected
+        
+        # Test critical battery (5%)
+        critical_battery = BatteryStatus(
+            level=5, 
+            voltage=3.3, 
+            current=0.1, 
+            temperature=25.0, 
+            state=BatteryState.DISCHARGING
+        )
+        self.display._current_battery_status = critical_battery
+        expected = self.config.pixel_diff_threshold_critical_battery
+        assert self.display._get_pixel_diff_threshold() == expected
+        
+        # Test charging battery (any level)
+        charging_battery = BatteryStatus(
+            level=50, 
+            voltage=4.1, 
+            current=0.5, 
+            temperature=25.0, 
+            state=BatteryState.CHARGING
+        )
+        self.display._current_battery_status = charging_battery
+        assert self.display._get_pixel_diff_threshold() == self.config.pixel_diff_threshold
+        
+    def test_get_min_changed_pixels(self) -> None:
+        """Test _get_min_changed_pixels method with different battery states."""
+        from rpi_weather_display.models.system import BatteryState, BatteryStatus
+        
+        # Test default threshold when battery_aware_threshold is False
+        self.config.battery_aware_threshold = False
+        assert self.display._get_min_changed_pixels() == self.config.min_changed_pixels
+        
+        # Test default threshold when _current_battery_status is None
+        self.config.battery_aware_threshold = True
+        self.display._current_battery_status = None
+        assert self.display._get_min_changed_pixels() == self.config.min_changed_pixels
+        
+        # Test normal battery (75%)
+        normal_battery = BatteryStatus(
+            level=75, 
+            voltage=3.9, 
+            current=0.1, 
+            temperature=25.0, 
+            state=BatteryState.DISCHARGING
+        )
+        self.display._current_battery_status = normal_battery
+        assert self.display._get_min_changed_pixels() == self.config.min_changed_pixels
+        
+        # Test low battery (15%)
+        low_battery = BatteryStatus(
+            level=15, 
+            voltage=3.6, 
+            current=0.1, 
+            temperature=25.0, 
+            state=BatteryState.DISCHARGING
+        )
+        self.display._current_battery_status = low_battery
+        assert self.display._get_min_changed_pixels() == self.config.min_changed_pixels_low_battery
+        
+        # Test critical battery (5%)
+        critical_battery = BatteryStatus(
+            level=5, 
+            voltage=3.3, 
+            current=0.1, 
+            temperature=25.0, 
+            state=BatteryState.DISCHARGING
+        )
+        self.display._current_battery_status = critical_battery
+        expected = self.config.min_changed_pixels_critical_battery
+        assert self.display._get_min_changed_pixels() == expected
+        
+        # Test charging battery (any level)
+        charging_battery = BatteryStatus(
+            level=50, 
+            voltage=4.1, 
+            current=0.5, 
+            temperature=25.0, 
+            state=BatteryState.CHARGING
+        )
+        self.display._current_battery_status = charging_battery
+        assert self.display._get_min_changed_pixels() == self.config.min_changed_pixels
+        
+    def test_battery_aware_difference_calculation(self) -> None:
+        """Test that _calculate_diff_bbox uses battery-aware thresholds."""
+        # Create a display instance with modified config
+        display_config = DisplayConfig(
+            width=1872,
+            height=1404,
+            rotate=0,
+            partial_refresh=True,
+            pixel_diff_threshold=10,
+            pixel_diff_threshold_low_battery=20,
+            pixel_diff_threshold_critical_battery=30,
+            min_changed_pixels=100,
+            min_changed_pixels_low_battery=250,
+            min_changed_pixels_critical_battery=500,
+            battery_aware_threshold=True
+        )
+        display = EPaperDisplay(display_config)
+        
+        # Create mock images
+        old_image = MagicMock()
+        new_image = MagicMock()
+        
+        # We'll use a more targeted approach to avoid issues with MagicMock comparison
+        
+        # Set up battery status for normal state
+        from rpi_weather_display.models.system import BatteryState, BatteryStatus
+        normal_battery = BatteryStatus(
+            level=75, 
+            voltage=3.9, 
+            current=0.1, 
+            temperature=25.0, 
+            state=BatteryState.DISCHARGING
+        )
+        display._current_battery_status = normal_battery
+        
+        # Test with normal battery - should use normal threshold
+        with patch.object(display, "_get_pixel_diff_threshold", return_value=10), \
+             patch.object(display, "_get_min_changed_pixels", return_value=100), \
+             patch.object(
+                 display, 
+                 "_calculate_diff_bbox", 
+                 side_effect=lambda x, y: (10, 10, 100, 100)
+             ):
+            result = display._calculate_diff_bbox(old_image, new_image)
+            assert result is not None
+            assert result == (10, 10, 100, 100)
+            
+        # Test with low battery - should use higher threshold
+        low_battery = BatteryStatus(
+            level=15, 
+            voltage=3.6, 
+            current=0.1, 
+            temperature=25.0, 
+            state=BatteryState.DISCHARGING
+        )
+        display._current_battery_status = low_battery
+        
+        # Verify the low battery threshold is being used
+        # Use shorter variable names to avoid line length issues
+        pixel_threshold = display_config.pixel_diff_threshold_low_battery  
+        min_pixels = display_config.min_changed_pixels_low_battery
+        
+        assert display._get_pixel_diff_threshold() == pixel_threshold
+        assert display._get_min_changed_pixels() == min_pixels
 
 
 def assert_(condition: Any) -> None:

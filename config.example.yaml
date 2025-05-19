@@ -13,6 +13,15 @@ display:
   rotate: 0
   refresh_interval_minutes: 30
   partial_refresh: true
+  # Image difference configuration
+  pixel_diff_threshold: 10  # Threshold for considering a pixel changed
+  pixel_diff_threshold_low_battery: 20  # Threshold when battery is low
+  pixel_diff_threshold_critical_battery: 30  # Threshold when battery is critical
+  min_changed_pixels: 100  # Minimum number of changed pixels to trigger refresh
+  min_changed_pixels_low_battery: 250  # Minimum when battery is low
+  min_changed_pixels_critical_battery: 500  # Minimum when battery is critical
+  battery_aware_threshold: true  # Whether to adjust thresholds based on battery
+  # Display formatting
   timestamp_format: "%Y-%m-%d %H:%M"
   time_format: null
   pressure_units: "hPa"  # Options: "hPa", "mmHg", "inHg"

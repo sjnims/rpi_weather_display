@@ -159,6 +159,10 @@ class WeatherDisplayClient:
         self.logger.info("Refreshing display")
 
         try:
+            # Update the battery status in the display for threshold adjustment
+            battery_status = self.power_manager.get_battery_status()
+            self.display.update_battery_status(battery_status)
+            
             # Check if we have a cached image
             if self.current_image_path.exists():
                 # Display the image
