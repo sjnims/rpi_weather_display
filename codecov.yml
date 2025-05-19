@@ -22,25 +22,56 @@ coverage:
   round: nearest
   precision: 2
 
+  # Ignore patterns for files that shouldn't be included in coverage
+  ignore:
+    - "**/*.md"        # Ignore markdown files
+    - "**/*.yml"       # Ignore YAML config files
+    - "**/*.yaml"      # Ignore YAML config files
+    - "tests/fixtures/**"  # Ignore test fixtures
+
 flags:
   models:
     paths:
       - src/rpi_weather_display/models/
+    carryforward: true
   client:
     paths:
       - src/rpi_weather_display/client/
+    carryforward: true
   server:
     paths:
       - src/rpi_weather_display/server/
+    carryforward: true
   utils:
     paths:
       - src/rpi_weather_display/utils/
+    carryforward: true
   combined:
     paths:
       - src/rpi_weather_display/
 
+# Component management for better insights into specific functional areas
+component_management:
+  individual_components:
+    - component_id: power_management
+      paths:
+        - "src/rpi_weather_display/utils/power_manager.py"
+        - "src/rpi_weather_display/utils/battery_utils.py"
+      
+    - component_id: display
+      paths:
+        - "src/rpi_weather_display/client/display.py"
+      
+    - component_id: weather_api
+      paths:
+        - "src/rpi_weather_display/server/api.py"
+        
+    - component_id: rendering
+      paths:
+        - "src/rpi_weather_display/server/renderer.py"
+
 comment:
-  layout: "reach, diff, flags, files"
+  layout: "reach, diff, flags, files, components"
   behavior: default
   require_changes: false  # if true: only post the comment if coverage changes
   require_base: false     # [true :: must have a base report to post]
