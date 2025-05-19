@@ -56,13 +56,25 @@ def _import_numpy() -> Any | None:
 
 
 class EPaperDisplay:
-    """Interface for the Waveshare e-paper display."""
+    """Interface for the Waveshare e-paper display.
+
+    This class provides a high-level interface for controlling the e-paper display,
+    including image display, text rendering, power management, and partial refresh
+    functionality with battery-aware optimizations.
+
+    Attributes:
+        config: Display configuration parameters
+        _display: The underlying IT8951 display driver instance
+        _last_image: Previously displayed image for partial refresh comparison
+        _initialized: Whether the display has been successfully initialized
+        _current_battery_status: Current battery status for power-aware refresh
+    """
 
     def __init__(self, config: DisplayConfig) -> None:
         """Initialize the display driver.
 
         Args:
-            config: Display configuration.
+            config: Display configuration including dimensions, rotation, and refresh settings.
         """
         self.config = config
         self._display: Any | None = None
@@ -71,9 +83,15 @@ class EPaperDisplay:
         self._current_battery_status: BatteryStatus | None = None
 
     def initialize(self) -> None:
-        """Initialize the e-paper display.
+        """Initialize the e-paper display hardware.
 
         This is separated from __init__ so that the display can be mocked for testing.
+        Attempts to connect to the IT8951 display driver, clear the screen, and set
+        the display rotation. If the IT8951 library is not available (e.g., when not
+        running on Raspberry Pi hardware), a mock display is used instead.
+
+        Raises:
+            RuntimeError: If the display initialization fails.
         """
         try:
             # Try to import the IT8951 library, which is only available on Raspberry Pi
@@ -99,21 +117,33 @@ class EPaperDisplay:
             self._initialized = False
 
     def _check_initialized(self) -> None:
-        """Check if the display is initialized."""
+        """Check if the display is initialized.
+
+        Raises:
+            RuntimeError: If the display has not been initialized.
+        """
         if not self._initialized:
             raise RuntimeError("Display not initialized. Call initialize() first.")
 
     def clear(self) -> None:
-        """Clear the display."""
+        """Clear the display.
+
+        Clears the entire display to white and resets the last image cache.
+        If the display is not initialized, this operation is silently skipped.
+        """
         if self._initialized and self._display:
             self._display.clear()
             self._last_image = None
 
     def display_image(self, image_path: str | Path) -> None:
-        """Display an image on the e-paper display.
+        """Display an image from a file on the e-paper display.
 
         Args:
-            image_path: Path to the image file.
+            image_path: Path to the image file to display.
+
+        Raises:
+            FileNotFoundError: If the image file does not exist.
+            PIL.UnidentifiedImageError: If the file is not a valid image.
         """
         image = Image.open(image_path)
         self.display_pil_image(image)
@@ -121,16 +151,26 @@ class EPaperDisplay:
     def update_battery_status(self, battery_status: BatteryStatus) -> None:
         """Update the current battery status for dynamic adjustments.
 
+        This information is used to modify refresh thresholds and behavior
+        based on battery level, helping extend battery life when needed.
+
         Args:
-            battery_status: The current battery status
+            battery_status: The current battery status including level and charging state.
         """
         self._current_battery_status = battery_status
 
     def display_pil_image(self, image: Image.Image) -> None:
         """Display a PIL Image on the e-paper display.
 
+        Handles image preprocessing (resizing, conversion to grayscale) and
+        implements power-efficient partial refresh when appropriate based on
+        battery status and configuration settings.
+
         Args:
-            image: PIL Image object.
+            image: PIL Image object to display.
+
+        Raises:
+            Exception: If there is an error during image display.
         """
         if not self._initialized:
             print(f"Mock display: would display image of size {image.size}")
@@ -175,14 +215,18 @@ class EPaperDisplay:
     def _get_bbox_dimensions(
         self, non_zero: tuple[list[int], list[int]], diff_shape: tuple[int, int]
     ) -> tuple[int, int, int, int] | None:
-        """Calculate the dimensions of the bounding box.
+        """Calculate the dimensions of the bounding box for partial refresh.
+
+        Takes the non-zero pixel positions from the difference image and
+        calculates a bounding box that contains all changed pixels, with
+        a margin to ensure smooth updates.
 
         Args:
-            non_zero: Tuple of arrays with non-zero indices
-            diff_shape: Shape of the difference array
+            non_zero: Tuple of arrays with non-zero pixel indices (rows, columns)
+            diff_shape: Shape of the difference array (height, width)
 
         Returns:
-            Bounding box as (left, top, right, bottom) or None
+            Bounding box as (left, top, right, bottom) or None if calculation fails
         """
         np = _import_numpy()
         if not np:
@@ -200,12 +244,17 @@ class EPaperDisplay:
     ) -> tuple[int, int, int, int] | None:
         """Calculate the bounding box of differences between two images.
 
+        Compares the previous and new images to determine which areas have changed
+        significantly. Uses configurable thresholds that adapt based on battery status
+        to optimize power usage.
+
         Args:
-            old_image: Previous image.
-            new_image: New image.
+            old_image: Previously displayed image
+            new_image: New image to be displayed
 
         Returns:
-            Tuple of (left, top, right, bottom) or None if no significant differences.
+            Tuple of (left, top, right, bottom) defining the update region, or
+            None if no significant differences exist or the calculation fails
         """
         try:
             np = _import_numpy()
@@ -243,8 +292,11 @@ class EPaperDisplay:
     def _get_pixel_diff_threshold(self) -> int:
         """Get the pixel difference threshold based on battery status.
 
+        Implements battery-aware thresholds to reduce refresh frequency
+        when battery is low, extending overall battery life.
+
         Returns:
-            The threshold to use for pixel differences
+            The threshold value to use for pixel differences
         """
         # If battery-aware thresholds are disabled, return the default threshold
         if not self.config.battery_aware_threshold or self._current_battery_status is None:
@@ -270,8 +322,12 @@ class EPaperDisplay:
     def _get_min_changed_pixels(self) -> int:
         """Get the minimum number of changed pixels required based on battery status.
 
+        Implements battery-aware thresholds to ensure refreshes only occur when
+        there are enough changed pixels to warrant an update, which helps reduce
+        power consumption when battery is low.
+
         Returns:
-            The minimum number of changed pixels to trigger a refresh
+            The minimum number of changed pixels required to trigger a refresh
         """
         # If battery-aware thresholds are disabled, return the default threshold
         if not self.config.battery_aware_threshold or self._current_battery_status is None:
@@ -295,7 +351,12 @@ class EPaperDisplay:
             return self.config.min_changed_pixels
 
     def sleep(self) -> None:
-        """Put the display to sleep (deep sleep mode)."""
+        """Put the display to sleep (deep sleep mode) to conserve power.
+
+        When in deep sleep mode, the display consumes minimal power but requires
+        a full refresh when waking up again. This is useful for periods when
+        the display will not be updated for a while.
+        """
         if self._initialized and self._display and hasattr(self._display, "epd"):
             try:
                 self._display.epd.sleep()
@@ -307,11 +368,15 @@ class EPaperDisplay:
         """Display a text message on the e-paper display.
 
         Creates a simple text image with the given title and message
-        for displaying alerts or status messages.
+        for displaying alerts or status messages. Handles font loading,
+        text positioning, and rendering automatically.
 
         Args:
-            title: The title/heading text to display
-            message: The main message text to display
+            title: The title/heading text to display at the top
+            message: The main message text to display below the title
+
+        Raises:
+            Exception: If there is an error during text rendering or display
         """
         try:
             from PIL import Image, ImageDraw, ImageFont
@@ -363,7 +428,11 @@ class EPaperDisplay:
             print(f"Message: {title} - {message}")
 
     def close(self) -> None:
-        """Close and clean up the display."""
+        """Close and clean up the display resources.
+
+        Puts the display into sleep mode and releases any resources.
+        Should be called when the application is shutting down.
+        """
         self.sleep()
         self._initialized = False
         self._display = None

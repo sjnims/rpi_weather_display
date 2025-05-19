@@ -1,7 +1,9 @@
 """Main entry point for the Raspberry Pi weather display client.
 
 Manages the client lifecycle including hardware initialization, display updates,
-power management, and scheduled operations for the e-paper weather display.
+power management, and scheduled deep sleep operations for the e-paper weather display.
+This module contains the main client application class responsible for coordinating
+the various subsystems and implementing the core logic of the weather display.
 """
 
 import argparse
@@ -27,13 +29,28 @@ from rpi_weather_display.utils.power_manager import PowerState
 
 
 class WeatherDisplayClient:
-    """Main client application for the weather display."""
+    """Main client application for the weather display.
+    
+    Manages the lifecycle of the weather display client, including initialization,
+    update scheduling, power management, and hardware control. Implements an
+    event-driven architecture with callbacks for power state changes to enable
+    battery-aware behavior.
+    
+    Attributes:
+        config: Application configuration loaded from YAML
+        logger: Configured logger instance
+        power_manager: Manager for power state and battery monitoring
+        display: E-paper display controller
+        cache_dir: Directory for caching weather images
+        current_image_path: Path to the most recently downloaded weather image
+        _running: Flag indicating if the main loop is active
+    """
 
     def __init__(self, config_path: Path) -> None:
-        """Initialize the client.
+        """Initialize the client with configuration.
 
         Args:
-            config_path: Path to configuration file.
+            config_path: Path to the YAML configuration file.
         """
         # Load configuration
         self.config = AppConfig.from_yaml(config_path)
@@ -54,7 +71,15 @@ class WeatherDisplayClient:
         self._running = False
 
     def initialize(self) -> None:
-        """Initialize hardware and subsystems."""
+        """Initialize hardware and subsystems.
+        
+        Sets up the power manager, registers callbacks for power state changes,
+        and initializes the e-paper display hardware. This method should be called
+        once at the start of the client application.
+        
+        Raises:
+            RuntimeError: If hardware initialization fails.
+        """
         self.logger.info("Initializing hardware")
 
         # Initialize power manager
@@ -69,7 +94,10 @@ class WeatherDisplayClient:
         self.logger.info("Hardware initialization complete")
 
     def _handle_power_state_change(self, old_state: PowerState, new_state: PowerState) -> None:
-        """Handle power state changes, particularly for critical events.
+        """Handle power state changes, particularly for critical battery events.
+
+        Manages transitions between power states, with special handling for the
+        CRITICAL state which initiates an emergency shutdown to protect the battery.
 
         Args:
             old_state: Previous power state
@@ -108,8 +136,16 @@ class WeatherDisplayClient:
     def update_weather(self) -> bool:
         """Update weather data from server.
 
+        Requests a new weather image from the server, sending battery status
+        and system metrics as part of the request to inform server-side
+        optimizations. The received image is saved to the local cache for
+        display.
+
         Returns:
             True if update was successful, False otherwise.
+            
+        Raises:
+            requests.RequestException: If there is an error communicating with the server.
         """
         self.logger.info("Updating weather data from server")
 
@@ -163,7 +199,16 @@ class WeatherDisplayClient:
             return False
 
     def refresh_display(self) -> None:
-        """Refresh the e-paper display with the latest weather data."""
+        """Refresh the e-paper display with the latest weather data.
+        
+        Updates the display with the most recently cached weather image.
+        If no cached image is available, attempts to request a new one
+        from the server first. The display refresh considers battery status
+        for power-efficient partial updates.
+        
+        Raises:
+            Exception: If there is an error refreshing the display.
+        """
         self.logger.info("Refreshing display")
 
         try:
@@ -191,7 +236,18 @@ class WeatherDisplayClient:
             self.logger.error(f"Error refreshing display: {e}")
 
     def run(self) -> None:
-        """Run the client main loop."""
+        """Run the client main loop.
+        
+        Implements the main operational loop of the client application, including:
+        - Hardware initialization
+        - Initial weather update and display
+        - Regular checks for update conditions
+        - Quiet hours handling with display sleep
+        - Deep sleep scheduling for power efficiency
+        
+        The loop continues until interrupted or a critical battery condition
+        triggers a shutdown.
+        """
         self.logger.info("Starting Weather Display Client")
         self._running = True
         display_sleeping = False
@@ -255,10 +311,14 @@ class WeatherDisplayClient:
             self.shutdown()
 
     def _handle_sleep(self, minutes: int) -> bool:
-        """Handle sleep request.
+        """Handle deep sleep request for extended idle periods.
+
+        For longer sleep intervals, uses the PiJuice's hardware wake-up timer
+        to completely shut down the system and save power, rather than keeping
+        the CPU running.
 
         Args:
-            minutes: Number of minutes to sleep.
+            minutes: Number of minutes to schedule for deep sleep.
 
         Returns:
             True if the system will be shut down for deep sleep, False otherwise.
@@ -281,7 +341,12 @@ class WeatherDisplayClient:
         return False
 
     def shutdown(self) -> None:
-        """Clean up resources and shut down."""
+        """Clean up resources and shut down the client.
+        
+        Performs an orderly shutdown of all hardware components and subsystems,
+        ensuring that resources are properly released and that the e-paper
+        display is put into sleep mode to conserve power.
+        """
         self.logger.info("Shutting down Weather Display Client")
 
         # Close the display
@@ -290,7 +355,11 @@ class WeatherDisplayClient:
 
 
 def main() -> None:
-    """Main entry point for the client."""
+    """Main entry point for the weather display client application.
+    
+    Parses command line arguments, loads configuration, and starts the client.
+    This is the function called when the client is invoked from the command line.
+    """
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="Weather Display Client")
     parser.add_argument(

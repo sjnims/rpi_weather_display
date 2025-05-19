@@ -131,8 +131,9 @@ Priority is indicated as:
 
 ### 5.4 Documentation Updates
 - [ ] 🔴 5.4.1 Create power optimization guide [PLANNED]
-- [ ] 🟠 5.4.2 Update code documentation to reflect optimization patterns [PLANNED]
-- [ ] 🟠 5.4.3 Add battery life estimates based on usage patterns [PLANNED]
+- [-] 🔴 5.4.2 Add proper Google-style docstrings to all modules, classes and functions [IN PROGRESS]
+- [ ] 🟠 5.4.3 Update code documentation to reflect optimization patterns [PLANNED]
+- [ ] 🟠 5.4.4 Add battery life estimates based on usage patterns [PLANNED]
 
 ### 5.5 Deployment Improvements
 - [ ] 🔴 5.5.1 Implement automatic update mechanism for client [PLANNED]
@@ -164,6 +165,6 @@ Priority is indicated as:
 | 2     | 17         | 0           | 1         | 18    |
 | 3     | 12         | 0           | 0         | 12    |
 | 4     | 12         | 0           | 0         | 12    |
-| 5     | 15         | 0           | 0         | 15    |
+| 5     | 15         | 1           | 0         | 16    |
 | 6     | 9          | 0           | 0         | 9     |
-| Total | 65         | 0           | 15        | 80    |
+| Total | 65         | 1           | 15        | 81    |
