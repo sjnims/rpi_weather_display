@@ -29,7 +29,7 @@ Priority is indicated as:
 ### 1.3 PiJuice Integration
 - [x] 🔴 1.3.1 Add support for all PiJuice events (LOW_CHARGE, button press) [COMPLETED 2025-05-18]
 - [x] 🔴 1.3.2 Create safe shutdown hooks for critical battery events [COMPLETED 2025-05-19]
-- [ ] 🟠 1.3.3 Implement dynamic wakeup scheduling based on battery levels [PLANNED]
+- [x] 🟠 1.3.3 Implement dynamic wakeup scheduling based on battery levels [COMPLETED 2025-05-19]
 
 ### 1.4 Dynamic Display Management
 - [ ] 🔴 1.4.1 Make image difference threshold configurable and battery-aware [PLANNED]
@@ -155,10 +155,10 @@ Priority is indicated as:
 
 | Phase | Not Started | In Progress | Completed | Total |
 |-------|------------|-------------|-----------|-------|
-| 1     | 6          | 0           | 8         | 14    |
+| 1     | 5          | 0           | 9         | 14    |
 | 2     | 15         | 0           | 0         | 15    |
 | 3     | 12         | 0           | 0         | 12    |
 | 4     | 12         | 0           | 0         | 12    |
 | 5     | 15         | 0           | 0         | 15    |
 | 6     | 9          | 0           | 0         | 9     |
-| Total | 69         | 0           | 8         | 77    |
+| Total | 68         | 0           | 9         | 77    |

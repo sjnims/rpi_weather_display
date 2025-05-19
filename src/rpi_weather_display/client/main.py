@@ -81,8 +81,9 @@ class WeatherDisplayClient:
                 # Halt the main loop
                 self._running = False
                 
-                # Schedule a wakeup when battery might be higher (12 hours)
-                self.power_manager.schedule_wakeup(12 * 60)  # 12 hours in minutes
+                # Schedule a dynamic wakeup based on battery level
+                # Using 12 hours as base duration, but it will be adjusted dynamically
+                self.power_manager.schedule_wakeup(12 * 60, dynamic=True)  # 12 hours as base
                 
                 # Initiate shutdown
                 self.shutdown()
@@ -240,8 +241,8 @@ class WeatherDisplayClient:
         if minutes > 10 and not self.config.debug:
             self.logger.info(f"Preparing for deep sleep ({minutes} minutes)")
 
-            # Schedule wakeup
-            if self.power_manager.schedule_wakeup(minutes):
+            # Schedule dynamic wakeup based on battery level
+            if self.power_manager.schedule_wakeup(minutes, dynamic=True):
                 # Close the display
                 self.display.sleep()
 

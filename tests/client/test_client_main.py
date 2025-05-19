@@ -355,7 +355,7 @@ class TestWeatherDisplayClient:
         assert result is True
         
         # Verify the correct methods were called for deep sleep
-        client.power_manager.schedule_wakeup.assert_called_once_with(30)
+        client.power_manager.schedule_wakeup.assert_called_once_with(30, dynamic=True)
         client.display.sleep.assert_called_once()
         client.power_manager.shutdown_system.assert_called_once()
 
@@ -424,7 +424,7 @@ class TestWeatherDisplayClient:
         assert result is True
 
         # Verify proper shutdown sequence
-        client.power_manager.schedule_wakeup.assert_called_once_with(30)
+        client.power_manager.schedule_wakeup.assert_called_once_with(30, dynamic=True)
         client.display.sleep.assert_called_once()
         client.power_manager.shutdown_system.assert_called_once()
 
@@ -443,7 +443,7 @@ class TestWeatherDisplayClient:
         assert result is False
 
         # Verify wakeup was attempted but shutdown wasn't
-        client.power_manager.schedule_wakeup.assert_called_once_with(30)
+        client.power_manager.schedule_wakeup.assert_called_once_with(30, dynamic=True)
         client.display.sleep.assert_not_called()
         client.power_manager.shutdown_system.assert_not_called()
 
@@ -471,7 +471,7 @@ class TestWeatherDisplayClient:
                 "CRITICAL BATTERY", "Shutting down to preserve battery"
             )
             mock_sleep.assert_called_once_with(5)
-            client.power_manager.schedule_wakeup.assert_called_once_with(12 * 60)
+            client.power_manager.schedule_wakeup.assert_called_once_with(12 * 60, dynamic=True)
             client.power_manager.shutdown_system.assert_called_once()
             
     def test_handle_power_state_change_non_critical(self, client: WeatherDisplayClient) -> None:

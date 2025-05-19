@@ -822,15 +822,24 @@ class PowerStateManager:
         except subprocess.SubprocessError as e:
             self.logger.error(f"Failed to shut down: {e}")
 
-    def schedule_wakeup(self, minutes: int) -> bool:
+    def schedule_wakeup(self, minutes: int, dynamic: bool = True) -> bool:
         """Schedule a wakeup using PiJuice.
 
+        When dynamic is True, the specified minutes will be adjusted based on the
+        current battery level, power state, and expected battery life to optimize
+        power consumption.
+
         Args:
-            minutes: Minutes from now to wake up.
+            minutes: Base minutes from now to wake up (will be adjusted if dynamic=True).
+            dynamic: Whether to dynamically adjust wakeup time based on battery level.
 
         Returns:
             True if wakeup was scheduled successfully, False otherwise.
         """
+        # If dynamic scheduling is enabled, adjust the wakeup time based on battery state
+        if dynamic:
+            minutes = self._calculate_dynamic_wakeup_minutes(minutes)
+
         if not self._initialized or not self._pijuice:
             self.logger.info(f"Mock wakeup: Would schedule wakeup in {minutes} minutes")
             return True
@@ -857,11 +866,96 @@ class PowerStateManager:
             self._pijuice.rtcAlarm.SetAlarm(alarm_time)
             self._pijuice.rtcAlarm.SetWakeupEnabled(True)
 
-            self.logger.info(f"Scheduled wakeup for {wake_time}")
+            self.logger.info(f"Scheduled wakeup for {wake_time} ({minutes} minutes from now)")
             return True
         except Exception as e:
             self.logger.error(f"Failed to schedule wakeup: {e}")
             return False
+            
+    def _calculate_dynamic_wakeup_minutes(self, base_minutes: int) -> int:
+        """Calculate dynamic wakeup time based on battery state.
+        
+        This method adjusts the wakeup schedule based on:
+        - Current battery level
+        - Power state (NORMAL, CONSERVING, CRITICAL, CHARGING)
+        - Expected battery life
+        - Abnormal discharge detection
+        
+        Args:
+            base_minutes: Base minutes to schedule wakeup
+            
+        Returns:
+            Adjusted minutes for wakeup scheduling
+        """
+        # Get current battery status and power state
+        battery_status = self.get_battery_status()
+        current_state = self.get_current_state()
+        
+        # Start with the base minutes
+        adjusted_minutes = base_minutes
+        
+        # If charging, we can use the base time (or even reduce it slightly)
+        if current_state == PowerState.CHARGING:
+            # When charging, we can be slightly more aggressive with wakeups
+            # but still maintain a minimum to avoid too frequent wakeups
+            return int(max(adjusted_minutes * 0.8, 30))  # Min 30 minutes even when charging
+        
+        # For critical battery, extend the time significantly to preserve battery
+        if current_state == PowerState.CRITICAL:
+            # Extend wakeup time by 8x for critical battery
+            return adjusted_minutes * 8
+            
+        # For power conserving state, extend the time based on battery level
+        if current_state == PowerState.CONSERVING:
+            # Calculate factor based on battery level
+            # Lower battery = longer sleep time
+            # At low_battery_threshold (e.g., 20%), use 3x
+            # At critical_battery_threshold (e.g., 10%), use 6x
+            low_threshold = self.config.power.low_battery_threshold
+            critical_threshold = self.config.power.critical_battery_threshold
+            
+            # Calculate dynamic factor between 3x and 6x based on battery level
+            if battery_status.level <= critical_threshold:
+                factor = 6.0  # Maximum extension for conserving state
+            else:
+                # Linear interpolation between 3x and 6x
+                # As battery level decreases from low to critical threshold
+                battery_range = low_threshold - critical_threshold
+                if battery_range <= 0:  # Prevent division by zero
+                    factor = 4.5  # Use middle value if thresholds are misconfigured
+                else:
+                    position = (battery_status.level - critical_threshold) / battery_range
+                    factor = 6.0 - (position * 3.0)  # Scale from 6.0 down to 3.0
+            
+            adjusted_minutes = adjusted_minutes * factor
+        
+        # For quiet hours, use the configured wake_up_interval_minutes
+        if current_state == PowerState.QUIET_HOURS:
+            return self.config.power.wake_up_interval_minutes
+        
+        # Check for abnormal discharge rate and adjust if necessary
+        if self.is_discharge_rate_abnormal():
+            self.logger.warning("Abnormal discharge rate detected, extending sleep time")
+            adjusted_minutes = adjusted_minutes * 1.5  # Additional 50% extension
+        
+        # Get remaining battery life estimate in hours
+        remaining_hours = self.get_expected_battery_life()
+        
+        # If we have a remaining life estimate, ensure we don't sleep too long
+        if remaining_hours is not None:
+            # Calculate a reasonable maximum sleep time based on remaining battery life
+            # Never sleep more than 25% of remaining battery life
+            max_sleep_minutes = remaining_hours * 60 * 0.25
+            
+            # But also never less than 30 minutes to avoid too frequent wakeups
+            max_sleep_minutes = max(max_sleep_minutes, 30)
+            
+            # Cap the adjusted minutes to this maximum
+            adjusted_minutes = min(adjusted_minutes, max_sleep_minutes)
+        
+        # Always ensure a minimum of 30 minutes to avoid excessive wakeups
+        # and a maximum of 24 hours to ensure we check eventually
+        return max(min(int(adjusted_minutes), 24 * 60), 30)
 
     def get_system_metrics(self) -> dict[str, float]:
         """Get system metrics like CPU temperature and usage.
