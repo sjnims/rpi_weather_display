@@ -260,7 +260,8 @@ nano config.yaml  # or use your preferred editor
 ```yaml
 weather:
   api_key: "YOUR_OPENWEATHERMAP_API_KEY"  # Required: Your OpenWeatherMap API key
-  city_name: "London"                      # Optional: City name for display
+  location: {"lat": 51.5072, "lon": -0.1276}  # Precise lat/lon coordinates
+  city_name: "London"                      # Used for display and when lat/lon not provided
   units: "metric"                          # Units: "metric", "imperial", "standard"
   language: "en"                           # Language for weather descriptions
   update_interval_minutes: 30              # How often to update weather data
@@ -271,8 +272,22 @@ display:
   width: 1872                              # Display resolution width
   height: 1404                             # Display resolution height
   rotate: 0                                # Display rotation (0, 90, 180, 270)
-  refresh_interval_minutes: 30             # Display refresh interval
+  # Refresh rate configuration
+  refresh_interval_minutes: 30             # Default refresh interval
+  refresh_interval_low_battery_minutes: 60 # Interval when battery is low
+  refresh_interval_critical_battery_minutes: 120  # Interval when battery is critical
+  refresh_interval_charging_minutes: 15    # Interval when charging
+  battery_aware_refresh: true              # Whether to adjust refresh intervals based on battery
   partial_refresh: true                    # Use partial refresh for display
+  # Image difference configuration
+  pixel_diff_threshold: 10                 # Threshold for considering a pixel changed
+  pixel_diff_threshold_low_battery: 20     # Threshold when battery is low
+  pixel_diff_threshold_critical_battery: 30  # Threshold when battery is critical
+  min_changed_pixels: 100                  # Minimum number of changed pixels to trigger refresh
+  min_changed_pixels_low_battery: 250      # Minimum when battery is low
+  min_changed_pixels_critical_battery: 500 # Minimum when battery is critical
+  battery_aware_threshold: true            # Whether to adjust thresholds based on battery
+  # Display formatting
   timestamp_format: "%Y-%m-%d %H:%M"       # Format for timestamps in logs
   time_format: null                        # Format for time display (null = AM/PM)
   pressure_units: "hPa"                    # Pressure units: "hPa", "mmHg", "inHg"
@@ -284,6 +299,28 @@ power:
   low_battery_threshold: 20                # Battery % to enter power saving
   critical_battery_threshold: 10           # Battery % for critical power saving
   wake_up_interval_minutes: 60             # How often to wake from sleep
+  wifi_timeout_seconds: 30                 # Timeout for WiFi connections
+  enable_battery_aware_wifi: true          # Adjust WiFi power based on battery
+  wifi_power_save_mode: "auto"             # Options: "auto", "off", "on", "aggressive"
+  # Retry configuration
+  retry_initial_delay_seconds: 1.0         # Initial delay for retry attempts
+  retry_max_delay_seconds: 300.0           # 5 minutes max delay
+  retry_backoff_factor: 2.0                # Exponential backoff multiplier
+  retry_jitter_factor: 0.1                 # 10% jitter to avoid thundering herd
+  retry_max_attempts: 5                    # Maximum number of retry attempts
+  # Hardware power optimizations
+  disable_hdmi: true                       # Disable HDMI output to save power
+  disable_bluetooth: true                  # Disable Bluetooth to save power
+  disable_leds: true                       # Disable status LEDs to save power
+  enable_temp_fs: true                     # Use tmpfs for temporary files
+  cpu_governor: "powersave"                # CPU governor mode for power saving
+  cpu_max_freq_mhz: 700                    # Limit CPU frequency to save power
+  # PiJuice integration
+  enable_pijuice_events: true              # Enable PiJuice event handling
+  low_charge_action: "SYSTEM_HALT"         # Action on low battery
+  low_charge_delay: 5                      # Delay before taking action (seconds)
+  button_press_action: "SYSDOWN"           # Action for button press (SW1)
+  button_press_delay: 180                  # Delay for button press (seconds)
 
 server:
   url: "http://your-server-ip"             # URL of the server
@@ -291,6 +328,19 @@ server:
   timeout_seconds: 10                      # API request timeout
   retry_attempts: 3                        # Number of retry attempts
   retry_delay_seconds: 5                   # Delay between retries
+  cache_dir: "/tmp/weather-cache-1000"     # Cache directory for weather data
+  log_level: "INFO"                        # Server log level
+  image_format: "PNG"                      # Image format for rendered dashboard
+
+logging:
+  level: "INFO"                            # Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+  file: null                               # Optional log file path, null uses stdout/stderr
+  format: "json"                           # Log format (json for structured logging)
+  max_size_mb: 5                           # Maximum log file size before rotation
+  backup_count: 3                          # Number of backup logs to keep
+
+debug: false                               # Enable debug mode
+development_mode: true                     # Enable development features like preview
 ```
 
 All configuration is managed through this YAML file - the project does not use environment variables or .env files.
