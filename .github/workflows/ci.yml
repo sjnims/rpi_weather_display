@@ -248,7 +248,11 @@ jobs:
           fail_under = 0" > .coveragerc
           
           # Run tests with the local .coveragerc to override the settings in pyproject.toml
-          poetry run pytest tests/${{ matrix.test-group }}/ --cov=src/ --cov-branch --cov-report=xml -v
+          # Only measure coverage for the specific module being tested
+          poetry run pytest tests/${{ matrix.test-group }}/ --cov=src/rpi_weather_display/${{ matrix.test-group }}/ --cov-branch --cov-report=xml -v
+          
+          # Rename the coverage file to avoid overwrites
+          mv coverage.xml coverage-${{ matrix.test-group }}.xml
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5
@@ -256,6 +260,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
           flags: ${{ matrix.test-group }}
+          files: coverage-${{ matrix.test-group }}.xml
 
   upload-combined-coverage:
     runs-on: ubuntu-latest
@@ -296,7 +301,16 @@ jobs:
           rm -f .coveragerc
           
           # Run with the settings from pyproject.toml (94% minimum)
-          poetry run pytest --cov=src/ --cov-branch --cov-report=xml --junitxml=junit.xml -o junit_family=legacy
+          poetry run pytest --cov=src/rpi_weather_display/ --cov-branch --cov-report=xml --cov-report=term --junitxml=junit.xml -o junit_family=legacy
+        
+      - name: Upload combined coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          flags: combined
+          name: combined-coverage
+          fail_ci_if_error: false
+          verbose: true
             
       - name: Upload JUnit test results to Codecov
         if: ${{ !cancelled() }}

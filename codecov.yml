@@ -1,0 +1,47 @@
+codecov:
+  require_ci_to_pass: true
+  notify:
+    wait_for_ci: true
+
+coverage:
+  status:
+    project:
+      default:
+        # Only use coverage from the combined run
+        target: 94%
+        threshold: 1%
+        flags:
+          - combined
+    patch:
+      default:
+        target: 90%
+        threshold: 2%
+        
+  # Don't consider the individual test group runs for repository status
+  range: 80..100
+  round: nearest
+  precision: 2
+
+flags:
+  models:
+    paths:
+      - src/rpi_weather_display/models/
+  client:
+    paths:
+      - src/rpi_weather_display/client/
+  server:
+    paths:
+      - src/rpi_weather_display/server/
+  utils:
+    paths:
+      - src/rpi_weather_display/utils/
+  combined:
+    paths:
+      - src/rpi_weather_display/
+
+comment:
+  layout: "reach, diff, flags, files"
+  behavior: default
+  require_changes: false  # if true: only post the comment if coverage changes
+  require_base: false     # [true :: must have a base report to post]
+  require_head: true      # [true :: must have a head report to post]
