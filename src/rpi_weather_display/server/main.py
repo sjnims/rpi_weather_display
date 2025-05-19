@@ -19,6 +19,15 @@ from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from rpi_weather_display.constants import (
+    CLIENT_CACHE_DIR_NAME,
+    DEFAULT_CONFIG_PATH,
+    DEFAULT_SERVER_HOST,
+    PREVIEW_BATTERY_CURRENT,
+    PREVIEW_BATTERY_LEVEL,
+    PREVIEW_BATTERY_TEMP,
+    PREVIEW_BATTERY_VOLTAGE,
+)
 from rpi_weather_display.models.config import AppConfig
 from rpi_weather_display.models.system import BatteryState, BatteryStatus
 from rpi_weather_display.server.api import WeatherAPIClient
@@ -104,7 +113,7 @@ class WeatherDisplayServer:
             "templates",
             [
                 Path(__file__).parent.parent.parent.parent / "templates",
-                Path("/etc/rpi-weather-display/templates"),
+                Path(f"/etc/{CLIENT_CACHE_DIR_NAME}/templates"),
             ],
         )
 
@@ -113,7 +122,7 @@ class WeatherDisplayServer:
             "static",
             [
                 Path(__file__).parent.parent.parent.parent / "static",
-                Path("/etc/rpi-weather-display/static"),
+                Path(f"/etc/{CLIENT_CACHE_DIR_NAME}/static"),
             ],
         )
 
@@ -153,10 +162,10 @@ class WeatherDisplayServer:
             try:
                 # Get default battery status for preview
                 battery_status = BatteryStatus(
-                    level=85,
-                    voltage=3.9,
-                    current=0.5,
-                    temperature=25.0,
+                    level=PREVIEW_BATTERY_LEVEL,
+                    voltage=PREVIEW_BATTERY_VOLTAGE,
+                    current=PREVIEW_BATTERY_CURRENT,
+                    temperature=PREVIEW_BATTERY_TEMP,
                     state=BatteryState.FULL,
                 )
 
@@ -264,7 +273,7 @@ class WeatherDisplayServer:
         import uvicorn
 
         # Use provided values, config values, or defaults
-        bind_host = host or getattr(self.config.server, "host", "127.0.0.1")
+        bind_host = host or getattr(self.config.server, "host", DEFAULT_SERVER_HOST)
         bind_port = port or self.config.server.port
 
         self.logger.info(f"Starting Weather Display Server on {bind_host}:{bind_port}")
@@ -278,7 +287,7 @@ def main() -> None:
     parser.add_argument(
         "--config",
         type=Path,
-        default=Path("/etc/rpi-weather-display/config.yaml"),
+        default=Path(DEFAULT_CONFIG_PATH),
         help="Path to configuration file",
     )
     parser.add_argument(

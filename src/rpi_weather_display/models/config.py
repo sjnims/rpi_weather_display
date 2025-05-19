@@ -46,6 +46,7 @@ class DisplayConfig(BaseModel):
     width: int = 1872
     height: int = 1404
     rotate: int = 0  # 0, 90, 180, 270
+    vcom: float = -2.06  # VCOM value specific to e-paper display hardware
     refresh_interval_minutes: int = 30
     refresh_interval_low_battery_minutes: int = 60  # Interval when battery is low
     refresh_interval_critical_battery_minutes: int = 120  # Interval when battery is critical
@@ -86,6 +87,7 @@ class PowerConfig(BaseModel):
     quiet_hours_end: str = "06:00"
     low_battery_threshold: int = 20
     critical_battery_threshold: int = 10
+    battery_capacity_mah: int = 12000  # Battery capacity in milliamp-hours
     wake_up_interval_minutes: int = 60
     wifi_timeout_seconds: int = 30
     enable_battery_aware_wifi: bool = True
@@ -101,14 +103,14 @@ class PowerConfig(BaseModel):
     enable_temp_fs: bool = True
     cpu_governor: str = "powersave"
     cpu_max_freq_mhz: int = 700
-    
+
     # PiJuice event handlers configuration
     enable_pijuice_events: bool = True
     low_charge_action: str = "SYSTEM_HALT"  # Action to take on LOW_CHARGE event
     low_charge_delay: int = 5  # Delay in seconds before taking action
     button_press_action: str = "SYSDOWN"  # Action for button press (SW1)
     button_press_delay: int = 180  # Delay in seconds for button press (SW1)
-    
+
     @field_validator("wifi_power_save_mode")
     @classmethod
     def validate_wifi_power_save_mode(cls, v: str) -> str:
@@ -117,15 +119,19 @@ class PowerConfig(BaseModel):
         if v not in valid_modes:
             raise ValueError(f"WiFi power save mode must be one of: {', '.join(valid_modes)}")
         return v
-        
+
     @field_validator("low_charge_action")
     @classmethod
     def validate_low_charge_action(cls, v: str) -> str:
         """Validate low charge action is valid."""
         valid_actions = [
-            "NO_ACTION", "SYSTEM_HALT", "SYSTEM_HALT_POW_OFF", 
-            "SYSTEM_POWER_OFF", "SYSTEM_POWER_ON", "SYSTEM_REBOOT", 
-            "SYSTEM_WAKEUP"
+            "NO_ACTION",
+            "SYSTEM_HALT",
+            "SYSTEM_HALT_POW_OFF",
+            "SYSTEM_POWER_OFF",
+            "SYSTEM_POWER_ON",
+            "SYSTEM_REBOOT",
+            "SYSTEM_WAKEUP",
         ]
         if v not in valid_actions:
             raise ValueError(f"Low charge action must be one of: {', '.join(valid_actions)}")

@@ -3,6 +3,12 @@
 Provides common battery state and power management utilities used across the application.
 """
 
+from rpi_weather_display.constants import (
+    BATTERY_EMPTY_THRESHOLD,
+    BATTERY_FULL_THRESHOLD,
+    BATTERY_HIGH_THRESHOLD,
+    BATTERY_LOW_THRESHOLD,
+)
 from rpi_weather_display.models.config import PowerConfig
 from rpi_weather_display.models.system import BatteryState, BatteryStatus
 
@@ -91,13 +97,13 @@ def get_battery_icon(status: BatteryStatus) -> str:
     """
     if status.state == BatteryState.CHARGING:
         return "battery-charging-bold"
-    elif status.level > 90:
+    elif status.level > BATTERY_FULL_THRESHOLD:
         return "battery-full-bold"
-    elif status.level > 60:
+    elif status.level > BATTERY_HIGH_THRESHOLD:
         return "battery-high-bold"
-    elif status.level > 30:
+    elif status.level > BATTERY_LOW_THRESHOLD:
         return "battery-medium-bold"
-    elif status.level > 10:
+    elif status.level > BATTERY_EMPTY_THRESHOLD:
         return "battery-low-bold"
     else:
         return "battery-empty-bold"

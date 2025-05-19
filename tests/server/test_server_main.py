@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from fastapi.responses import Response
 from fastapi.testclient import TestClient
 
+from rpi_weather_display.constants import CLIENT_CACHE_DIR_NAME
 from rpi_weather_display.models.config import LoggingConfig
 from rpi_weather_display.models.system import BatteryState
 from rpi_weather_display.server.main import WeatherDisplayServer
@@ -54,7 +55,7 @@ def test_template_dir_fallback() -> None:
         server = WeatherDisplayServer(Path("test_config.yaml"))
 
         # Verify template_dir was set to the fallback path
-        assert str(server.template_dir) == "/etc/rpi-weather-display/templates"
+        assert str(server.template_dir) == f"/etc/{CLIENT_CACHE_DIR_NAME}/templates"
 
 
 def test_static_files_not_found() -> None:
@@ -153,7 +154,7 @@ def test_alt_static_dir() -> None:
 
     # Determine paths for default and alternative static dirs
     default_static_dir = Path(__file__).parent.parent.parent / "static"
-    alt_static_dir = Path("/etc/rpi-weather-display/static")
+    alt_static_dir = Path(f"/etc/{CLIENT_CACHE_DIR_NAME}/static")
 
     # Create custom file system with specific existence rules
     test_file_system = _TestFileSystem(
@@ -421,7 +422,7 @@ def test_main_function() -> None:
     ):
         # Configure mock args
         mock_args = MagicMock()
-        mock_args.config = Path("/etc/rpi-weather-display/config.yaml")
+        mock_args.config = Path(f"/etc/{CLIENT_CACHE_DIR_NAME}/config.yaml")
         mock_args.host = "127.0.0.1"
         mock_args.port = 9000
         mock_parse_args.return_value = mock_args
@@ -450,7 +451,7 @@ def test_main_function_config_not_found() -> None:
     ):
         # Configure mock args
         mock_args = MagicMock()
-        mock_args.config = Path("/etc/rpi-weather-display/config.yaml")
+        mock_args.config = Path(f"/etc/{CLIENT_CACHE_DIR_NAME}/config.yaml")
         mock_parse_args.return_value = mock_args
 
         # Call main function

@@ -272,6 +272,7 @@ display:
   width: 1872                              # Display resolution width
   height: 1404                             # Display resolution height
   rotate: 0                                # Display rotation (0, 90, 180, 270)
+  vcom: -2.06                              # VCOM value specific to e-paper display hardware
   # Refresh rate configuration
   refresh_interval_minutes: 30             # Default refresh interval
   refresh_interval_low_battery_minutes: 60 # Interval when battery is low
@@ -298,6 +299,7 @@ power:
   quiet_hours_end: "06:00"                 # End of quiet hours
   low_battery_threshold: 20                # Battery % to enter power saving
   critical_battery_threshold: 10           # Battery % for critical power saving
+  battery_capacity_mah: 12000              # Battery capacity in milliamp-hours
   wake_up_interval_minutes: 60             # How often to wake from sleep
   wifi_timeout_seconds: 30                 # Timeout for WiFi connections
   enable_battery_aware_wifi: true          # Adjust WiFi power based on battery

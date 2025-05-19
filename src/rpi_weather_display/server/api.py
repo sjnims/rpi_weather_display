@@ -9,6 +9,12 @@ from datetime import datetime, timedelta
 
 import httpx
 
+from rpi_weather_display.constants import (
+    API_LOCATION_LIMIT,
+    OWM_AIR_POLLUTION_URL,
+    OWM_GEOCODING_URL,
+    OWM_ONECALL_URL,
+)
 from rpi_weather_display.models.config import WeatherConfig
 from rpi_weather_display.models.weather import (
     AirPollutionData,
@@ -23,9 +29,9 @@ from rpi_weather_display.utils.error_utils import get_error_location
 class WeatherAPIClient:
     """Client for the OpenWeatherMap API."""
 
-    BASE_URL = "https://api.openweathermap.org/data/3.0/onecall"
-    AIR_POLLUTION_URL = "https://api.openweathermap.org/data/2.5/air_pollution"
-    GEOCODING_URL = "https://api.openweathermap.org/geo/1.0/direct"
+    BASE_URL = OWM_ONECALL_URL
+    AIR_POLLUTION_URL = OWM_AIR_POLLUTION_URL
+    GEOCODING_URL = OWM_GEOCODING_URL
 
     def __init__(self, config: WeatherConfig) -> None:
         """Initialize the API client.
@@ -70,7 +76,11 @@ class WeatherAPIClient:
         # Use geocoding API to get coordinates
         try:
             async with httpx.AsyncClient() as client:
-                params = {"q": city_query, "limit": 1, "appid": self.config.api_key}
+                params = {
+                    "q": city_query,
+                    "limit": API_LOCATION_LIMIT,
+                    "appid": self.config.api_key,
+                }
 
                 response = await client.get(self.GEOCODING_URL, params=params)
                 response.raise_for_status()

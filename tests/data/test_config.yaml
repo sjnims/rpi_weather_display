@@ -1,11 +1,26 @@
 debug: true
 development_mode: true
 display:
+  battery_aware_refresh: true
+  battery_aware_threshold: true
+  display_datetime_format: null
   height: 600
+  min_changed_pixels: 100
+  min_changed_pixels_critical_battery: 500
+  min_changed_pixels_low_battery: 250
   partial_refresh: true
+  pixel_diff_threshold: 10
+  pixel_diff_threshold_critical_battery: 30
+  pixel_diff_threshold_low_battery: 20
+  pressure_units: "hPa"
+  refresh_interval_charging_minutes: 15
+  refresh_interval_critical_battery_minutes: 120
+  refresh_interval_low_battery_minutes: 60
   refresh_interval_minutes: 30
   rotate: 0
+  time_format: null
   timestamp_format: '%Y-%m-%d %H:%M'
+  vcom: -2.06
   width: 800
 logging:
   backup_count: 1
@@ -13,13 +28,35 @@ logging:
   level: INFO
   max_size_mb: 1
 power:
+  battery_capacity_mah: 12000
+  button_press_action: "SYSDOWN"
+  button_press_delay: 180
+  cpu_governor: "powersave"
+  cpu_max_freq_mhz: 700
   critical_battery_threshold: 10
+  disable_bluetooth: true
+  disable_hdmi: true
+  disable_leds: true
+  enable_battery_aware_wifi: true
+  enable_pijuice_events: true
+  enable_temp_fs: true
   low_battery_threshold: 20
+  low_charge_action: "SYSTEM_HALT"
+  low_charge_delay: 5
   quiet_hours_end: 06:00
   quiet_hours_start: '23:00'
+  retry_backoff_factor: 2.0
+  retry_initial_delay_seconds: 1.0
+  retry_jitter_factor: 0.1
+  retry_max_attempts: 5
+  retry_max_delay_seconds: 300.0
   wake_up_interval_minutes: 60
+  wifi_power_save_mode: "auto"
   wifi_timeout_seconds: 30
 server:
+  cache_dir: "/tmp/weather-cache-1000"
+  image_format: "PNG"
+  log_level: "INFO"
   port: 8000
   retry_attempts: 2
   retry_delay_seconds: 1
@@ -29,6 +66,8 @@ weather:
   api_key: test_api_key
   city_name: Test City
   forecast_days: 5
+  hourly_forecast_count: 24
   language: en
+  location: {"lat": 51.5072, "lon": -0.1276}
   units: metric
   update_interval_minutes: 30

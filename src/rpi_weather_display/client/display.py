@@ -11,6 +11,19 @@ from typing import Any, TypeVar
 
 from PIL import Image
 
+from rpi_weather_display.constants import (
+    DEFAULT_MESSAGE_FONT,
+    DEFAULT_TITLE_FONT,
+    DISPLAY_MARGIN,
+    FONT_SIZE_DIVIDER,
+    FONT_SIZE_MESSAGE_DIVIDER,
+    MESSAGE_FONT_SIZE_BASE,
+    MESSAGE_FONT_SIZE_MAX,
+    MESSAGE_Y_POSITION_FACTOR,
+    TITLE_FONT_SIZE_BASE,
+    TITLE_FONT_SIZE_MAX,
+    TITLE_Y_POSITION_FACTOR,
+)
 from rpi_weather_display.models.config import DisplayConfig
 from rpi_weather_display.models.system import BatteryState, BatteryStatus
 
@@ -70,8 +83,8 @@ class EPaperDisplay:
                 self._initialized = False
                 return
 
-            # Initialize the display
-            self._display = auto_epd_display(vcom=-2.06)
+            # Initialize the display with configured VCOM value
+            self._display = auto_epd_display(vcom=self.config.vcom)
             if self._display:
                 self._display.clear()
 
@@ -107,7 +120,7 @@ class EPaperDisplay:
 
     def update_battery_status(self, battery_status: BatteryStatus) -> None:
         """Update the current battery status for dynamic adjustments.
-        
+
         Args:
             battery_status: The current battery status
         """
@@ -175,10 +188,10 @@ class EPaperDisplay:
         if not np:
             return None
 
-        left = max(0, int(np.min(non_zero[1])) - 5)  # Add margin
-        top = max(0, int(np.min(non_zero[0])) - 5)
-        right = min(int(diff_shape[1]), int(np.max(non_zero[1])) + 5)
-        bottom = min(int(diff_shape[0]), int(np.max(non_zero[0])) + 5)
+        left = max(0, int(np.min(non_zero[1])) - DISPLAY_MARGIN)  # Add margin
+        top = max(0, int(np.min(non_zero[0])) - DISPLAY_MARGIN)
+        right = min(int(diff_shape[1]), int(np.max(non_zero[1])) + DISPLAY_MARGIN)
+        bottom = min(int(diff_shape[0]), int(np.max(non_zero[0])) + DISPLAY_MARGIN)
 
         return (left, top, right, bottom)
 
@@ -209,7 +222,7 @@ class EPaperDisplay:
             # Get the appropriate threshold based on battery status
             pixel_threshold = self._get_pixel_diff_threshold()
             min_changed_pixels = self._get_min_changed_pixels()
-            
+
             # If max difference is below threshold, return None
             if np.max(diff) < pixel_threshold:
                 return None
@@ -226,21 +239,21 @@ class EPaperDisplay:
         except Exception as e:
             print(f"Error calculating diff bbox: {e}")
             return None
-            
+
     def _get_pixel_diff_threshold(self) -> int:
         """Get the pixel difference threshold based on battery status.
-        
+
         Returns:
             The threshold to use for pixel differences
         """
         # If battery-aware thresholds are disabled, return the default threshold
         if not self.config.battery_aware_threshold or self._current_battery_status is None:
             return self.config.pixel_diff_threshold
-            
+
         # Use appropriate threshold based on battery status
         battery = self._current_battery_status
         is_discharging = battery.state == BatteryState.DISCHARGING
-        
+
         if battery.state == BatteryState.CHARGING:
             # When charging, use the standard threshold
             return self.config.pixel_diff_threshold
@@ -253,21 +266,21 @@ class EPaperDisplay:
         else:
             # Normal battery or other states
             return self.config.pixel_diff_threshold
-            
+
     def _get_min_changed_pixels(self) -> int:
         """Get the minimum number of changed pixels required based on battery status.
-        
+
         Returns:
             The minimum number of changed pixels to trigger a refresh
         """
         # If battery-aware thresholds are disabled, return the default threshold
         if not self.config.battery_aware_threshold or self._current_battery_status is None:
             return self.config.min_changed_pixels
-            
+
         # Use appropriate threshold based on battery status
         battery = self._current_battery_status
         is_discharging = battery.state == BatteryState.DISCHARGING
-        
+
         if battery.state == BatteryState.CHARGING:
             # When charging, use the standard threshold
             return self.config.min_changed_pixels
@@ -292,52 +305,58 @@ class EPaperDisplay:
 
     def display_text(self, title: str, message: str) -> None:
         """Display a text message on the e-paper display.
-        
+
         Creates a simple text image with the given title and message
         for displaying alerts or status messages.
-        
+
         Args:
             title: The title/heading text to display
             message: The main message text to display
         """
         try:
             from PIL import Image, ImageDraw, ImageFont
-            
+
             # Create a blank white image
             image = Image.new("L", (self.config.width, self.config.height), 255)
             draw = ImageDraw.Draw(image)
-            
+
             # Determine font sizes based on display size
-            title_font_size = max(36, min(48, self.config.width // 20))
-            message_font_size = max(24, min(36, self.config.width // 30))
-            
+            title_font_size = max(
+                TITLE_FONT_SIZE_BASE,
+                min(TITLE_FONT_SIZE_MAX, self.config.width // FONT_SIZE_DIVIDER),
+            )
+            message_font_size = max(
+                MESSAGE_FONT_SIZE_BASE,
+                min(MESSAGE_FONT_SIZE_MAX, self.config.width // FONT_SIZE_MESSAGE_DIVIDER),
+            )
+
             # Try to load a font, fall back to default if not available
             try:
-                title_font = ImageFont.truetype("DejaVuSans-Bold.ttf", title_font_size)
-                message_font = ImageFont.truetype("DejaVuSans.ttf", message_font_size)
+                title_font = ImageFont.truetype(DEFAULT_TITLE_FONT, title_font_size)
+                message_font = ImageFont.truetype(DEFAULT_MESSAGE_FONT, message_font_size)
             except OSError:
                 # Fall back to default font
                 title_font = ImageFont.load_default()
                 message_font = ImageFont.load_default()
-            
+
             # Calculate positions
             title_bbox = draw.textbbox((0, 0), title, font=title_font)
             title_width = title_bbox[2] - title_bbox[0]
             title_x = (self.config.width - title_width) // 2
-            title_y = self.config.height // 3
-            
+            title_y = self.config.height // TITLE_Y_POSITION_FACTOR
+
             message_bbox = draw.textbbox((0, 0), message, font=message_font)
             message_width = message_bbox[2] - message_bbox[0]
             message_x = (self.config.width - message_width) // 2
-            message_y = self.config.height // 2
-            
+            message_y = self.config.height // MESSAGE_Y_POSITION_FACTOR
+
             # Draw the text
             draw.text((title_x, title_y), title, font=title_font, fill=0)
             draw.text((message_x, message_y), message, font=message_font, fill=0)
-            
+
             # Display the image
             self.display_pil_image(image)
-            
+
         except Exception as e:
             print(f"Error displaying text: {e}")
             # If we can't create a proper image, at least log the message

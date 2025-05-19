@@ -18,6 +18,7 @@ from unittest.mock import AsyncMock, MagicMock, mock_open, patch
 import jinja2
 import pytest
 
+from rpi_weather_display.constants import HPA_TO_INHG, HPA_TO_MMHG
 from rpi_weather_display.models.config import (
     AppConfig,
     DisplayConfig,
@@ -1996,14 +1997,14 @@ class TestWeatherRenderer:
         """Test converting pressure from hPa to mmHg."""
         pressure_hpa = 1013.25
         result = renderer._convert_pressure(pressure_hpa, "mmHg")
-        expected = pressure_hpa * 0.75006
+        expected = pressure_hpa * HPA_TO_MMHG
         assert abs(result - expected) < 0.01  # Account for floating point precision
 
     def test_convert_pressure_inhg(self, renderer: WeatherRenderer) -> None:
         """Test converting pressure from hPa to inHg."""
         pressure_hpa = 1013.25
         result = renderer._convert_pressure(pressure_hpa, "inHg")
-        expected = pressure_hpa * 0.02953
+        expected = pressure_hpa * HPA_TO_INHG
         assert abs(result - expected) < 0.0001  # Account for floating point precision
 
     def test_convert_pressure_fallback(self, renderer: WeatherRenderer) -> None:
@@ -2054,7 +2055,7 @@ class TestWeatherRenderer:
             # Check the template context
             context = mock_template.render.call_args[1]
             assert context["units_pressure"] == "mmHg"
-            expected_mmhg = round(1013.25 * 0.75006, 1)
+            expected_mmhg = round(1013.25 * HPA_TO_MMHG, 1)
             assert context["pressure"] == expected_mmhg
 
         # Test with inHg setting
@@ -2068,7 +2069,7 @@ class TestWeatherRenderer:
             # Check the template context
             context = mock_template.render.call_args[1]
             assert context["units_pressure"] == "inHg"
-            expected_inhg = round(1013.25 * 0.02953, 1)
+            expected_inhg = round(1013.25 * HPA_TO_INHG, 1)
             assert context["pressure"] == expected_inhg
 
     @pytest.mark.asyncio()

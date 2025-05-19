@@ -47,6 +47,7 @@ def default_config() -> AppConfig:
             quiet_hours_end="06:00",
             low_battery_threshold=20,
             critical_battery_threshold=10,
+            battery_capacity_mah=12000,
             wake_up_interval_minutes=60,
         ),
         server=ServerConfig(url="http://localhost"),
@@ -333,12 +334,12 @@ class TestPowerStateManagerAdvanced:
         mock_pijuice_instance.status.GetStatus.return_value = {"error": "NO_ERROR", "data": {}}
         # Mock the event configuration responses
         mock_pijuice_instance.config.SetSystemTaskParameters.return_value = {
-            "error": "NO_ERROR", 
-            "data": {}
+            "error": "NO_ERROR",
+            "data": {},
         }
         mock_pijuice_instance.config.SetButtonConfiguration.return_value = {
-            "error": "NO_ERROR", 
-            "data": {}
+            "error": "NO_ERROR",
+            "data": {},
         }
 
         # Patch the import inside the initialize method
@@ -348,28 +349,30 @@ class TestPowerStateManagerAdvanced:
         ):
             # Make sure events are enabled in config
             power_manager.config.power.enable_pijuice_events = True
-            
+
             # Initialize PiJuice
             power_manager.initialize()
 
             # Check initialization result
             assert power_manager.get_initialization_status_for_testing()
-            
+
             # Verify the PiJuice was initialized correctly
             mock_pijuice_class.assert_called_once_with(1, 0x14)
-            
+
             # Verify event handlers were configured
             mock_pijuice_instance.config.SetSystemTaskParameters.assert_called_once_with(
-                "LOW_CHARGE", 
+                "LOW_CHARGE",
                 power_manager.config.power.low_charge_action,
-                power_manager.config.power.low_charge_delay
+                power_manager.config.power.low_charge_delay,
             )
-            
+
             mock_pijuice_instance.config.SetButtonConfiguration.assert_called_once_with(
-                "SW1", 
+                "SW1",
                 "SINGLE_PRESS",
-                {"function": power_manager.config.power.button_press_action, 
-                 "parameter": power_manager.config.power.button_press_delay}
+                {
+                    "function": power_manager.config.power.button_press_action,
+                    "parameter": power_manager.config.power.button_press_delay,
+                },
             )
 
     def test_initialize_with_pijuice_exception(self, power_manager: PowerStateManager) -> None:
@@ -410,7 +413,7 @@ class TestPowerStateManagerAdvanced:
         with patch.dict("sys.modules", {"pijuice": MagicMock(PiJuice=mock_pijuice_class)}):
             power_manager.initialize()
             assert not power_manager.get_initialization_status_for_testing()
-            
+
     def test_configure_pijuice_events_not_initialized(
         self, power_manager: PowerStateManager
     ) -> None:
@@ -418,30 +421,30 @@ class TestPowerStateManagerAdvanced:
         # Ensure PiJuice is not initialized
         power_manager._initialized = False
         power_manager._pijuice = None
-        
+
         # Should not raise any exceptions
         power_manager._configure_pijuice_events()
-        
+
         # No assertions needed, just checking it doesn't raise exceptions
-        
+
     def test_configure_pijuice_events_with_errors(self, power_manager: PowerStateManager) -> None:
         """Test _configure_pijuice_events handling API errors."""
         # Create mock PiJuice instance
         mock_pijuice = MagicMock()
         power_manager._pijuice = mock_pijuice
         power_manager._initialized = True
-        
+
         # Configure mocks to return errors
         mock_pijuice.config.SetSystemTaskParameters.return_value = {"error": "ERROR", "data": {}}
         mock_pijuice.config.SetButtonConfiguration.return_value = {"error": "ERROR", "data": {}}
-        
+
         # Should log errors but not raise exceptions
         power_manager._configure_pijuice_events()
-        
+
         # Verify method calls
         mock_pijuice.config.SetSystemTaskParameters.assert_called_once()
         mock_pijuice.config.SetButtonConfiguration.assert_called_once()
-        
+
     def test_configure_pijuice_events_with_exception(
         self, power_manager: PowerStateManager
     ) -> None:
@@ -450,97 +453,91 @@ class TestPowerStateManagerAdvanced:
         mock_pijuice = MagicMock()
         power_manager._pijuice = mock_pijuice
         power_manager._initialized = True
-        
+
         # Configure mock to raise an exception
         mock_pijuice.config.SetSystemTaskParameters.side_effect = Exception("Test exception")
-        
+
         # Should catch exception and log error
         power_manager._configure_pijuice_events()
-        
+
         # Verify method was called despite exception
         mock_pijuice.config.SetSystemTaskParameters.assert_called_once()
-        
+
     def test_get_event_configuration(self, power_manager: PowerStateManager) -> None:
         """Test get_event_configuration with different event types."""
         from rpi_weather_display.utils.power_manager import PiJuiceEvent
-        
+
         # Create mock PiJuice instance
         mock_pijuice = MagicMock()
         power_manager._pijuice = mock_pijuice
         power_manager._initialized = True
-        
+
         # Configure mocks to return valid responses
         mock_pijuice.config.GetSystemTaskParameters.return_value = {
-            "error": "NO_ERROR", 
-            "data": {"function": "SYSTEM_HALT", "delay": 5}
+            "error": "NO_ERROR",
+            "data": {"function": "SYSTEM_HALT", "delay": 5},
         }
         mock_pijuice.config.GetButtonConfiguration.return_value = {
-            "error": "NO_ERROR", 
-            "data": {"function": "SYSDOWN", "parameter": 180}
+            "error": "NO_ERROR",
+            "data": {"function": "SYSDOWN", "parameter": 180},
         }
-        
+
         # Test LOW_CHARGE event
         result = power_manager.get_event_configuration(PiJuiceEvent.LOW_CHARGE)
         assert result == {"function": "SYSTEM_HALT", "delay": 5}
-        
+
         # Test button press event
         result = power_manager.get_event_configuration(PiJuiceEvent.BUTTON_SW1_PRESS)
         assert result == {"function": "SYSDOWN", "parameter": 180}
-        
+
         # Test unsupported event type
         result = power_manager.get_event_configuration(PiJuiceEvent.SYSTEM_WAKEUP)
         assert result == {}
-        
+
     def test_get_event_configuration_errors(self, power_manager: PowerStateManager) -> None:
         """Test get_event_configuration error handling."""
         from rpi_weather_display.utils.power_manager import PiJuiceEvent
-        
+
         # Test not initialized case
         power_manager._initialized = False
         power_manager._pijuice = None
         result = power_manager.get_event_configuration(PiJuiceEvent.LOW_CHARGE)
         assert result == {}
-        
+
         # Test API error responses
         power_manager._initialized = True
         mock_pijuice = MagicMock()
         power_manager._pijuice = mock_pijuice
-        
+
         # Configure mocks to return error responses
-        mock_pijuice.config.GetSystemTaskParameters.return_value = {
-            "error": "ERROR", 
-            "data": {}
-        }
-        mock_pijuice.config.GetButtonConfiguration.return_value = {
-            "error": "ERROR", 
-            "data": {}
-        }
-        
+        mock_pijuice.config.GetSystemTaskParameters.return_value = {"error": "ERROR", "data": {}}
+        mock_pijuice.config.GetButtonConfiguration.return_value = {"error": "ERROR", "data": {}}
+
         # Test LOW_CHARGE event with error
         result = power_manager.get_event_configuration(PiJuiceEvent.LOW_CHARGE)
         assert result == {}
-        
+
         # Test button press event with error
         result = power_manager.get_event_configuration(PiJuiceEvent.BUTTON_SW1_PRESS)
         assert result == {}
-        
+
     def test_get_event_configuration_exceptions(self, power_manager: PowerStateManager) -> None:
         """Test get_event_configuration exception handling."""
         from rpi_weather_display.utils.power_manager import PiJuiceEvent
-        
+
         # Setup manager with mock that raises exceptions
         power_manager._initialized = True
         mock_pijuice = MagicMock()
         power_manager._pijuice = mock_pijuice
-        
+
         # Configure mocks to raise exceptions
         mock_pijuice.config.GetSystemTaskParameters.side_effect = Exception("Test exception")
         mock_pijuice.config.GetButtonConfiguration.side_effect = Exception("Test exception")
-        
+
         # Test LOW_CHARGE event with exception
         result = power_manager.get_event_configuration(PiJuiceEvent.LOW_CHARGE)
         assert result == {}
-        
+
         # Test button press event with exception
         result = power_manager.get_event_configuration(PiJuiceEvent.BUTTON_SW1_PRESS)
         assert result == {}
@@ -603,48 +600,48 @@ class TestPowerStateManagerAdvanced:
             {"second": 0, "minute": 0, "hour": 0, "day": 1, "month": 1, "year": 23}
         )
         interface.rtcAlarm.SetWakeupEnabled(True)
-        
+
         # Test the new power class methods
         power_result = interface.power.SetSystemPowerSwitch(1)
         assert isinstance(power_result, dict)
         assert "error" in power_result
         assert "data" in power_result
-        
+
         # Test the new config class methods
         sys_task_result = interface.config.SetSystemTaskParameters("LOW_CHARGE", "SYSTEM_HALT", 5)
         assert isinstance(sys_task_result, dict)
         assert "error" in sys_task_result
         assert "data" in sys_task_result
-        
+
         get_sys_task_result = interface.config.GetSystemTaskParameters("LOW_CHARGE")
         assert isinstance(get_sys_task_result, dict)
         assert "error" in get_sys_task_result
         assert "data" in get_sys_task_result
-        
+
         button_config_result = interface.config.SetButtonConfiguration(
             "SW1", "SINGLE_PRESS", {"function": "SYSDOWN", "parameter": 180}
         )
         assert isinstance(button_config_result, dict)
         assert "error" in button_config_result
         assert "data" in button_config_result
-        
+
         get_button_config_result = interface.config.GetButtonConfiguration("SW1", "SINGLE_PRESS")
         assert isinstance(get_button_config_result, dict)
         assert "error" in get_button_config_result
         assert "data" in get_button_config_result
-        
+
         # Test wakeupalarm class methods
         wakeup_result = interface.wakeupalarm.SetWakeupEnabled(True)
         assert isinstance(wakeup_result, dict)
         assert "error" in wakeup_result
         assert "data" in wakeup_result
-        
+
         # Test convenience methods
         status = interface.get_status()
         assert isinstance(status, dict)
         assert "error" in status
         assert "data" in status
-        
+
         level = interface.get_charge_level()
         assert level == 0
 
@@ -860,110 +857,110 @@ class TestPowerManagerBatteryAndMetrics:
 
 class TestQuietHoursAndSleepTiming:
     """Tests for quiet hours and sleep timing calculations."""
-    
+
     def test_get_refresh_interval(self, power_manager: PowerStateManager) -> None:
         """Test _get_refresh_interval for different power states and battery levels."""
         # Test NORMAL state
         with patch.object(power_manager, "get_current_state", return_value=PowerState.NORMAL):
             with patch.object(power_manager, "get_battery_status") as mock_battery:
                 mock_battery.return_value = BatteryStatus(
-                    level=80, 
-                    voltage=3.7, 
-                    current=-100.0, 
-                    temperature=25.0, 
-                    state=BatteryState.DISCHARGING
+                    level=80,
+                    voltage=3.7,
+                    current=-100.0,
+                    temperature=25.0,
+                    state=BatteryState.DISCHARGING,
                 )
                 interval = power_manager._get_refresh_interval()
                 # Should return normal interval
                 assert interval.total_seconds() == 30 * 60  # 30 minutes
-        
+
         # Test CONSERVING state
         with patch.object(power_manager, "get_current_state", return_value=PowerState.CONSERVING):
             with patch.object(power_manager, "get_battery_status") as mock_battery:
                 mock_battery.return_value = BatteryStatus(
-                    level=15, 
-                    voltage=3.7, 
-                    current=-100.0, 
-                    temperature=25.0, 
-                    state=BatteryState.DISCHARGING
+                    level=15,
+                    voltage=3.7,
+                    current=-100.0,
+                    temperature=25.0,
+                    state=BatteryState.DISCHARGING,
                 )
                 interval = power_manager._get_refresh_interval()
                 # Should return low battery interval
                 assert interval.total_seconds() == 60 * 60  # 60 minutes
-        
+
         # Test CRITICAL state
         with patch.object(power_manager, "get_current_state", return_value=PowerState.CRITICAL):
             with patch.object(power_manager, "get_battery_status") as mock_battery:
                 mock_battery.return_value = BatteryStatus(
-                    level=5, 
-                    voltage=3.7, 
-                    current=-100.0, 
-                    temperature=25.0, 
-                    state=BatteryState.DISCHARGING
+                    level=5,
+                    voltage=3.7,
+                    current=-100.0,
+                    temperature=25.0,
+                    state=BatteryState.DISCHARGING,
                 )
                 interval = power_manager._get_refresh_interval()
                 # Should return critical battery interval
                 assert interval.total_seconds() == 120 * 60  # 120 minutes
-        
+
         # Test CHARGING state
         with patch.object(power_manager, "get_current_state", return_value=PowerState.CHARGING):
             with patch.object(power_manager, "get_battery_status") as mock_battery:
                 mock_battery.return_value = BatteryStatus(
-                    level=50, 
-                    voltage=4.0, 
-                    current=500.0, 
-                    temperature=25.0, 
-                    state=BatteryState.CHARGING
+                    level=50,
+                    voltage=4.0,
+                    current=500.0,
+                    temperature=25.0,
+                    state=BatteryState.CHARGING,
                 )
                 interval = power_manager._get_refresh_interval()
                 # Should return charging interval
                 assert interval.total_seconds() == 15 * 60  # 15 minutes
-        
+
         # Test QUIET_HOURS state when charging
         with patch.object(power_manager, "get_current_state", return_value=PowerState.QUIET_HOURS):
             with patch.object(power_manager, "get_battery_status") as mock_battery:
                 mock_battery.return_value = BatteryStatus(
-                    level=50, 
-                    voltage=4.0, 
-                    current=500.0, 
-                    temperature=25.0, 
-                    state=BatteryState.CHARGING
+                    level=50,
+                    voltage=4.0,
+                    current=500.0,
+                    temperature=25.0,
+                    state=BatteryState.CHARGING,
                 )
                 interval = power_manager._get_refresh_interval()
                 # Should return charging interval
                 assert interval.total_seconds() == 15 * 60  # 15 minutes
-        
+
         # Test QUIET_HOURS state when not charging
         with patch.object(power_manager, "get_current_state", return_value=PowerState.QUIET_HOURS):
             with patch.object(power_manager, "get_battery_status") as mock_battery:
                 mock_battery.return_value = BatteryStatus(
-                    level=70, 
-                    voltage=3.7, 
-                    current=-100.0, 
-                    temperature=25.0, 
-                    state=BatteryState.DISCHARGING
+                    level=70,
+                    voltage=3.7,
+                    current=-100.0,
+                    temperature=25.0,
+                    state=BatteryState.DISCHARGING,
                 )
                 interval = power_manager._get_refresh_interval()
                 # Should return wake up interval
                 assert interval.total_seconds() == 60 * 60  # 60 minutes
-        
+
         # Test with battery_aware_refresh disabled
         power_manager.config.display.battery_aware_refresh = False
         with patch.object(power_manager, "get_current_state", return_value=PowerState.CONSERVING):
             with patch.object(power_manager, "get_battery_status") as mock_battery:
                 mock_battery.return_value = BatteryStatus(
-                    level=15, 
-                    voltage=3.7, 
-                    current=-100.0, 
-                    temperature=25.0, 
-                    state=BatteryState.DISCHARGING
+                    level=15,
+                    voltage=3.7,
+                    current=-100.0,
+                    temperature=25.0,
+                    state=BatteryState.DISCHARGING,
                 )
                 interval = power_manager._get_refresh_interval()
                 # Should return normal interval regardless of battery state
                 assert interval.total_seconds() == 30 * 60  # 30 minutes
         # Reset for other tests
         power_manager.config.display.battery_aware_refresh = True
-    
+
     def test_should_update_weather_first_time(self, power_manager: PowerStateManager) -> None:
         """Test should_update_weather on first run."""
         # First time (no previous update) should always return True
@@ -998,20 +995,20 @@ class TestQuietHoursAndSleepTiming:
         power_manager.set_last_update_for_testing(now - timedelta(minutes=61))
         with patch.object(power_manager, "get_current_state", return_value=PowerState.CONSERVING):
             assert power_manager.should_update_weather()  # Enough time (61 min > 60 min)
-            
+
     def test_should_update_weather_critical_state(self, power_manager: PowerStateManager) -> None:
         """Test should_update_weather in critical battery state."""
         # Set last update time
         now = datetime.now()
-        
+
         # Test with just enough time for normal interval (31 minutes)
         power_manager.set_last_update_for_testing(now - timedelta(minutes=31))
-        
+
         # In critical state - interval should be quadrupled (30 min -> 120 min)
         with patch.object(power_manager, "get_current_state", return_value=PowerState.CRITICAL):
             # 31 minutes is not enough for quadrupled interval
             assert not power_manager.should_update_weather()  # Not enough time (31 min < 120 min)
-        
+
         # Test with enough time for critical interval
         power_manager.set_last_update_for_testing(now - timedelta(minutes=121))
         with patch.object(power_manager, "get_current_state", return_value=PowerState.CRITICAL):
@@ -1090,10 +1087,8 @@ class TestQuietHoursAndSleepTiming:
             patch.object(power_manager, "_time_until_quiet_change", return_value=7200.0),  # 2 hours
             # Mock _get_refresh_interval to return the configured value for conserving state
             patch.object(
-                power_manager, 
-                "_get_refresh_interval", 
-                return_value=timedelta(minutes=60)
-            )
+                power_manager, "_get_refresh_interval", return_value=timedelta(minutes=60)
+            ),
         ):
             # Calculate time until next refresh (in seconds)
             refresh_time = (
@@ -1488,7 +1483,7 @@ class TestSystemMetricsAndShutdown:
 
             # Should log error and return False
             assert result is False
-            
+
     def test_handle_low_charge_event(self, power_manager: PowerStateManager) -> None:
         """Test handling a direct PiJuice LOW_CHARGE event."""
         # Need to initialize _pijuice and set _initialized to True
@@ -1497,15 +1492,15 @@ class TestSystemMetricsAndShutdown:
             power_manager.get_battery_status = MagicMock()
             power_manager.schedule_wakeup = MagicMock()
             power_manager.shutdown_system = MagicMock()
-            
+
             # Call the handler method
             power_manager._handle_low_charge_event()
-            
+
             # Verify actions
             power_manager.get_battery_status.assert_called_once()
             power_manager.schedule_wakeup.assert_called_once_with(12 * 60)  # 12 hours in minutes
             power_manager.shutdown_system.assert_called_once()
-            
+
     def test_register_pijuice_event_listener(self, power_manager: PowerStateManager) -> None:
         """Test registering a PiJuice event listener."""
         # Need to initialize _pijuice and set _initialized to True
@@ -1517,10 +1512,10 @@ class TestSystemMetricsAndShutdown:
             power_manager.get_event_configuration = MagicMock(
                 return_value={"function": "SYSSHUTDOWN"}
             )
-            
+
             # Call the method
             power_manager._register_pijuice_event_listener()
-            
+
             # Verify the configuration was checked
             power_manager.get_event_configuration.assert_called_once()
 

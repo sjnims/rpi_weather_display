@@ -13,6 +13,25 @@ from enum import Enum, auto
 from pathlib import Path
 from typing import Any, TypedDict, cast
 
+from rpi_weather_display.constants import (
+    ABNORMAL_SLEEP_FACTOR,
+    BATTERY_CHARGING_FACTOR,
+    BATTERY_HISTORY_SIZE,
+    CONSERVING_MAX_FACTOR,
+    CONSERVING_MIN_FACTOR,
+    CRITICAL_SLEEP_FACTOR,
+    DEFAULT_DRAIN_RATE,
+    DF_PATH,
+    DRAIN_WEIGHT_NEW,
+    DRAIN_WEIGHT_PREV,
+    MAX_BATTERY_PERCENTAGE_SLEEP,
+    MAX_SLEEP_MINUTES,
+    MIN_SLEEP_MINUTES,
+    SHUTDOWN_PATH,
+    SUDO_PATH,
+    TOP_PATH,
+    TWELVE_HOURS_IN_MINUTES,
+)
 from rpi_weather_display.models.config import AppConfig
 from rpi_weather_display.models.system import BatteryState, BatteryStatus
 from rpi_weather_display.utils.battery_utils import (
@@ -23,12 +42,6 @@ from rpi_weather_display.utils.battery_utils import (
     should_conserve_power,
 )
 from rpi_weather_display.utils.time_utils import is_quiet_hours
-
-# Define absolute paths for executables to avoid partial path security issues
-SUDO_PATH = "/usr/bin/sudo"
-SHUTDOWN_PATH = "/sbin/shutdown"
-TOP_PATH = "/usr/bin/top"
-DF_PATH = "/bin/df"
 
 
 class PowerState(Enum):
@@ -149,87 +162,87 @@ class PiJuiceInterface:
                 enabled: Whether to enable wakeup
             """
             pass
-    
+
     class power:  # noqa: N801  # Name matches PiJuice API
         """PiJuice power interface."""
-        
+
         @staticmethod
         def SetSystemPowerSwitch(state: int) -> PiJuiceResponse:  # noqa: N802  # Name matches PiJuice API
             """Set system power switch state.
-            
+
             Args:
                 state: Power switch state (0=off, 1=on)
             """
             return {"error": "NO_ERROR", "data": {}}
-            
+
     class config:  # noqa: N801  # Name matches PiJuice API
         """PiJuice configuration interface."""
-        
+
         @staticmethod
         def SetSystemTaskParameters(  # noqa: N802
             task: str, param1: str, param2: int
         ) -> PiJuiceResponse:  # Name matches PiJuice API
             """Set system task parameters.
-            
+
             Args:
                 task: Task name (e.g., 'LOW_CHARGE')
                 param1: Action to perform (e.g., 'SYSTEM_HALT')
                 param2: Delay in seconds before action
             """
             return {"error": "NO_ERROR", "data": {}}
-            
+
         @staticmethod
         def GetSystemTaskParameters(  # noqa: N802
-            task: str
+            task: str,
         ) -> PiJuiceResponse:  # Name matches PiJuice API
             """Get system task parameters.
-            
+
             Args:
                 task: Task name to query
             """
             return {"error": "NO_ERROR", "data": {"function": "SYSTEM_HALT", "delay": 5}}
-            
+
         @staticmethod
         def SetButtonConfiguration(  # noqa: N802
             button: str, function: str, parameter: int | dict[str, str | int]
         ) -> PiJuiceResponse:  # Name matches PiJuice API
             """Set button configuration.
-            
+
             Args:
                 button: Button name (e.g., 'SW1')
                 function: Event type (e.g., 'SINGLE_PRESS')
                 parameter: Action delay in seconds or configuration dict
             """
             return {"error": "NO_ERROR", "data": {}}
-            
+
         @staticmethod
         def GetButtonConfiguration(  # noqa: N802
             button: str, function: str
         ) -> PiJuiceResponse:  # Name matches PiJuice API
             """Get button configuration.
-            
+
             Args:
                 button: Button name
                 function: Event type
             """
             return {"error": "NO_ERROR", "data": {"function": "SYSDOWN", "parameter": 180}}
-            
+
     class wakeupalarm:  # noqa: N801  # Name matches PiJuice API
         """PiJuice wakeup alarm interface."""
-        
+
         @staticmethod
         def SetWakeupEnabled(enabled: bool) -> PiJuiceResponse:  # noqa: N802  # Name matches PiJuice API
             """Enable or disable wakeup alarm.
-            
+
             Args:
                 enabled: Whether to enable wakeup
             """
             return {"error": "NO_ERROR", "data": {}}
-            
+
     def get_status(self) -> PiJuiceStatus:
         """Get PiJuice status (convenience method)."""
         return self.status.GetStatus()
-        
+
     def get_charge_level(self) -> int:
         """Get charge level (convenience method)."""
         response = self.status.GetChargeLevel()
@@ -259,7 +272,7 @@ class PowerStateManager:
     """
 
     # Maximum number of battery readings to keep in history
-    MAX_HISTORY_SIZE = 24  # 24 hours of hourly readings
+    MAX_HISTORY_SIZE = BATTERY_HISTORY_SIZE
 
     def __init__(self, config: AppConfig) -> None:
         """Initialize the power state manager.
@@ -278,7 +291,7 @@ class PowerStateManager:
         self._battery_history: deque[BatteryStatus] = deque(maxlen=self.MAX_HISTORY_SIZE)
 
         # Expected battery drain rate in % per hour (will be updated based on measurements)
-        self._expected_drain_rate: float = 1.0  # Conservative initial estimate
+        self._expected_drain_rate: float = DEFAULT_DRAIN_RATE  # Conservative initial estimate
 
         # Last refresh and update times (moved from Scheduler)
         self._last_refresh: datetime | None = None
@@ -303,11 +316,11 @@ class PowerStateManager:
             else:
                 self._initialized = True
                 self.logger.info("PiJuice initialized successfully")
-                
+
                 # Configure PiJuice events if enabled
                 if self.config.power.enable_pijuice_events:
                     self._configure_pijuice_events()
-                    
+
                     # Register direct event listener for critical battery events
                     # This provides a backup mechanism if state transitions aren't caught
                     self._register_pijuice_event_listener()
@@ -321,16 +334,16 @@ class PowerStateManager:
 
         # Initialize power state based on current battery status
         self._update_power_state()
-        
+
     def _configure_pijuice_events(self) -> None:
         """Configure PiJuice events from settings in configuration.
-        
+
         Sets up handlers for LOW_CHARGE and button press events based on config.
         """
         if not self._initialized or not self._pijuice:
             self.logger.warning("Cannot configure PiJuice events: PiJuice not initialized")
             return
-            
+
         try:
             # Configure LOW_CHARGE event
             self.logger.info(
@@ -338,16 +351,16 @@ class PowerStateManager:
                 f"and delay {self.config.power.low_charge_delay}s"
             )
             response = self._pijuice.config.SetSystemTaskParameters(
-                "LOW_CHARGE", 
+                "LOW_CHARGE",
                 self.config.power.low_charge_action,
-                self.config.power.low_charge_delay
+                self.config.power.low_charge_delay,
             )
-            
+
             if response["error"] != "NO_ERROR":
                 self.logger.error(f"Error configuring LOW_CHARGE event: {response['error']}")
             else:
                 self.logger.info("LOW_CHARGE event configured successfully")
-                
+
             # Configure button press events (SW1)
             self.logger.info(
                 f"Configuring SW1 button press with action "
@@ -355,62 +368,64 @@ class PowerStateManager:
                 f"and delay {self.config.power.button_press_delay}s"
             )
             response = self._pijuice.config.SetButtonConfiguration(
-                "SW1", 
+                "SW1",
                 "SINGLE_PRESS",
-                {"function": self.config.power.button_press_action,
-                 "parameter": self.config.power.button_press_delay}
+                {
+                    "function": self.config.power.button_press_action,
+                    "parameter": self.config.power.button_press_delay,
+                },
             )
-            
+
             if response["error"] != "NO_ERROR":
                 self.logger.error(f"Error configuring button press event: {response['error']}")
             else:
                 self.logger.info("Button press event configured successfully")
-                
+
         except Exception as e:
             self.logger.error(f"Error configuring PiJuice events: {e}")
-            
+
     def get_event_configuration(self, event_type: PiJuiceEvent) -> dict[str, Any]:
         """Get the current configuration for a PiJuice event.
-        
+
         Args:
             event_type: The event type to query
-            
+
         Returns:
             Dictionary with event configuration or empty dict if not available
         """
         if not self._initialized or not self._pijuice:
             return {}
-            
+
         try:
             if event_type == PiJuiceEvent.LOW_CHARGE:
                 response = self._pijuice.config.GetSystemTaskParameters("LOW_CHARGE")
                 if response["error"] == "NO_ERROR":
                     return response["data"]
-                    
+
             elif event_type == PiJuiceEvent.BUTTON_SW1_PRESS:
                 response = self._pijuice.config.GetButtonConfiguration("SW1", "SINGLE_PRESS")
                 if response["error"] == "NO_ERROR":
                     return response["data"]
-                    
+
             return {}
         except Exception as e:
             self.logger.error(f"Error getting event configuration: {e}")
             return {}
-            
+
     def _register_pijuice_event_listener(self) -> None:
         """Register a direct event listener for critical PiJuice events.
-        
+
         This provides a hardware-level failsafe for critical battery events
         that works independently of the software power state management.
         """
         if not self._initialized or not self._pijuice:
             return
-            
+
         try:
             # Skip direct event registration - not supported in current PiJuice API
             # We rely on the system task configuration set in _configure_pijuice_events instead
             self.logger.info("Using system task configuration for LOW_CHARGE events")
-            
+
             # Check current LOW_CHARGE configuration
             config = self.get_event_configuration(PiJuiceEvent.LOW_CHARGE)
             if config:
@@ -419,27 +434,27 @@ class PowerStateManager:
                 self.logger.warning("Could not retrieve LOW_CHARGE configuration")
         except Exception as e:
             self.logger.error(f"Error setting up PiJuice event listener: {e}")
-    
+
     def _handle_low_charge_event(self) -> None:
         """Handle PiJuice LOW_CHARGE hardware event.
-        
+
         This is called directly by the PiJuice when a LOW_CHARGE event occurs,
         providing a hardware-level failsafe for critical battery conditions.
         """
         self.logger.critical("PiJuice LOW_CHARGE hardware event triggered")
-        
+
         try:
             # Force update of battery status
             battery_status = self.get_battery_status()
-            
+
             self.logger.critical(
                 f"Emergency shutdown triggered by LOW_CHARGE event - "
                 f"Battery at {battery_status.level}%"
             )
-            
-            # Try to schedule a wake-up in 12 hours to check if battery has recovered
-            self.schedule_wakeup(12 * 60)  # 12 hours in minutes
-            
+
+            # Try to schedule a wake-up to check if battery has recovered
+            self.schedule_wakeup(TWELVE_HOURS_IN_MINUTES)
+
             # Immediately initiate system shutdown
             self.shutdown_system()
         except Exception as e:
@@ -463,8 +478,10 @@ class PowerStateManager:
             drain_rate = calculate_drain_rate(list(self._battery_history))
             if drain_rate is not None:
                 # Gradually adjust expected rate to observed rate
-                # 90% previous value, 10% new value for stability
-                self._expected_drain_rate = (self._expected_drain_rate * 0.9) + (drain_rate * 0.1)
+                # Weighted average of previous value and new value for stability
+                self._expected_drain_rate = (self._expected_drain_rate * DRAIN_WEIGHT_PREV) + (
+                    drain_rate * DRAIN_WEIGHT_NEW
+                )
 
         # Determine the new state based on various factors
         if is_charging(battery_status):
@@ -585,7 +602,8 @@ class PowerStateManager:
             time_remaining = None
             if state == BatteryState.DISCHARGING and amps != 0:
                 # Convert mAh to hours and multiply by 60 for minutes
-                time_remaining = int((level / 100.0 * 12000) / abs(amps) * 60)
+                battery_capacity = self.config.power.battery_capacity_mah
+                time_remaining = int((level / 100.0 * battery_capacity) / abs(amps) * 60)
 
             return BatteryStatus(
                 level=level,
@@ -643,57 +661,57 @@ class PowerStateManager:
 
         # Calculate time since last refresh
         time_since_refresh = datetime.now() - self._last_refresh
-        
+
         # Get the appropriate refresh interval based on battery status and power state
         min_refresh_interval = self._get_refresh_interval()
 
         return time_since_refresh >= min_refresh_interval
-        
+
     def _get_refresh_interval(self) -> timedelta:
         """Get the appropriate refresh interval based on battery status and power state.
-        
+
         Takes into account:
         - Current power state (NORMAL, CONSERVING, CRITICAL, CHARGING)
         - Battery level
         - Configuration settings
-        
+
         Returns:
             The appropriate refresh interval as timedelta
         """
         # Get current state and battery status
         current_state = self.get_current_state()
         battery_status = self.get_battery_status()
-        
+
         # Default refresh interval
         refresh_interval_minutes = self.config.display.refresh_interval_minutes
-        
+
         # If battery-aware refresh is disabled, just use the default interval
         if not self.config.display.battery_aware_refresh:
             return timedelta(minutes=refresh_interval_minutes)
-            
+
         # Adjust interval based on power state and battery status
         if current_state == PowerState.CHARGING or is_charging(battery_status):
             # Use charging interval if charging
             refresh_interval_minutes = self.config.display.refresh_interval_charging_minutes
             self.logger.info(f"Battery charging, interval: {refresh_interval_minutes} minutes")
-            
+
         elif current_state == PowerState.CRITICAL:
             # Use critical battery interval if battery is critical
             refresh_interval_minutes = self.config.display.refresh_interval_critical_battery_minutes
             self.logger.info(f"Battery critical, interval: {refresh_interval_minutes} minutes")
-            
+
         elif current_state == PowerState.CONSERVING:
             # Use low battery interval if in conserving mode
             refresh_interval_minutes = self.config.display.refresh_interval_low_battery_minutes
             self.logger.info(f"Battery low, interval: {refresh_interval_minutes} minutes")
-            
+
         # Handle quiet hours
         if current_state == PowerState.QUIET_HOURS:
             # In quiet hours, only refresh if charging, otherwise use wake_up_interval
             if not is_charging(battery_status):
                 refresh_interval_minutes = self.config.power.wake_up_interval_minutes
                 self.logger.info(f"Quiet hours, interval: {refresh_interval_minutes} minutes")
-                
+
         return timedelta(minutes=refresh_interval_minutes)
 
     def should_update_weather(self) -> bool:
@@ -714,7 +732,7 @@ class PowerStateManager:
 
         # Check if we should adjust the interval based on power state
         in_quiet_hours = current_state == PowerState.QUIET_HOURS
-        
+
         if current_state == PowerState.CRITICAL and not in_quiet_hours:
             min_update_interval *= 4  # Quadruple interval in critical state
             self.logger.info("Critical battery state, quadrupling update interval")
@@ -922,40 +940,40 @@ class PowerStateManager:
         except Exception as e:
             self.logger.error(f"Failed to schedule wakeup: {e}")
             return False
-            
+
     def _calculate_dynamic_wakeup_minutes(self, base_minutes: int) -> int:
         """Calculate dynamic wakeup time based on battery state.
-        
+
         This method adjusts the wakeup schedule based on:
         - Current battery level
         - Power state (NORMAL, CONSERVING, CRITICAL, CHARGING)
         - Expected battery life
         - Abnormal discharge detection
-        
+
         Args:
             base_minutes: Base minutes to schedule wakeup
-            
+
         Returns:
             Adjusted minutes for wakeup scheduling
         """
         # Get current battery status and power state
         battery_status = self.get_battery_status()
         current_state = self.get_current_state()
-        
+
         # Start with the base minutes
         adjusted_minutes = base_minutes
-        
+
         # If charging, we can use the base time (or even reduce it slightly)
         if current_state == PowerState.CHARGING:
             # When charging, we can be slightly more aggressive with wakeups
             # but still maintain a minimum to avoid too frequent wakeups
-            return int(max(adjusted_minutes * 0.8, 30))  # Min 30 minutes even when charging
-        
+            return int(max(adjusted_minutes * BATTERY_CHARGING_FACTOR, MIN_SLEEP_MINUTES))
+
         # For critical battery, extend the time significantly to preserve battery
         if current_state == PowerState.CRITICAL:
-            # Extend wakeup time by 8x for critical battery
-            return adjusted_minutes * 8
-            
+            # Extend wakeup time by factor for critical battery
+            return int(adjusted_minutes * CRITICAL_SLEEP_FACTOR)
+
         # For power conserving state, extend the time based on battery level
         if current_state == PowerState.CONSERVING:
             # Calculate factor based on battery level
@@ -964,49 +982,52 @@ class PowerStateManager:
             # At critical_battery_threshold (e.g., 10%), use 6x
             low_threshold = self.config.power.low_battery_threshold
             critical_threshold = self.config.power.critical_battery_threshold
-            
+
             # Calculate dynamic factor between 3x and 6x based on battery level
             if battery_status.level <= critical_threshold:
-                factor = 6.0  # Maximum extension for conserving state
+                factor = CONSERVING_MAX_FACTOR  # Maximum extension for conserving state
             else:
-                # Linear interpolation between 3x and 6x
+                # Linear interpolation between min and max factors
                 # As battery level decreases from low to critical threshold
                 battery_range = low_threshold - critical_threshold
                 if battery_range <= 0:  # Prevent division by zero
-                    factor = 4.5  # Use middle value if thresholds are misconfigured
+                    # Use middle value if thresholds are misconfigured
+                    factor = (CONSERVING_MIN_FACTOR + CONSERVING_MAX_FACTOR) / 2
                 else:
                     position = (battery_status.level - critical_threshold) / battery_range
-                    factor = 6.0 - (position * 3.0)  # Scale from 6.0 down to 3.0
-            
+                    # Scale from max factor down to min factor
+                    factor_range = CONSERVING_MAX_FACTOR - CONSERVING_MIN_FACTOR
+                    factor = CONSERVING_MAX_FACTOR - (position * factor_range)
+
             adjusted_minutes = adjusted_minutes * factor
-        
+
         # For quiet hours, use the configured wake_up_interval_minutes
         if current_state == PowerState.QUIET_HOURS:
             return self.config.power.wake_up_interval_minutes
-        
+
         # Check for abnormal discharge rate and adjust if necessary
         if self.is_discharge_rate_abnormal():
             self.logger.warning("Abnormal discharge rate detected, extending sleep time")
-            adjusted_minutes = adjusted_minutes * 1.5  # Additional 50% extension
-        
+            adjusted_minutes = adjusted_minutes * ABNORMAL_SLEEP_FACTOR
+
         # Get remaining battery life estimate in hours
         remaining_hours = self.get_expected_battery_life()
-        
+
         # If we have a remaining life estimate, ensure we don't sleep too long
         if remaining_hours is not None:
             # Calculate a reasonable maximum sleep time based on remaining battery life
-            # Never sleep more than 25% of remaining battery life
-            max_sleep_minutes = remaining_hours * 60 * 0.25
-            
-            # But also never less than 30 minutes to avoid too frequent wakeups
-            max_sleep_minutes = max(max_sleep_minutes, 30)
-            
+            # Never sleep more than a percentage of remaining battery life
+            max_sleep_minutes = remaining_hours * 60 * MAX_BATTERY_PERCENTAGE_SLEEP
+
+            # But also never less than minimum minutes to avoid too frequent wakeups
+            max_sleep_minutes = max(max_sleep_minutes, MIN_SLEEP_MINUTES)
+
             # Cap the adjusted minutes to this maximum
             adjusted_minutes = min(adjusted_minutes, max_sleep_minutes)
-        
-        # Always ensure a minimum of 30 minutes to avoid excessive wakeups
-        # and a maximum of 24 hours to ensure we check eventually
-        return max(min(int(adjusted_minutes), 24 * 60), 30)
+
+        # Always ensure a minimum and maximum sleep time
+        # to avoid excessive wakeups and ensure we check eventually
+        return max(min(int(adjusted_minutes), MAX_SLEEP_MINUTES), MIN_SLEEP_MINUTES)
 
     def get_system_metrics(self) -> dict[str, float]:
         """Get system metrics like CPU temperature and usage.

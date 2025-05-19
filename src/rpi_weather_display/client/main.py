@@ -12,6 +12,13 @@ from pathlib import Path
 import requests
 
 from rpi_weather_display.client.display import EPaperDisplay
+from rpi_weather_display.constants import (
+    CLIENT_CACHE_DIR_NAME,
+    DEFAULT_CONFIG_PATH,
+    SLEEP_BEFORE_SHUTDOWN,
+    TEN_MINUTES,
+    TWELVE_HOURS_IN_MINUTES,
+)
 from rpi_weather_display.models.config import AppConfig
 from rpi_weather_display.utils import PowerStateManager
 from rpi_weather_display.utils.battery_utils import is_charging
@@ -39,7 +46,7 @@ class WeatherDisplayClient:
         self.display = EPaperDisplay(self.config.display)
 
         # Image cache path
-        self.cache_dir = Path(tempfile.gettempdir()) / "rpi-weather-display"
+        self.cache_dir = Path(tempfile.gettempdir()) / CLIENT_CACHE_DIR_NAME
         self.cache_dir.mkdir(exist_ok=True)
         self.current_image_path = self.cache_dir / "current.png"
 
@@ -77,14 +84,14 @@ class WeatherDisplayClient:
                 self.display.display_text("CRITICAL BATTERY", "Shutting down to preserve battery")
 
                 # Give a brief pause to allow warning to be displayed
-                time.sleep(5)
+                time.sleep(SLEEP_BEFORE_SHUTDOWN)
 
                 # Halt the main loop
                 self._running = False
 
                 # Schedule a dynamic wakeup based on battery level
                 # Using 12 hours as base duration, but it will be adjusted dynamically
-                self.power_manager.schedule_wakeup(12 * 60, dynamic=True)  # 12 hours as base
+                self.power_manager.schedule_wakeup(TWELVE_HOURS_IN_MINUTES, dynamic=True)
 
                 # Initiate shutdown
                 self.shutdown()
@@ -228,7 +235,7 @@ class WeatherDisplayClient:
                 sleep_time = self.power_manager.calculate_sleep_time()
 
                 # If sleep time is long, consider deep sleep
-                if sleep_time > 10 * 60:  # More than 10 minutes
+                if sleep_time > TEN_MINUTES:  # More than 10 minutes
                     minutes = sleep_time // 60
                     if self._handle_sleep(minutes):
                         break  # Exit loop if we're doing deep sleep
@@ -259,7 +266,7 @@ class WeatherDisplayClient:
         # For battery conservation, only schedule wakeup and shutdown if:
         # 1. The sleep duration is significant (more than 10 minutes)
         # 2. We're not in debug mode
-        if minutes > 10 and not self.config.debug:
+        if minutes > TEN_MINUTES // 60 and not self.config.debug:
             self.logger.info(f"Preparing for deep sleep ({minutes} minutes)")
 
             # Schedule dynamic wakeup based on battery level
@@ -289,7 +296,7 @@ def main() -> None:
     parser.add_argument(
         "--config",
         type=Path,
-        default=Path("/etc/rpi-weather-display/config.yaml"),
+        default=Path(DEFAULT_CONFIG_PATH),
         help="Path to configuration file",
     )
     args = parser.parse_args()

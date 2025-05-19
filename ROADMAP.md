@@ -39,7 +39,7 @@ Priority is indicated as:
 ## Phase 2: Code Optimization (Target: v0.3.0)
 
 ### 2.1 Convention Improvements
-- [ ] 🔴 2.1.1 Create centralized constants module for default values [PLANNED]
+- [x] 🔴 2.1.1 Create centralized constants module for default values [COMPLETED 2025-05-19]
 - [ ] 🔴 2.1.2 Standardize path resolution across client and server [PLANNED]
 - [ ] 🟢 2.1.3 Implement consistent file system abstraction project-wide [PLANNED]
 
@@ -161,9 +161,9 @@ Priority is indicated as:
 | Phase | Not Started | In Progress | Completed | Total |
 |-------|------------|-------------|-----------|-------|
 | 1     | 0          | 0           | 14        | 14    |
-| 2     | 18         | 0           | 0         | 18    |
+| 2     | 17         | 0           | 1         | 18    |
 | 3     | 12         | 0           | 0         | 12    |
 | 4     | 12         | 0           | 0         | 12    |
 | 5     | 15         | 0           | 0         | 15    |
 | 6     | 9          | 0           | 0         | 9     |
-| Total | 66         | 0           | 14        | 80    |
+| Total | 65         | 0           | 15        | 80    |

@@ -11,6 +11,7 @@ from pathlib import Path
 
 import jinja2
 
+from rpi_weather_display.constants import HPA_TO_INHG, HPA_TO_MMHG, UVI_CACHE_FILENAME
 from rpi_weather_display.models.config import AppConfig
 from rpi_weather_display.models.system import BatteryStatus
 from rpi_weather_display.models.weather import (
@@ -755,7 +756,7 @@ class WeatherRenderer:
         Returns:
             Tuple of (max_uvi, max_uvi_timestamp)
         """
-        cache_file = Path("uvi_max_cache.json")
+        cache_file = Path(UVI_CACHE_FILENAME)
         today = now.date()
 
         # Initialize with current API data
@@ -833,10 +834,10 @@ class WeatherRenderer:
             return pressure_hpa
         elif target_units == "mmHg":
             # 1 hPa = 0.75006375541921 mmHg
-            return pressure_hpa * 0.75006
+            return pressure_hpa * HPA_TO_MMHG
         elif target_units == "inHg":
             # 1 hPa = 0.02953 inHg
-            return pressure_hpa * 0.02953
+            return pressure_hpa * HPA_TO_INHG
         else:
             # Default fallback to hPa
             return pressure_hpa
