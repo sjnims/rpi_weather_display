@@ -40,11 +40,11 @@ Priority is indicated as:
 
 ### 2.1 Convention Improvements
 - [ ] 🔴 2.1.1 Create centralized constants module for default values [PLANNED]
-- [ ] 🟠 2.1.2 Standardize path resolution across client and server [PLANNED]
+- [ ] 🔴 2.1.2 Standardize path resolution across client and server [PLANNED]
 - [ ] 🟢 2.1.3 Implement consistent file system abstraction project-wide [PLANNED]
 
 ### 2.2 Modern Python Features
-- [ ] 🟠 2.2.1 Replace generic `Any` types with more specific Union types [PLANNED]
+- [ ] 🔴 2.2.1 Replace generic `Any` types with more specific Union types [PLANNED]
 - [ ] 🟢 2.2.2 Implement structural pattern matching for state handling [PLANNED]
 - [ ] 🟠 2.2.3 Add exception chaining throughout error handling [PLANNED]
 
@@ -55,24 +55,29 @@ Priority is indicated as:
 
 ### 2.4 Memory Management
 - [ ] 🔴 2.4.1 Optimize image processing for memory efficiency [PLANNED]
-- [ ] 🟠 2.4.2 Implement memory-aware caching with size limits [PLANNED]
+- [ ] 🔴 2.4.2 Implement memory-aware caching with size limits [PLANNED]
 - [ ] 🟢 2.4.3 Add memory profiling and reporting [PLANNED]
 
-### 2.5 Code Refactoring (New)
+### 2.5 Code Refactoring
 - [ ] 🔴 2.5.1 Modularize large files (power_manager.py, renderer.py) [PLANNED]
-- [ ] 🟠 2.5.2 Create custom exception hierarchy for better error handling [PLANNED]
+- [ ] 🔴 2.5.2 Create custom exception hierarchy for better error handling [PLANNED]
 - [ ] 🟠 2.5.3 Standardize callback patterns across the codebase [PLANNED]
+
+### 2.6 Hardware Abstractions (New)
+- [ ] 🔴 2.6.1 Create hardware abstraction interfaces for display and power management [PLANNED]
+- [ ] 🔴 2.6.2 Optimize Playwright usage in renderer for lower memory footprint [PLANNED]
+- [ ] 🟠 2.6.3 Implement more robust error recovery mechanisms [PLANNED]
 
 ## Phase 3: Telemetry and Monitoring (Target: v0.4.0)
 
 ### 3.1 Power Consumption Tracking
 - [ ] 🔴 3.1.1 Add battery drain rate calculation [PLANNED]
-- [ ] 🟠 3.1.2 Create power consumption logging for different operations [PLANNED]
+- [ ] 🔴 3.1.2 Create power consumption logging for different operations [PLANNED]
 - [ ] 🟠 3.1.3 Implement event markers for power state transitions [PLANNED]
 
 ### 3.2 Performance Metrics
 - [ ] 🟠 3.2.1 Add timing measurements for critical operations [PLANNED]
-- [ ] 🟢 3.2.2 Implement CPU/memory usage tracking [PLANNED]
+- [ ] 🟠 3.2.2 Implement CPU/memory usage tracking [PLANNED]
 - [ ] 🟢 3.2.3 Create metrics dashboard for the server [PLANNED]
 
 ### 3.3 Logging Enhancements
@@ -82,7 +87,7 @@ Priority is indicated as:
 
 ### 3.4 Remote Diagnostics
 - [ ] 🟠 3.4.1 Create minimal telemetry data format for battery status [PLANNED]
-- [ ] 🟢 3.4.2 Implement periodic reporting to server during updates [PLANNED]
+- [ ] 🟠 3.4.2 Implement periodic reporting to server during updates [PLANNED]
 - [ ] 🟢 3.4.3 Add alert mechanism for abnormal power consumption [PLANNED]
 
 ## Phase 4: Adaptive Behavior (Target: v0.5.0)
@@ -94,13 +99,13 @@ Priority is indicated as:
 
 ### 4.2 Caching Strategy
 - [ ] 🔴 4.2.1 Implement TTL-based cache invalidation [PLANNED]
-- [ ] 🟠 4.2.2 Add differential data updates to minimize transfer size [PLANNED]
+- [ ] 🔴 4.2.2 Add differential data updates to minimize transfer size [PLANNED]
 - [ ] 🟢 4.2.3 Create hierarchical caching (memory, disk, server) [PLANNED]
 
 ### 4.3 CPU Management Integration
 - [ ] 🟠 4.3.1 Detect available CPU cores and adjust processing [PLANNED]
 - [ ] 🟠 4.3.2 Implement dynamic CPU frequency scaling requests for intensive operations [PLANNED]
-- [ ] 🟢 4.3.3 Add workload scheduling to minimize CPU wakeups [PLANNED]
+- [ ] 🟠 4.3.3 Add workload scheduling to minimize CPU wakeups [PLANNED]
 
 ### 4.4 Hardware Adaptation
 - [ ] 🟠 4.4.1 Create abstraction layer for different e-paper display types [PLANNED]
@@ -115,9 +120,9 @@ Priority is indicated as:
 - [ ] 🟠 5.1.3 Add regression testing for power optimizations [PLANNED]
 
 ### 5.2 Enhanced Test Coverage
-- [ ] 🟠 5.2.1 Add property-based tests with Hypothesis [PLANNED]
-- [ ] 🟠 5.2.2 Implement integration tests for power management features [PLANNED]
-- [ ] 🟢 5.2.3 Create mock hardware environment for testing [PLANNED]
+- [ ] 🔴 5.2.1 Add property-based tests with Hypothesis for critical components [PLANNED]
+- [ ] 🔴 5.2.2 Implement integration tests for power management features [PLANNED]
+- [ ] 🟠 5.2.3 Create mock hardware environment for testing [PLANNED]
 
 ### 5.3 Real-world Validation
 - [ ] 🔴 5.3.1 Design extended battery life tests (multi-week) [PLANNED]
@@ -129,12 +134,12 @@ Priority is indicated as:
 - [ ] 🟠 5.4.2 Update code documentation to reflect optimization patterns [PLANNED]
 - [ ] 🟠 5.4.3 Add battery life estimates based on usage patterns [PLANNED]
 
-### 5.5 Deployment Improvements (New)
+### 5.5 Deployment Improvements
 - [ ] 🔴 5.5.1 Implement automatic update mechanism for client [PLANNED]
 - [ ] 🟠 5.5.2 Create comprehensive CI/CD pipeline for deployment [PLANNED]
-- [ ] 🟢 5.5.3 Add rollback capability for failed updates [PLANNED]
+- [ ] 🟠 5.5.3 Add rollback capability for failed updates [PLANNED]
 
-## Phase 6: Enhanced User Experience (New)
+## Phase 6: Enhanced User Experience
 
 ### 6.1 Template Optimization
 - [ ] 🟠 6.1.1 Refactor templates to reduce duplication [PLANNED]
@@ -156,9 +161,9 @@ Priority is indicated as:
 | Phase | Not Started | In Progress | Completed | Total |
 |-------|------------|-------------|-----------|-------|
 | 1     | 0          | 0           | 14        | 14    |
-| 2     | 15         | 0           | 0         | 15    |
+| 2     | 18         | 0           | 0         | 18    |
 | 3     | 12         | 0           | 0         | 12    |
 | 4     | 12         | 0           | 0         | 12    |
 | 5     | 15         | 0           | 0         | 15    |
 | 6     | 9          | 0           | 0         | 9     |
-| Total | 63         | 0           | 14        | 77    |
+| Total | 66         | 0           | 14        | 80    |
