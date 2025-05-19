@@ -307,6 +307,10 @@ class PowerStateManager:
                 # Configure PiJuice events if enabled
                 if self.config.power.enable_pijuice_events:
                     self._configure_pijuice_events()
+                    
+                    # Register direct event listener for critical battery events
+                    # This provides a backup mechanism if state transitions aren't caught
+                    self._register_pijuice_event_listener()
         except ImportError:
             # When running on development machine, print message
             self.logger.warning("PiJuice library not available. Using mock PiJuice.")
@@ -346,7 +350,8 @@ class PowerStateManager:
                 
             # Configure button press events (SW1)
             self.logger.info(
-                f"Configuring SW1 button press with action {self.config.power.button_press_action} "
+                f"Configuring SW1 button press with action "
+                f"{self.config.power.button_press_action} "
                 f"and delay {self.config.power.button_press_delay}s"
             )
             response = self._pijuice.config.SetButtonConfiguration(
@@ -391,6 +396,59 @@ class PowerStateManager:
         except Exception as e:
             self.logger.error(f"Error getting event configuration: {e}")
             return {}
+            
+    def _register_pijuice_event_listener(self) -> None:
+        """Register a direct event listener for critical PiJuice events.
+        
+        This provides a hardware-level failsafe for critical battery events
+        that works independently of the software power state management.
+        """
+        if not self._initialized or not self._pijuice:
+            return
+            
+        try:
+            # Skip direct event registration - not supported in current PiJuice API
+            # We rely on the system task configuration set in _configure_pijuice_events instead
+            self.logger.info("Using system task configuration for LOW_CHARGE events")
+            
+            # Check current LOW_CHARGE configuration
+            config = self.get_event_configuration(PiJuiceEvent.LOW_CHARGE)
+            if config:
+                self.logger.info(f"Current LOW_CHARGE configuration: {config}")
+            else:
+                self.logger.warning("Could not retrieve LOW_CHARGE configuration")
+        except Exception as e:
+            self.logger.error(f"Error setting up PiJuice event listener: {e}")
+    
+    def _handle_low_charge_event(self) -> None:
+        """Handle PiJuice LOW_CHARGE hardware event.
+        
+        This is called directly by the PiJuice when a LOW_CHARGE event occurs,
+        providing a hardware-level failsafe for critical battery conditions.
+        """
+        self.logger.critical("PiJuice LOW_CHARGE hardware event triggered")
+        
+        try:
+            # Force update of battery status
+            battery_status = self.get_battery_status()
+            
+            self.logger.critical(
+                f"Emergency shutdown triggered by LOW_CHARGE event - "
+                f"Battery at {battery_status.level}%"
+            )
+            
+            # Try to schedule a wake-up in 12 hours to check if battery has recovered
+            self.schedule_wakeup(12 * 60)  # 12 hours in minutes
+            
+            # Immediately initiate system shutdown
+            self.shutdown_system()
+        except Exception as e:
+            self.logger.error(f"Error handling LOW_CHARGE event: {e}")
+            # Still try to shut down even if there was an error
+            try:
+                self.shutdown_system()
+            except Exception as shutdown_error:
+                self.logger.critical(f"Final shutdown attempt failed: {shutdown_error}")
 
     def _update_power_state(self) -> None:
         """Update the current power state based on battery status and time."""

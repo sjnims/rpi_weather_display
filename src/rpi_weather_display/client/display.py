@@ -222,6 +222,59 @@ class EPaperDisplay:
                 # If sleep not available, we'll just leave it as is
                 pass
 
+    def display_text(self, title: str, message: str) -> None:
+        """Display a text message on the e-paper display.
+        
+        Creates a simple text image with the given title and message
+        for displaying alerts or status messages.
+        
+        Args:
+            title: The title/heading text to display
+            message: The main message text to display
+        """
+        try:
+            from PIL import Image, ImageDraw, ImageFont
+            
+            # Create a blank white image
+            image = Image.new("L", (self.config.width, self.config.height), 255)
+            draw = ImageDraw.Draw(image)
+            
+            # Determine font sizes based on display size
+            title_font_size = max(36, min(48, self.config.width // 20))
+            message_font_size = max(24, min(36, self.config.width // 30))
+            
+            # Try to load a font, fall back to default if not available
+            try:
+                title_font = ImageFont.truetype("DejaVuSans-Bold.ttf", title_font_size)
+                message_font = ImageFont.truetype("DejaVuSans.ttf", message_font_size)
+            except OSError:
+                # Fall back to default font
+                title_font = ImageFont.load_default()
+                message_font = ImageFont.load_default()
+            
+            # Calculate positions
+            title_bbox = draw.textbbox((0, 0), title, font=title_font)
+            title_width = title_bbox[2] - title_bbox[0]
+            title_x = (self.config.width - title_width) // 2
+            title_y = self.config.height // 3
+            
+            message_bbox = draw.textbbox((0, 0), message, font=message_font)
+            message_width = message_bbox[2] - message_bbox[0]
+            message_x = (self.config.width - message_width) // 2
+            message_y = self.config.height // 2
+            
+            # Draw the text
+            draw.text((title_x, title_y), title, font=title_font, fill=0)
+            draw.text((message_x, message_y), message, font=message_font, fill=0)
+            
+            # Display the image
+            self.display_pil_image(image)
+            
+        except Exception as e:
+            print(f"Error displaying text: {e}")
+            # If we can't create a proper image, at least log the message
+            print(f"Message: {title} - {message}")
+
     def close(self) -> None:
         """Close and clean up the display."""
         self.sleep()

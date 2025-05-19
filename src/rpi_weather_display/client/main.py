@@ -15,6 +15,7 @@ from rpi_weather_display.client.display import EPaperDisplay
 from rpi_weather_display.models.config import AppConfig
 from rpi_weather_display.utils import PowerStateManager
 from rpi_weather_display.utils.logging import setup_logging
+from rpi_weather_display.utils.power_manager import PowerState
 
 
 class WeatherDisplayClient:
@@ -50,11 +51,50 @@ class WeatherDisplayClient:
 
         # Initialize power manager
         self.power_manager.initialize()
+        
+        # Register power state change callback for critical battery events
+        self.power_manager.register_state_change_callback(self._handle_power_state_change)
 
         # Initialize display
         self.display.initialize()
 
         self.logger.info("Hardware initialization complete")
+        
+    def _handle_power_state_change(self, old_state: PowerState, new_state: PowerState) -> None:
+        """Handle power state changes, particularly for critical events.
+        
+        Args:
+            old_state: Previous power state
+            new_state: New power state
+        """
+        # If transitioning to CRITICAL state, initiate safe shutdown
+        if new_state == PowerState.CRITICAL:
+            self.logger.warning("CRITICAL BATTERY STATE DETECTED - Initiating safe shutdown")
+            
+            try:
+                # Display a warning message if possible
+                self.display.display_text("CRITICAL BATTERY", "Shutting down to preserve battery")
+                
+                # Give a brief pause to allow warning to be displayed
+                time.sleep(5)
+                
+                # Halt the main loop
+                self._running = False
+                
+                # Schedule a wakeup when battery might be higher (12 hours)
+                self.power_manager.schedule_wakeup(12 * 60)  # 12 hours in minutes
+                
+                # Initiate shutdown
+                self.shutdown()
+                self.power_manager.shutdown_system()
+                
+            except Exception as e:
+                self.logger.error(f"Error during critical shutdown: {e}")
+                # Still try to shut down even if there was an error
+                try:
+                    self.power_manager.shutdown_system()
+                except Exception as shutdown_error:
+                    self.logger.error(f"Final shutdown attempt failed: {shutdown_error}")
 
     def update_weather(self) -> bool:
         """Update weather data from server.

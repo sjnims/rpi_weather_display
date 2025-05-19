@@ -164,6 +164,14 @@ class TestWeatherDisplayClient:
             assert args[0] == "http://localhost:8000/render"
             assert "battery" in kwargs["json"]
             assert "metrics" in kwargs["json"]
+            
+            # Verify the correct battery information is in the payload
+            battery_data = kwargs["json"]["battery"]
+            assert "level" in battery_data
+            assert "state" in battery_data
+            assert "voltage" in battery_data
+            assert "current" in battery_data
+            assert "temperature" in battery_data
 
             # Verify image was saved
             assert client.current_image_path.exists()
@@ -303,15 +311,19 @@ class TestWeatherDisplayClient:
             patch.object(client, "initialize") as mock_initialize,
             patch.object(client, "update_weather") as mock_update,
             patch.object(client, "refresh_display") as mock_refresh,
+            # We need to create _running since we're mocking it and it needs to be True initially
             patch.object(client, "_running", True, create=True),
-            # Set _running to False after first loop iteration
-            patch.object(client.power_manager, "should_update_weather", side_effect=[True, False]),
-            patch.object(client.power_manager, "should_refresh_display", return_value=True),
-            patch.object(client.power_manager, "calculate_sleep_time", return_value=5),
-            patch("time.sleep"),
-            # Exit after one iteration
-            patch.object(client, "_handle_sleep", return_value=False),
+            # Set _running to False after first loop iteration with a side effect
+            patch.object(client, "power_manager") as mock_power_manager,
+            # After one iteration, set _running to False
+            patch("time.sleep", side_effect=lambda x: setattr(client, "_running", False)),
         ):
+            # Configure the power_manager mocks with specific behaviors
+            mock_power_manager.should_update_weather.return_value = True
+            mock_power_manager.should_refresh_display.return_value = True
+            mock_power_manager.calculate_sleep_time.return_value = 5  # Short sleep time
+            
+            # Execute the run method
             client.run()
 
             # Verify initialization
@@ -322,9 +334,30 @@ class TestWeatherDisplayClient:
             mock_refresh.assert_called()
 
             # Verify power manager methods were called
-            client.power_manager.should_update_weather.assert_called()
-            client.power_manager.should_refresh_display.assert_called()
-            client.power_manager.calculate_sleep_time.assert_called()
+            mock_power_manager.should_update_weather.assert_called()
+            mock_power_manager.should_refresh_display.assert_called()
+            mock_power_manager.calculate_sleep_time.assert_called()
+            
+    def test_handle_sleep_deep_sleep_scenario(self, client: WeatherDisplayClient) -> None:
+        """Test the handle_sleep method's deep sleep functionality directly."""
+        # Set debug mode to False so deep sleep is allowed
+        client.config.debug = False
+        
+        # Reset all mocks to make sure we have a clean state
+        client.power_manager.schedule_wakeup.reset_mock()
+        client.power_manager.shutdown_system.reset_mock()
+        client.display.sleep.reset_mock()
+        
+        # Call _handle_sleep directly with a long duration
+        result = client._handle_sleep(30)  # 30 minutes
+        
+        # Verify the result indicates deep sleep
+        assert result is True
+        
+        # Verify the correct methods were called for deep sleep
+        client.power_manager.schedule_wakeup.assert_called_once_with(30)
+        client.display.sleep.assert_called_once()
+        client.power_manager.shutdown_system.assert_called_once()
 
     def test_run_keyboard_interrupt(self, client: WeatherDisplayClient) -> None:
         """Test run method with keyboard interrupt."""
@@ -420,6 +453,106 @@ class TestWeatherDisplayClient:
 
         # Verify display is closed
         client.display.close.assert_called_once()
+        
+    def test_handle_power_state_change_critical(self, client: WeatherDisplayClient) -> None:
+        """Test handling critical power state change."""
+        # Import PowerState from power_manager module
+        from rpi_weather_display.utils.power_manager import PowerState
+        
+        # Mock display_text method, which might not be in default mock
+        client.display.display_text = MagicMock()
+        
+        # Call the handler with NORMAL -> CRITICAL transition
+        with patch("time.sleep") as mock_sleep:
+            client._handle_power_state_change(PowerState.NORMAL, PowerState.CRITICAL)
+            
+            # Verify the actions taken
+            client.display.display_text.assert_called_once_with(
+                "CRITICAL BATTERY", "Shutting down to preserve battery"
+            )
+            mock_sleep.assert_called_once_with(5)
+            client.power_manager.schedule_wakeup.assert_called_once_with(12 * 60)
+            client.power_manager.shutdown_system.assert_called_once()
+            
+    def test_handle_power_state_change_non_critical(self, client: WeatherDisplayClient) -> None:
+        """Test handling non-critical power state changes."""
+        # Import PowerState from power_manager module
+        from rpi_weather_display.utils.power_manager import PowerState
+        
+        # Mock methods
+        client.display.display_text = MagicMock()
+        client.power_manager.schedule_wakeup = MagicMock()
+        client.power_manager.shutdown_system = MagicMock()
+        
+        # Test various non-critical state transitions
+        transitions = [
+            (PowerState.NORMAL, PowerState.CONSERVING),
+            (PowerState.CONSERVING, PowerState.NORMAL),
+            (PowerState.NORMAL, PowerState.QUIET_HOURS),
+            (PowerState.CONSERVING, PowerState.CHARGING),
+        ]
+        
+        for old_state, new_state in transitions:
+            # Reset mocks
+            client.display.display_text.reset_mock()
+            client.power_manager.schedule_wakeup.reset_mock()
+            client.power_manager.shutdown_system.reset_mock()
+            
+            # Call the handler with non-critical transition
+            client._handle_power_state_change(old_state, new_state)
+            
+            # Verify no actions were taken
+            client.display.display_text.assert_not_called()
+            client.power_manager.schedule_wakeup.assert_not_called()
+            client.power_manager.shutdown_system.assert_not_called()
+    
+    def test_critical_state_exception_handling(self, client: WeatherDisplayClient) -> None:
+        """Test critical state exception handling in power state callback."""
+        from rpi_weather_display.utils.power_manager import PowerState
+        
+        # Create a clean mock setup to isolate error path
+        with patch("time.sleep"):
+            # Using the existing client from the fixture
+            # Reset mocks to ensure clean state
+            client.logger = MagicMock()
+            client.display = MagicMock()
+            client.display.display_text.side_effect = Exception("Display error")
+            client.power_manager.schedule_wakeup = MagicMock()
+            client.power_manager.shutdown_system = MagicMock()
+            client.shutdown = MagicMock()
+            
+            # Manually set _running to ensure it's defined
+            client._running = True
+            
+            # Call the handler method directly
+            client._handle_power_state_change(PowerState.NORMAL, PowerState.CRITICAL)
+            
+            # Verify error is logged
+            client.logger.error.assert_called_with(
+                f"Error during critical shutdown: {client.display.display_text.side_effect}"
+            )
+            
+    def test_handle_power_state_change_critical_shutdown_exception(
+        self, client: WeatherDisplayClient
+    ) -> None:
+        """Test handling shutdown exceptions during critical power state change."""
+        # Import PowerState from power_manager module
+        from rpi_weather_display.utils.power_manager import PowerState
+        
+        # Mock methods
+        client.display.display_text = MagicMock()
+        client.shutdown = MagicMock()
+        client.power_manager.schedule_wakeup = MagicMock()
+        client.power_manager.shutdown_system = MagicMock(
+            side_effect=[Exception("First shutdown error"), None]
+        )
+        
+        # Call the handler
+        with patch("time.sleep"):
+            client._handle_power_state_change(PowerState.NORMAL, PowerState.CRITICAL)
+            
+            # Should call shutdown_system twice: once in normal flow, once in error handler
+            assert client.power_manager.shutdown_system.call_count == 2
 
     def test_main_path_for_early_return(self) -> None:
         """Test the early return path in the main function when config file doesn't exist."""

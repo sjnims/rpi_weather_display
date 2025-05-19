@@ -236,6 +236,19 @@ class TestEPaperDisplay:
         # Verify display is cleared
         assert self.display._display.clear.call_count == 1
         assert self.display._last_image is None
+        
+    def test_clear_not_initialized(self) -> None:
+        """Test clear method when display is not initialized."""
+        # Mock display as not initialized
+        self.display._initialized = False
+        self.display._display = None
+        self.display._last_image = MagicMock()
+        
+        # Call clear - should not raise exception
+        self.display.clear()
+        
+        # Last image should not be cleared since method returned early
+        assert self.display._last_image is not None
 
     def test_display_pil_image_full_refresh(self) -> None:
         """Test display_pil_image with full refresh."""
@@ -753,6 +766,95 @@ class TestEPaperDisplay:
 
             # Verify the result
             assert result == (35, 5, 65, 35)
+            
+    def test_display_text_success(self) -> None:
+        """Test display_text method successfully creates and displays text."""
+        # Create a display instance and initialize it
+        display = EPaperDisplay(self.config)
+        display._initialized = True
+        display._display = MagicMock()
+        
+        # Mock the PIL imports and Image creation
+        with (
+            patch("PIL.Image.new", return_value=MagicMock()) as mock_image_new,
+            patch("PIL.ImageDraw.Draw", return_value=MagicMock()) as mock_draw,
+            patch("PIL.ImageFont.truetype", return_value=MagicMock()) as mock_font,
+            patch.object(display, "display_pil_image") as mock_display_pil,
+        ):
+            # Set up the mock draw object's textbbox method
+            mock_draw_instance = mock_draw.return_value
+            mock_draw_instance.textbbox.return_value = (0, 0, 100, 50)  # left, top, right, bottom
+            
+            # Call the display_text method
+            display.display_text("Critical Battery", "System will shutdown")
+            
+            # Verify image was created with correct dimensions
+            mock_image_new.assert_called_once_with(
+                "L", (display.config.width, display.config.height), 255
+            )
+            
+            # Verify fonts were loaded
+            assert mock_font.call_count == 2
+            
+            # Verify text was drawn
+            assert mock_draw_instance.text.call_count == 2
+            
+            # Verify the image was displayed
+            mock_display_pil.assert_called_once()
+            
+    def test_display_text_font_error(self) -> None:
+        """Test display_text handles font loading errors."""
+        # Create a display instance
+        display = EPaperDisplay(self.config)
+        display._initialized = True
+        display._display = MagicMock()
+        
+        # Mock PIL imports with font loading error
+        with (
+            patch("PIL.Image.new", return_value=MagicMock()) as mock_image_new,
+            patch("PIL.ImageDraw.Draw", return_value=MagicMock()) as mock_draw,
+            patch(
+                "PIL.ImageFont.truetype", 
+                side_effect=OSError("Font not found")
+            ) as mock_font_fail,
+            patch("PIL.ImageFont.load_default", return_value=MagicMock()) as mock_font_default,
+            patch.object(display, "display_pil_image") as mock_display_pil,
+        ):
+            # Set up mock draw object
+            mock_draw_instance = mock_draw.return_value
+            mock_draw_instance.textbbox.return_value = (0, 0, 100, 50)
+            
+            # Call display_text method
+            display.display_text("Test Title", "Test Message")
+            
+            # Verify fallback to default font
+            assert mock_font_fail.call_count > 0
+            assert mock_font_default.call_count > 0
+            
+            # Verify image was still created and displayed
+            mock_image_new.assert_called_once()
+            mock_display_pil.assert_called_once()
+            
+    def test_display_text_exception(self) -> None:
+        """Test display_text handles general exceptions."""
+        # Create a display instance
+        display = EPaperDisplay(self.config)
+        
+        # Mock PIL import to raise exception
+        with (
+            patch("PIL.Image.new", side_effect=Exception("Failed to create image")),
+            patch("builtins.print") as mock_print,
+        ):
+            # Call display_text
+            display.display_text("Error Title", "Error Message")
+            
+            # Verify error was printed
+            assert mock_print.call_count >= 2
+            # First call should contain the error message
+            assert "Error displaying text" in mock_print.call_args_list[0][0][0] 
+            # Second call should contain the message content as fallback
+            assert "Error Title" in mock_print.call_args_list[1][0][0]
+            assert "Error Message" in mock_print.call_args_list[1][0][0]
 
     def test_display_pil_image_with_resampling(self) -> None:
         """Test display_pil_image with explicit resampling filter."""

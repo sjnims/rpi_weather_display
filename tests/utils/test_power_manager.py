@@ -1354,6 +1354,41 @@ class TestSystemMetricsAndShutdown:
 
             # Should log error and return False
             assert result is False
+            
+    def test_handle_low_charge_event(self, power_manager: PowerStateManager) -> None:
+        """Test handling a direct PiJuice LOW_CHARGE event."""
+        # Need to initialize _pijuice and set _initialized to True
+        with patch.object(power_manager, "_initialized", True):
+            # Mock the relevant methods
+            power_manager.get_battery_status = MagicMock()
+            power_manager.schedule_wakeup = MagicMock()
+            power_manager.shutdown_system = MagicMock()
+            
+            # Call the handler method
+            power_manager._handle_low_charge_event()
+            
+            # Verify actions
+            power_manager.get_battery_status.assert_called_once()
+            power_manager.schedule_wakeup.assert_called_once_with(12 * 60)  # 12 hours in minutes
+            power_manager.shutdown_system.assert_called_once()
+            
+    def test_register_pijuice_event_listener(self, power_manager: PowerStateManager) -> None:
+        """Test registering a PiJuice event listener."""
+        # Need to initialize _pijuice and set _initialized to True
+        with (
+            patch.object(power_manager, "_initialized", True),
+            patch.object(power_manager, "_pijuice", MagicMock()),
+        ):
+            # Set up an event configuration
+            power_manager.get_event_configuration = MagicMock(
+                return_value={"function": "SYSSHUTDOWN"}
+            )
+            
+            # Call the method
+            power_manager._register_pijuice_event_listener()
+            
+            # Verify the configuration was checked
+            power_manager.get_event_configuration.assert_called_once()
 
 
 class TestBatteryCoverageExtensions:
