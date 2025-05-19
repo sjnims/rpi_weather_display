@@ -14,6 +14,7 @@ import requests
 from rpi_weather_display.client.display import EPaperDisplay
 from rpi_weather_display.models.config import AppConfig
 from rpi_weather_display.utils import PowerStateManager
+from rpi_weather_display.utils.battery_utils import is_charging
 from rpi_weather_display.utils.logging import setup_logging
 from rpi_weather_display.utils.power_manager import PowerState
 
@@ -51,7 +52,7 @@ class WeatherDisplayClient:
 
         # Initialize power manager
         self.power_manager.initialize()
-        
+
         # Register power state change callback for critical battery events
         self.power_manager.register_state_change_callback(self._handle_power_state_change)
 
@@ -59,10 +60,10 @@ class WeatherDisplayClient:
         self.display.initialize()
 
         self.logger.info("Hardware initialization complete")
-        
+
     def _handle_power_state_change(self, old_state: PowerState, new_state: PowerState) -> None:
         """Handle power state changes, particularly for critical events.
-        
+
         Args:
             old_state: Previous power state
             new_state: New power state
@@ -70,25 +71,25 @@ class WeatherDisplayClient:
         # If transitioning to CRITICAL state, initiate safe shutdown
         if new_state == PowerState.CRITICAL:
             self.logger.warning("CRITICAL BATTERY STATE DETECTED - Initiating safe shutdown")
-            
+
             try:
                 # Display a warning message if possible
                 self.display.display_text("CRITICAL BATTERY", "Shutting down to preserve battery")
-                
+
                 # Give a brief pause to allow warning to be displayed
                 time.sleep(5)
-                
+
                 # Halt the main loop
                 self._running = False
-                
+
                 # Schedule a dynamic wakeup based on battery level
                 # Using 12 hours as base duration, but it will be adjusted dynamically
                 self.power_manager.schedule_wakeup(12 * 60, dynamic=True)  # 12 hours as base
-                
+
                 # Initiate shutdown
                 self.shutdown()
                 self.power_manager.shutdown_system()
-                
+
             except Exception as e:
                 self.logger.error(f"Error during critical shutdown: {e}")
                 # Still try to shut down even if there was an error
@@ -162,7 +163,7 @@ class WeatherDisplayClient:
             # Update the battery status in the display for threshold adjustment
             battery_status = self.power_manager.get_battery_status()
             self.display.update_battery_status(battery_status)
-            
+
             # Check if we have a cached image
             if self.current_image_path.exists():
                 # Display the image
@@ -186,6 +187,7 @@ class WeatherDisplayClient:
         """Run the client main loop."""
         self.logger.info("Starting Weather Display Client")
         self._running = True
+        display_sleeping = False
 
         try:
             # Initialize hardware
@@ -199,12 +201,27 @@ class WeatherDisplayClient:
 
             # Main loop using PowerStateManager for scheduling
             while self._running:
+                # Check current power state for quiet hours
+                current_state = self.power_manager.get_current_state()
+                battery_status = self.power_manager.get_battery_status()
+                is_in_quiet_hours = current_state == PowerState.QUIET_HOURS
+
+                # Handle display sleep during quiet hours
+                if is_in_quiet_hours and not is_charging(battery_status) and not display_sleeping:
+                    self.logger.info("Quiet hours active and not charging - display sleeping")
+                    self.display.sleep()
+                    display_sleeping = True
+                elif display_sleeping and (not is_in_quiet_hours or is_charging(battery_status)):
+                    self.logger.info("Quiet hours ended or charging - waking display")
+                    self.refresh_display()
+                    display_sleeping = False
+
                 # Check if we should update weather
                 if self.power_manager.should_update_weather():
                     self.update_weather()
 
-                # Check if we should refresh display
-                if self.power_manager.should_refresh_display():
+                # Check if we should refresh display (but skip if display is sleeping)
+                if self.power_manager.should_refresh_display() and not display_sleeping:
                     self.refresh_display()
 
                 # Calculate sleep time

@@ -164,7 +164,7 @@ class TestWeatherDisplayClient:
             assert args[0] == "http://localhost:8000/render"
             assert "battery" in kwargs["json"]
             assert "metrics" in kwargs["json"]
-            
+
             # Verify the correct battery information is in the payload
             battery_data = kwargs["json"]["battery"]
             assert "level" in battery_data
@@ -322,7 +322,7 @@ class TestWeatherDisplayClient:
             mock_power_manager.should_update_weather.return_value = True
             mock_power_manager.should_refresh_display.return_value = True
             mock_power_manager.calculate_sleep_time.return_value = 5  # Short sleep time
-            
+
             # Execute the run method
             client.run()
 
@@ -337,23 +337,103 @@ class TestWeatherDisplayClient:
             mock_power_manager.should_update_weather.assert_called()
             mock_power_manager.should_refresh_display.assert_called()
             mock_power_manager.calculate_sleep_time.assert_called()
-            
+
+    def test_quiet_hours_display_sleep_mode(self, client: WeatherDisplayClient) -> None:
+        """Test display sleep during quiet hours."""
+        # Import PowerState
+        from rpi_weather_display.models.system import BatteryState, BatteryStatus
+        from rpi_weather_display.utils.power_manager import PowerState
+
+        # Mock methods
+        with (
+            patch.object(client, "initialize"),
+            patch.object(client, "update_weather"),
+            patch.object(client, "refresh_display"),
+            # We need to create _running since we're mocking it
+            patch.object(client, "_running", True, create=True),
+            patch("time.sleep", side_effect=lambda x: setattr(client, "_running", False)),
+        ):
+            # First test case: Quiet hours and not charging - should put display to sleep
+            # Configure the power manager
+            client.power_manager.get_current_state = MagicMock(return_value=PowerState.QUIET_HOURS)
+            client.power_manager.get_battery_status = MagicMock(
+                return_value=BatteryStatus(
+                    level=50,
+                    voltage=3.7,
+                    current=100.0,
+                    temperature=25.0,
+                    state=BatteryState.DISCHARGING,
+                    time_remaining=1200,
+                )
+            )
+
+            # Reset the display sleep method mock
+            client.display.sleep.reset_mock()
+
+            # Execute the run method (will exit after one iteration due to our mock)
+            client.run()
+
+            # The display should be put to sleep when in quiet hours and not charging
+            client.display.sleep.assert_called_once()
+
+            # Reset the mocks for second test case
+            client._running = True
+            client.display.sleep.reset_mock()
+            client.refresh_display.reset_mock()
+
+            # Second test case: Quiet hours and charging - should NOT put display to sleep
+            client.power_manager.get_current_state = MagicMock(return_value=PowerState.QUIET_HOURS)
+            client.power_manager.get_battery_status = MagicMock(
+                return_value=BatteryStatus(
+                    level=50,
+                    voltage=3.7,
+                    current=100.0,
+                    temperature=25.0,
+                    state=BatteryState.CHARGING,
+                    time_remaining=None,
+                )
+            )
+
+            # Execute the run method again
+            client.run()
+
+            # The display should NOT be put to sleep when in quiet hours and charging
+            client.display.sleep.assert_not_called()
+
+            # Reset the mocks for third test case
+            client._running = True
+            client.display.sleep.reset_mock()
+            client.refresh_display.reset_mock()
+
+            # Third test case: Display is already asleep, but quiet hours end
+            # Set display_sleeping to True via direct attribute (mimicking earlier state)
+            client.display_sleeping = True
+
+            # Now we're not in quiet hours
+            client.power_manager.get_current_state = MagicMock(return_value=PowerState.NORMAL)
+
+            # Execute the run method again
+            client.run()
+
+            # The display should be refreshed to wake it up
+            client.refresh_display.assert_called()
+
     def test_handle_sleep_deep_sleep_scenario(self, client: WeatherDisplayClient) -> None:
         """Test the handle_sleep method's deep sleep functionality directly."""
         # Set debug mode to False so deep sleep is allowed
         client.config.debug = False
-        
+
         # Reset all mocks to make sure we have a clean state
         client.power_manager.schedule_wakeup.reset_mock()
         client.power_manager.shutdown_system.reset_mock()
         client.display.sleep.reset_mock()
-        
+
         # Call _handle_sleep directly with a long duration
         result = client._handle_sleep(30)  # 30 minutes
-        
+
         # Verify the result indicates deep sleep
         assert result is True
-        
+
         # Verify the correct methods were called for deep sleep
         client.power_manager.schedule_wakeup.assert_called_once_with(30, dynamic=True)
         client.display.sleep.assert_called_once()
@@ -453,19 +533,19 @@ class TestWeatherDisplayClient:
 
         # Verify display is closed
         client.display.close.assert_called_once()
-        
+
     def test_handle_power_state_change_critical(self, client: WeatherDisplayClient) -> None:
         """Test handling critical power state change."""
         # Import PowerState from power_manager module
         from rpi_weather_display.utils.power_manager import PowerState
-        
+
         # Mock display_text method, which might not be in default mock
         client.display.display_text = MagicMock()
-        
+
         # Call the handler with NORMAL -> CRITICAL transition
         with patch("time.sleep") as mock_sleep:
             client._handle_power_state_change(PowerState.NORMAL, PowerState.CRITICAL)
-            
+
             # Verify the actions taken
             client.display.display_text.assert_called_once_with(
                 "CRITICAL BATTERY", "Shutting down to preserve battery"
@@ -473,17 +553,17 @@ class TestWeatherDisplayClient:
             mock_sleep.assert_called_once_with(5)
             client.power_manager.schedule_wakeup.assert_called_once_with(12 * 60, dynamic=True)
             client.power_manager.shutdown_system.assert_called_once()
-            
+
     def test_handle_power_state_change_non_critical(self, client: WeatherDisplayClient) -> None:
         """Test handling non-critical power state changes."""
         # Import PowerState from power_manager module
         from rpi_weather_display.utils.power_manager import PowerState
-        
+
         # Mock methods
         client.display.display_text = MagicMock()
         client.power_manager.schedule_wakeup = MagicMock()
         client.power_manager.shutdown_system = MagicMock()
-        
+
         # Test various non-critical state transitions
         transitions = [
             (PowerState.NORMAL, PowerState.CONSERVING),
@@ -491,25 +571,25 @@ class TestWeatherDisplayClient:
             (PowerState.NORMAL, PowerState.QUIET_HOURS),
             (PowerState.CONSERVING, PowerState.CHARGING),
         ]
-        
+
         for old_state, new_state in transitions:
             # Reset mocks
             client.display.display_text.reset_mock()
             client.power_manager.schedule_wakeup.reset_mock()
             client.power_manager.shutdown_system.reset_mock()
-            
+
             # Call the handler with non-critical transition
             client._handle_power_state_change(old_state, new_state)
-            
+
             # Verify no actions were taken
             client.display.display_text.assert_not_called()
             client.power_manager.schedule_wakeup.assert_not_called()
             client.power_manager.shutdown_system.assert_not_called()
-    
+
     def test_critical_state_exception_handling(self, client: WeatherDisplayClient) -> None:
         """Test critical state exception handling in power state callback."""
         from rpi_weather_display.utils.power_manager import PowerState
-        
+
         # Create a clean mock setup to isolate error path
         with patch("time.sleep"):
             # Using the existing client from the fixture
@@ -520,25 +600,25 @@ class TestWeatherDisplayClient:
             client.power_manager.schedule_wakeup = MagicMock()
             client.power_manager.shutdown_system = MagicMock()
             client.shutdown = MagicMock()
-            
+
             # Manually set _running to ensure it's defined
             client._running = True
-            
+
             # Call the handler method directly
             client._handle_power_state_change(PowerState.NORMAL, PowerState.CRITICAL)
-            
+
             # Verify error is logged
             client.logger.error.assert_called_with(
                 f"Error during critical shutdown: {client.display.display_text.side_effect}"
             )
-            
+
     def test_handle_power_state_change_critical_shutdown_exception(
         self, client: WeatherDisplayClient
     ) -> None:
         """Test handling shutdown exceptions during critical power state change."""
         # Import PowerState from power_manager module
         from rpi_weather_display.utils.power_manager import PowerState
-        
+
         # Mock methods
         client.display.display_text = MagicMock()
         client.shutdown = MagicMock()
@@ -546,11 +626,11 @@ class TestWeatherDisplayClient:
         client.power_manager.shutdown_system = MagicMock(
             side_effect=[Exception("First shutdown error"), None]
         )
-        
+
         # Call the handler
         with patch("time.sleep"):
             client._handle_power_state_change(PowerState.NORMAL, PowerState.CRITICAL)
-            
+
             # Should call shutdown_system twice: once in normal flow, once in error handler
             assert client.power_manager.shutdown_system.call_count == 2
 

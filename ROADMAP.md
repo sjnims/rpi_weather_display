@@ -34,7 +34,7 @@ Priority is indicated as:
 ### 1.4 Dynamic Display Management
 - [x] 🔴 1.4.1 Make image difference threshold configurable and battery-aware [COMPLETED 2025-05-19]
 - [x] 🟠 1.4.2 Implement variable refresh rates based on battery state [COMPLETED 2025-05-19]
-- [ ] 🟢 1.4.3 Add quiet hours display sleep mode [PLANNED]
+- [x] 🟢 1.4.3 Add quiet hours display sleep mode [COMPLETED 2025-05-19]
 
 ## Phase 2: Code Optimization (Target: v0.3.0)
 
@@ -155,10 +155,10 @@ Priority is indicated as:
 
 | Phase | Not Started | In Progress | Completed | Total |
 |-------|------------|-------------|-----------|-------|
-| 1     | 3          | 0           | 11        | 14    |
+| 1     | 0          | 0           | 14        | 14    |
 | 2     | 15         | 0           | 0         | 15    |
 | 3     | 12         | 0           | 0         | 12    |
 | 4     | 12         | 0           | 0         | 12    |
 | 5     | 15         | 0           | 0         | 15    |
 | 6     | 9          | 0           | 0         | 9     |
-| Total | 66         | 0           | 11        | 77    |
+| Total | 63         | 0           | 14        | 77    |
