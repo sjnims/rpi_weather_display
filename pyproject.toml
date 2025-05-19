@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [project]
 name = "rpi_weather_display"
-version = "0.1.0"
+version = "0.2.0"
 description = "Ultra-Low-Power Weather Display for Raspberry Pi"
 authors = [
     {name = "Steve Nims", email = "sjnims@gmail.com"}
