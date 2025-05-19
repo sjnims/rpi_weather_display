@@ -35,7 +35,13 @@ def default_config() -> AppConfig:
             location={"lat": 0.0, "lon": 0.0},
             update_interval_minutes=30,
         ),
-        display=DisplayConfig(refresh_interval_minutes=30),
+        display=DisplayConfig(
+            refresh_interval_minutes=30,
+            refresh_interval_low_battery_minutes=60,
+            refresh_interval_critical_battery_minutes=120,
+            refresh_interval_charging_minutes=15,
+            battery_aware_refresh=True,
+        ),
         power=PowerConfig(
             quiet_hours_start="23:00",
             quiet_hours_end="06:00",
@@ -854,7 +860,110 @@ class TestPowerManagerBatteryAndMetrics:
 
 class TestQuietHoursAndSleepTiming:
     """Tests for quiet hours and sleep timing calculations."""
-
+    
+    def test_get_refresh_interval(self, power_manager: PowerStateManager) -> None:
+        """Test _get_refresh_interval for different power states and battery levels."""
+        # Test NORMAL state
+        with patch.object(power_manager, "get_current_state", return_value=PowerState.NORMAL):
+            with patch.object(power_manager, "get_battery_status") as mock_battery:
+                mock_battery.return_value = BatteryStatus(
+                    level=80, 
+                    voltage=3.7, 
+                    current=-100.0, 
+                    temperature=25.0, 
+                    state=BatteryState.DISCHARGING
+                )
+                interval = power_manager._get_refresh_interval()
+                # Should return normal interval
+                assert interval.total_seconds() == 30 * 60  # 30 minutes
+        
+        # Test CONSERVING state
+        with patch.object(power_manager, "get_current_state", return_value=PowerState.CONSERVING):
+            with patch.object(power_manager, "get_battery_status") as mock_battery:
+                mock_battery.return_value = BatteryStatus(
+                    level=15, 
+                    voltage=3.7, 
+                    current=-100.0, 
+                    temperature=25.0, 
+                    state=BatteryState.DISCHARGING
+                )
+                interval = power_manager._get_refresh_interval()
+                # Should return low battery interval
+                assert interval.total_seconds() == 60 * 60  # 60 minutes
+        
+        # Test CRITICAL state
+        with patch.object(power_manager, "get_current_state", return_value=PowerState.CRITICAL):
+            with patch.object(power_manager, "get_battery_status") as mock_battery:
+                mock_battery.return_value = BatteryStatus(
+                    level=5, 
+                    voltage=3.7, 
+                    current=-100.0, 
+                    temperature=25.0, 
+                    state=BatteryState.DISCHARGING
+                )
+                interval = power_manager._get_refresh_interval()
+                # Should return critical battery interval
+                assert interval.total_seconds() == 120 * 60  # 120 minutes
+        
+        # Test CHARGING state
+        with patch.object(power_manager, "get_current_state", return_value=PowerState.CHARGING):
+            with patch.object(power_manager, "get_battery_status") as mock_battery:
+                mock_battery.return_value = BatteryStatus(
+                    level=50, 
+                    voltage=4.0, 
+                    current=500.0, 
+                    temperature=25.0, 
+                    state=BatteryState.CHARGING
+                )
+                interval = power_manager._get_refresh_interval()
+                # Should return charging interval
+                assert interval.total_seconds() == 15 * 60  # 15 minutes
+        
+        # Test QUIET_HOURS state when charging
+        with patch.object(power_manager, "get_current_state", return_value=PowerState.QUIET_HOURS):
+            with patch.object(power_manager, "get_battery_status") as mock_battery:
+                mock_battery.return_value = BatteryStatus(
+                    level=50, 
+                    voltage=4.0, 
+                    current=500.0, 
+                    temperature=25.0, 
+                    state=BatteryState.CHARGING
+                )
+                interval = power_manager._get_refresh_interval()
+                # Should return charging interval
+                assert interval.total_seconds() == 15 * 60  # 15 minutes
+        
+        # Test QUIET_HOURS state when not charging
+        with patch.object(power_manager, "get_current_state", return_value=PowerState.QUIET_HOURS):
+            with patch.object(power_manager, "get_battery_status") as mock_battery:
+                mock_battery.return_value = BatteryStatus(
+                    level=70, 
+                    voltage=3.7, 
+                    current=-100.0, 
+                    temperature=25.0, 
+                    state=BatteryState.DISCHARGING
+                )
+                interval = power_manager._get_refresh_interval()
+                # Should return wake up interval
+                assert interval.total_seconds() == 60 * 60  # 60 minutes
+        
+        # Test with battery_aware_refresh disabled
+        power_manager.config.display.battery_aware_refresh = False
+        with patch.object(power_manager, "get_current_state", return_value=PowerState.CONSERVING):
+            with patch.object(power_manager, "get_battery_status") as mock_battery:
+                mock_battery.return_value = BatteryStatus(
+                    level=15, 
+                    voltage=3.7, 
+                    current=-100.0, 
+                    temperature=25.0, 
+                    state=BatteryState.DISCHARGING
+                )
+                interval = power_manager._get_refresh_interval()
+                # Should return normal interval regardless of battery state
+                assert interval.total_seconds() == 30 * 60  # 30 minutes
+        # Reset for other tests
+        power_manager.config.display.battery_aware_refresh = True
+    
     def test_should_update_weather_first_time(self, power_manager: PowerStateManager) -> None:
         """Test should_update_weather on first run."""
         # First time (no previous update) should always return True
@@ -889,6 +998,25 @@ class TestQuietHoursAndSleepTiming:
         power_manager.set_last_update_for_testing(now - timedelta(minutes=61))
         with patch.object(power_manager, "get_current_state", return_value=PowerState.CONSERVING):
             assert power_manager.should_update_weather()  # Enough time (61 min > 60 min)
+            
+    def test_should_update_weather_critical_state(self, power_manager: PowerStateManager) -> None:
+        """Test should_update_weather in critical battery state."""
+        # Set last update time
+        now = datetime.now()
+        
+        # Test with just enough time for normal interval (31 minutes)
+        power_manager.set_last_update_for_testing(now - timedelta(minutes=31))
+        
+        # In critical state - interval should be quadrupled (30 min -> 120 min)
+        with patch.object(power_manager, "get_current_state", return_value=PowerState.CRITICAL):
+            # 31 minutes is not enough for quadrupled interval
+            assert not power_manager.should_update_weather()  # Not enough time (31 min < 120 min)
+        
+        # Test with enough time for critical interval
+        power_manager.set_last_update_for_testing(now - timedelta(minutes=121))
+        with patch.object(power_manager, "get_current_state", return_value=PowerState.CRITICAL):
+            # 121 minutes is enough for quadrupled interval
+            assert power_manager.should_update_weather()  # Enough time (121 min > 120 min)
 
     def test_should_update_weather_quiet_hours(self, power_manager: PowerStateManager) -> None:
         """Test should_update_weather during quiet hours."""
@@ -960,8 +1088,14 @@ class TestQuietHoursAndSleepTiming:
         with (
             patch.object(power_manager, "get_current_state", return_value=PowerState.CONSERVING),
             patch.object(power_manager, "_time_until_quiet_change", return_value=7200.0),  # 2 hours
+            # Mock _get_refresh_interval to return the configured value for conserving state
+            patch.object(
+                power_manager, 
+                "_get_refresh_interval", 
+                return_value=timedelta(minutes=60)
+            )
         ):
-            # Calculate time until next refresh (in seconds) - doubled in conserving state
+            # Calculate time until next refresh (in seconds)
             refresh_time = (
                 now - timedelta(minutes=15) + timedelta(minutes=60) - now
             ).total_seconds()

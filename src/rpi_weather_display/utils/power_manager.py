@@ -618,7 +618,7 @@ class PowerStateManager:
         return self._current_state
 
     def should_refresh_display(self) -> bool:
-        """Check if the display should be refreshed based on power state and timing.
+        """Check if the display should be refreshed based on power state, battery level, and timing.
 
         Returns:
             True if display should be refreshed
@@ -643,14 +643,58 @@ class PowerStateManager:
 
         # Calculate time since last refresh
         time_since_refresh = datetime.now() - self._last_refresh
-        min_refresh_interval = timedelta(minutes=self.config.display.refresh_interval_minutes)
-
-        # Adjust interval based on power state
-        if current_state == PowerState.CONSERVING:
-            min_refresh_interval *= 2
-            self.logger.info("Power conserving mode, doubling refresh interval")
+        
+        # Get the appropriate refresh interval based on battery status and power state
+        min_refresh_interval = self._get_refresh_interval()
 
         return time_since_refresh >= min_refresh_interval
+        
+    def _get_refresh_interval(self) -> timedelta:
+        """Get the appropriate refresh interval based on battery status and power state.
+        
+        Takes into account:
+        - Current power state (NORMAL, CONSERVING, CRITICAL, CHARGING)
+        - Battery level
+        - Configuration settings
+        
+        Returns:
+            The appropriate refresh interval as timedelta
+        """
+        # Get current state and battery status
+        current_state = self.get_current_state()
+        battery_status = self.get_battery_status()
+        
+        # Default refresh interval
+        refresh_interval_minutes = self.config.display.refresh_interval_minutes
+        
+        # If battery-aware refresh is disabled, just use the default interval
+        if not self.config.display.battery_aware_refresh:
+            return timedelta(minutes=refresh_interval_minutes)
+            
+        # Adjust interval based on power state and battery status
+        if current_state == PowerState.CHARGING or is_charging(battery_status):
+            # Use charging interval if charging
+            refresh_interval_minutes = self.config.display.refresh_interval_charging_minutes
+            self.logger.info(f"Battery charging, interval: {refresh_interval_minutes} minutes")
+            
+        elif current_state == PowerState.CRITICAL:
+            # Use critical battery interval if battery is critical
+            refresh_interval_minutes = self.config.display.refresh_interval_critical_battery_minutes
+            self.logger.info(f"Battery critical, interval: {refresh_interval_minutes} minutes")
+            
+        elif current_state == PowerState.CONSERVING:
+            # Use low battery interval if in conserving mode
+            refresh_interval_minutes = self.config.display.refresh_interval_low_battery_minutes
+            self.logger.info(f"Battery low, interval: {refresh_interval_minutes} minutes")
+            
+        # Handle quiet hours
+        if current_state == PowerState.QUIET_HOURS:
+            # In quiet hours, only refresh if charging, otherwise use wake_up_interval
+            if not is_charging(battery_status):
+                refresh_interval_minutes = self.config.power.wake_up_interval_minutes
+                self.logger.info(f"Quiet hours, interval: {refresh_interval_minutes} minutes")
+                
+        return timedelta(minutes=refresh_interval_minutes)
 
     def should_update_weather(self) -> bool:
         """Check if weather data should be updated based on power state and timing.
@@ -668,11 +712,18 @@ class PowerStateManager:
         time_since_update = datetime.now() - self._last_update
         min_update_interval = timedelta(minutes=self.config.weather.update_interval_minutes)
 
-        # Check if we should double intervals (conserving power)
+        # Check if we should adjust the interval based on power state
         in_quiet_hours = current_state == PowerState.QUIET_HOURS
-        if current_state == PowerState.CONSERVING and not in_quiet_hours:
-            min_update_interval *= 2
+        
+        if current_state == PowerState.CRITICAL and not in_quiet_hours:
+            min_update_interval *= 4  # Quadruple interval in critical state
+            self.logger.info("Critical battery state, quadrupling update interval")
+        elif current_state == PowerState.CONSERVING and not in_quiet_hours:
+            min_update_interval *= 2  # Double interval in conserving mode
             self.logger.info("Power conserving mode, doubling update interval")
+        elif current_state == PowerState.CHARGING:
+            # No change to interval when charging
+            pass
 
         return time_since_update >= min_update_interval
 
@@ -701,13 +752,10 @@ class PowerStateManager:
 
         # Calculate time until next refresh if we have a last refresh time
         if self._last_refresh is not None:
-            refresh_interval = self.config.display.refresh_interval_minutes
+            # Get appropriate refresh interval based on battery status and power state
+            refresh_interval_td = self._get_refresh_interval()
 
-            # Double interval if in conserving mode
-            if current_state == PowerState.CONSERVING:
-                refresh_interval *= 2
-
-            next_refresh = self._last_refresh + timedelta(minutes=refresh_interval)
+            next_refresh = self._last_refresh + refresh_interval_td
             time_until_refresh = (next_refresh - datetime.now()).total_seconds()
 
             if time_until_refresh > 0:
@@ -720,6 +768,9 @@ class PowerStateManager:
             # Double interval if in conserving mode
             if current_state == PowerState.CONSERVING:
                 update_interval *= 2
+            # Quadruple interval if in critical mode
+            elif current_state == PowerState.CRITICAL:
+                update_interval *= 4
 
             next_update = self._last_update + timedelta(minutes=update_interval)
             time_until_update = (next_update - datetime.now()).total_seconds()

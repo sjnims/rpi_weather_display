@@ -1,6 +1,7 @@
 weather:
   api_key: "YOUR_OPENWEATHERMAP_API_KEY"
-  city_name: "London"
+  location: {"lat": 51.5072, "lon": -0.1276}  # Precise lat/lon coordinates for London
+  city_name: "London"  # Used for display and when lat/lon not provided
   units: "metric"
   language: "en"
   update_interval_minutes: 30
@@ -11,7 +12,12 @@ display:
   width: 1872
   height: 1404
   rotate: 0
+  # Refresh rate configuration
   refresh_interval_minutes: 30
+  refresh_interval_low_battery_minutes: 60  # Interval when battery is low
+  refresh_interval_critical_battery_minutes: 120  # Interval when battery is critical
+  refresh_interval_charging_minutes: 15  # Interval when charging
+  battery_aware_refresh: true  # Whether to adjust refresh intervals based on battery
   partial_refresh: true
   # Image difference configuration
   pixel_diff_threshold: 10  # Threshold for considering a pixel changed
@@ -34,12 +40,24 @@ power:
   critical_battery_threshold: 10
   wake_up_interval_minutes: 60
   wifi_timeout_seconds: 30
+  enable_battery_aware_wifi: true
+  wifi_power_save_mode: "auto"  # Options: "auto", "off", "on", "aggressive"
+  retry_initial_delay_seconds: 1.0
+  retry_max_delay_seconds: 300.0  # 5 minutes max delay
+  retry_backoff_factor: 2.0
+  retry_jitter_factor: 0.1  # 10% jitter
+  retry_max_attempts: 5
   disable_hdmi: true
   disable_bluetooth: true
   disable_leds: true
   enable_temp_fs: true
   cpu_governor: "powersave"
   cpu_max_freq_mhz: 700
+  enable_pijuice_events: true
+  low_charge_action: "SYSTEM_HALT"  # Options: "NO_ACTION", "SYSTEM_HALT", "SYSTEM_HALT_POW_OFF", "SYSTEM_POWER_OFF", "SYSTEM_POWER_ON", "SYSTEM_REBOOT", "SYSTEM_WAKEUP"
+  low_charge_delay: 5  # Delay in seconds before taking action
+  button_press_action: "SYSDOWN"  # Action for button press (SW1)
+  button_press_delay: 180  # Delay in seconds for button press (SW1)
 
 server:
   url: "http://your-unraid-server-ip"
@@ -47,12 +65,13 @@ server:
   timeout_seconds: 10
   retry_attempts: 3
   retry_delay_seconds: 5
-  cache_dir: "/tmp/weather-cache"
+  cache_dir: "/tmp/weather-cache-1000"  # Uses gettempdir() and user ID by default
   log_level: "INFO"
   image_format: "PNG"
 
 logging:
   level: "INFO"
+  file: null  # Optional log file path, null uses stdout/stderr
   format: "json"
   max_size_mb: 5
   backup_count: 3

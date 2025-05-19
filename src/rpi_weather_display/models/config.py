@@ -47,6 +47,10 @@ class DisplayConfig(BaseModel):
     height: int = 1404
     rotate: int = 0  # 0, 90, 180, 270
     refresh_interval_minutes: int = 30
+    refresh_interval_low_battery_minutes: int = 60  # Interval when battery is low
+    refresh_interval_critical_battery_minutes: int = 120  # Interval when battery is critical
+    refresh_interval_charging_minutes: int = 15  # Interval when charging
+    battery_aware_refresh: bool = True  # Whether to adjust refresh intervals based on battery
     partial_refresh: bool = True
     pixel_diff_threshold: int = 10  # Threshold for considering a pixel changed
     pixel_diff_threshold_low_battery: int = 20  # Threshold when battery is low
