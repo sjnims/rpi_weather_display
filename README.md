@@ -47,10 +47,16 @@ A power-optimized weather display solution for Raspberry Pi Zero 2 W with e-pape
 - Ultra-low-power consumption (60-90 days battery life)
 - Beautiful e-paper weather display with current conditions and forecast
 - Server-client architecture for minimal client power usage
-- Comprehensive power management with aggressive optimizations
-- Quiet hours support to conserve battery during night time
+- Advanced battery-aware power management system:
+  - Dynamic refresh rates based on battery level
+  - Adaptive wakeup scheduling
+  - Battery-aware image threshold for display updates
+  - Smart WiFi power state transitions
+- Comprehensive power optimizations:
+  - Quiet hours for conserving battery during night time
+  - Integration with PiJuice for power events and safe shutdown
+  - Automatic deep sleep between updates
 - Weather data from OpenWeatherMap API
-- Automatic deep sleep between updates
 - Browser-based preview for easier development
 
 ## Latest Improvements
@@ -68,6 +74,14 @@ A power-optimized weather display solution for Raspberry Pi Zero 2 W with e-pape
 - **Improved Data Display**:
   - More accurate high UV time prediction that persists between updates
   - Improved weather icon mapping for precise conditions visualization
+
+- **Power Optimization (v0.2.0)**:
+  - Dynamic display refresh rates based on battery level
+  - Battery-aware image difference threshold for display updates
+  - Quiet hours display sleep mode for nighttime power saving
+  - PiJuice integration for advanced power management and events
+  - Dynamic wakeup scheduling responsive to battery conditions
+  - Smart WiFi power state management based on battery levels
 
 ## User Experience
 
@@ -579,23 +593,31 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 See the [ROADMAP.md](ROADMAP.md) for detailed development plans.
 
-### Recently Completed Roadmap Items
+### Recently Completed Roadmap Items (Phase 1: v0.2.0)
 
 - ✅ Moved `is_quiet_hours()` to a common utility function
 - ✅ Centralized battery threshold logic into a shared utility
 - ✅ Created unified power state management interface
 - ✅ Integrated WiFi sleep script with NetworkManager class
 - ✅ Implemented exponential backoff for network retry attempts
+- ✅ Added battery-level-aware WiFi power state transitions
+- ✅ Added support for PiJuice events (LOW_CHARGE, button press)
+- ✅ Created safe shutdown hooks for critical battery events
+- ✅ Implemented dynamic wakeup scheduling based on battery levels
+- ✅ Made image difference threshold configurable and battery-aware
+- ✅ Implemented variable refresh rates based on battery state
+- ✅ Added quiet hours display sleep mode
 
-### Future Development Plans
+### Future Development Plans (Phase 2: v0.3.0)
 
-- Enhanced power telemetry with battery drain rate calculations
-- Adaptive weather update frequency based on forecast stability
-- Battery-level-aware WiFi power state transitions
-- PiJuice integration for power events
-- Dynamic display refresh rates based on battery state
-- More aggressive memory and processing optimizations
-- Expanded hardware support for different e-paper displays
+- 🔄 Create centralized constants module for default values
+- 🔄 Standardize path resolution across client and server
+- 🔄 Implement consistent file system abstraction project-wide
+- 🔄 Replace generic `Any` types with more specific Union types
+- 🔄 Implement structural pattern matching for state handling
+- 🔄 Modularize large files (power_manager.py, renderer.py)
+- 🔄 Create custom exception hierarchy for better error handling
+- 🔄 Optimize image processing for memory efficiency
 
 ## Acknowledgements
 
