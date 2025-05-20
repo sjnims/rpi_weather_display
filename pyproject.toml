@@ -123,17 +123,6 @@ reportUnknownMemberType = "none"
 reportUnknownArgumentType = "none"
 reportIncompatibleMethodOverride = "warning"
 
-[tool.mypy]
-python_version = "3.11"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
-disallow_incomplete_defs = true
-check_untyped_defs = true
-disallow_untyped_decorators = false
-no_implicit_optional = true
-strict_optional = true
-
 [tool.ruff]
 line-length = 100
 target-version = "py311"
@@ -141,6 +130,9 @@ target-version = "py311"
 [tool.ruff.lint]
 ignore = ["ANN101", "ANN102"]
 select = ["E", "F", "B", "I", "N", "UP", "ANN", "S", "A", "C4", "PT", "RUF", "D"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101", "ANN201", "ANN001", "ANN401", "E501"]  # Ignore assert usage, line length, and type annotation requirements in tests
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

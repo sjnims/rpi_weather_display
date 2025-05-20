@@ -1,6 +1,5 @@
 """Common fixtures for testing the weather display application."""
 
-import os
 from collections.abc import Generator
 from pathlib import Path
 from typing import Any
@@ -41,9 +40,13 @@ def mock_command_execution(
 
 
 @pytest.fixture()
-def test_config_path() -> str:
+def test_config_path() -> Path:
     """Get the path to the test config file."""
-    return os.path.join(os.path.dirname(__file__), "data", "test_config.yaml")
+    # Import here to avoid circular imports during test collection
+    from rpi_weather_display.utils import path_resolver
+
+    # Use path resolver consistently to find test data file
+    return path_resolver.get_resource_path("tests/data", "test_config.yaml")
 
 
 @pytest.fixture()
@@ -95,4 +98,8 @@ def mock_server(test_config_path: Path) -> TestClient:
 @pytest.fixture()
 def template_dir() -> Path:
     """Path to templates directory."""
-    return Path(os.path.dirname(os.path.dirname(__file__))) / "templates"
+    # Import here to avoid circular imports during test collection
+    from rpi_weather_display.utils import path_resolver
+
+    # Use path resolver to find templates directory
+    return path_resolver.get_templates_dir()

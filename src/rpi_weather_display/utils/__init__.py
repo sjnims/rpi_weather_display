@@ -12,6 +12,7 @@ from rpi_weather_display.utils.battery_utils import (
     should_conserve_power,
     should_double_intervals,
 )
+from rpi_weather_display.utils.path_utils import PathResolver, path_resolver
 from rpi_weather_display.utils.power_manager import (
     PowerState,
     PowerStateCallback,
@@ -37,4 +38,7 @@ __all__ = [
     "PowerState",
     "PowerStateCallback",
     "PowerStateManager",
+    # Path utilities
+    "PathResolver",
+    "path_resolver",
 ]

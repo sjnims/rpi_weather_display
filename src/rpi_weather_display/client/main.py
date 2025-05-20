@@ -7,7 +7,6 @@ the various subsystems and implementing the core logic of the weather display.
 """
 
 import argparse
-import tempfile
 import time
 from pathlib import Path
 
@@ -15,27 +14,27 @@ import requests
 
 from rpi_weather_display.client.display import EPaperDisplay
 from rpi_weather_display.constants import (
-    CLIENT_CACHE_DIR_NAME,
     DEFAULT_CONFIG_PATH,
     SLEEP_BEFORE_SHUTDOWN,
     TEN_MINUTES,
     TWELVE_HOURS_IN_MINUTES,
 )
 from rpi_weather_display.models.config import AppConfig
-from rpi_weather_display.utils import PowerStateManager
+from rpi_weather_display.utils import PowerStateManager, path_resolver
 from rpi_weather_display.utils.battery_utils import is_charging
 from rpi_weather_display.utils.logging import setup_logging
+from rpi_weather_display.utils.path_utils import validate_config_path
 from rpi_weather_display.utils.power_manager import PowerState
 
 
 class WeatherDisplayClient:
     """Main client application for the weather display.
-    
+
     Manages the lifecycle of the weather display client, including initialization,
     update scheduling, power management, and hardware control. Implements an
     event-driven architecture with callbacks for power state changes to enable
     battery-aware behavior.
-    
+
     Attributes:
         config: Application configuration loaded from YAML
         logger: Configured logger instance
@@ -62,21 +61,20 @@ class WeatherDisplayClient:
         self.power_manager = PowerStateManager(self.config)
         self.display = EPaperDisplay(self.config.display)
 
-        # Image cache path
-        self.cache_dir = Path(tempfile.gettempdir()) / CLIENT_CACHE_DIR_NAME
-        self.cache_dir.mkdir(exist_ok=True)
-        self.current_image_path = self.cache_dir / "current.png"
+        # Image cache path using the path resolver
+        self.cache_dir = path_resolver.cache_dir
+        self.current_image_path = path_resolver.get_cache_file("current.png")
 
         self.logger.info("Weather Display Client initialized")
         self._running = False
 
     def initialize(self) -> None:
         """Initialize hardware and subsystems.
-        
+
         Sets up the power manager, registers callbacks for power state changes,
         and initializes the e-paper display hardware. This method should be called
         once at the start of the client application.
-        
+
         Raises:
             RuntimeError: If hardware initialization fails.
         """
@@ -143,7 +141,7 @@ class WeatherDisplayClient:
 
         Returns:
             True if update was successful, False otherwise.
-            
+
         Raises:
             requests.RequestException: If there is an error communicating with the server.
         """
@@ -200,12 +198,12 @@ class WeatherDisplayClient:
 
     def refresh_display(self) -> None:
         """Refresh the e-paper display with the latest weather data.
-        
+
         Updates the display with the most recently cached weather image.
         If no cached image is available, attempts to request a new one
         from the server first. The display refresh considers battery status
         for power-efficient partial updates.
-        
+
         Raises:
             Exception: If there is an error refreshing the display.
         """
@@ -237,14 +235,14 @@ class WeatherDisplayClient:
 
     def run(self) -> None:
         """Run the client main loop.
-        
+
         Implements the main operational loop of the client application, including:
         - Hardware initialization
         - Initial weather update and display
         - Regular checks for update conditions
         - Quiet hours handling with display sleep
         - Deep sleep scheduling for power efficiency
-        
+
         The loop continues until interrupted or a critical battery condition
         triggers a shutdown.
         """
@@ -317,7 +315,7 @@ class WeatherDisplayClient:
         to completely shut down the system and save power, rather than keeping
         the CPU running. This approach dramatically reduces power consumption
         during long idle periods by turning off the entire system except for
-        the PiJuice RTC (Real-Time Clock) that will wake the system at the 
+        the PiJuice RTC (Real-Time Clock) that will wake the system at the
         scheduled time.
 
         Deep sleep is only triggered for intervals longer than 10 minutes
@@ -334,7 +332,7 @@ class WeatherDisplayClient:
         Returns:
             bool: True if the system will be shut down for deep sleep
                  False if normal sleep is used instead (shorter duration or debug mode)
-            
+
         Raises:
             RuntimeError: If there is a critical error during the sleep process
                          that prevents proper shutdown.
@@ -358,7 +356,7 @@ class WeatherDisplayClient:
 
     def shutdown(self) -> None:
         """Clean up resources and shut down the client.
-        
+
         Performs an orderly shutdown of all hardware components and subsystems,
         ensuring that resources are properly released and that the e-paper
         display is put into sleep mode to conserve power.
@@ -372,7 +370,7 @@ class WeatherDisplayClient:
 
 def main() -> None:
     """Main entry point for the weather display client application.
-    
+
     Parses command line arguments, loads configuration, and starts the client.
     This is the function called when the client is invoked from the command line.
     """
@@ -381,18 +379,16 @@ def main() -> None:
     parser.add_argument(
         "--config",
         type=Path,
-        default=Path(DEFAULT_CONFIG_PATH),
-        help="Path to configuration file",
+        default=None,  # Will use path_resolver to determine default
+        help=f"Path to configuration file (default: {DEFAULT_CONFIG_PATH})",
     )
     args = parser.parse_args()
 
-    # Check if config file exists
-    if not args.config.exists():
-        print(f"Error: Configuration file not found at {args.config}")
-        return
+    # Validate and resolve the config path
+    config_path = validate_config_path(args.config)
 
     # Create and run client
-    client = WeatherDisplayClient(args.config)
+    client = WeatherDisplayClient(config_path)
     client.run()
 
 

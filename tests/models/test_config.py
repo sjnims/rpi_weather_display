@@ -10,8 +10,6 @@ Tests validate the behavior of Pydantic models in config.py, including:
 # ruff: noqa: S101
 # pyright: reportUnknownMemberType=false
 
-import os
-import tempfile
 from pathlib import Path
 from unittest.mock import mock_open, patch
 
@@ -77,22 +75,22 @@ class TestWeatherConfig:
 
         error_details = str(excinfo.value)
         assert "Update interval must be at least 15 minutes" in error_details
-        
+
     def test_hourly_forecast_count_validator(self) -> None:
         """Test validator for hourly_forecast_count."""
         # Valid counts
         min_count = WeatherConfig(api_key="test_key", hourly_forecast_count=1)
         assert min_count.hourly_forecast_count == 1
-        
+
         max_count = WeatherConfig(api_key="test_key", hourly_forecast_count=48)
         assert max_count.hourly_forecast_count == 48
-        
+
         # Invalid counts
         with pytest.raises(ValidationError) as excinfo:
             WeatherConfig(api_key="test_key", hourly_forecast_count=0)
         error_details = str(excinfo.value)
         assert "Hourly forecast count must be between 1 and 48" in error_details
-        
+
         with pytest.raises(ValidationError) as excinfo:
             WeatherConfig(api_key="test_key", hourly_forecast_count=49)
         error_details = str(excinfo.value)
@@ -225,38 +223,42 @@ class TestPowerConfig:
         assert power_config.low_charge_delay == 10
         assert power_config.button_press_action == "SYSTEM_POWER_OFF"
         assert power_config.button_press_delay == 60
-        
+
     def test_wifi_power_save_mode_validator(self) -> None:
         """Test validation of WiFi power save mode."""
         # Valid modes
         for mode in ["auto", "off", "on", "aggressive"]:
             config = PowerConfig(wifi_power_save_mode=mode)
             assert config.wifi_power_save_mode == mode
-            
+
         # Invalid mode
         with pytest.raises(ValidationError) as excinfo:
             PowerConfig(wifi_power_save_mode="invalid_mode")
-        
+
         error_details = str(excinfo.value)
         assert "WiFi power save mode must be one of" in error_details
-        
+
     def test_low_charge_action_validator(self) -> None:
         """Test validation of low charge action."""
         # Valid actions
         valid_actions = [
-            "NO_ACTION", "SYSTEM_HALT", "SYSTEM_HALT_POW_OFF", 
-            "SYSTEM_POWER_OFF", "SYSTEM_POWER_ON", "SYSTEM_REBOOT", 
-            "SYSTEM_WAKEUP"
+            "NO_ACTION",
+            "SYSTEM_HALT",
+            "SYSTEM_HALT_POW_OFF",
+            "SYSTEM_POWER_OFF",
+            "SYSTEM_POWER_ON",
+            "SYSTEM_REBOOT",
+            "SYSTEM_WAKEUP",
         ]
-        
+
         for action in valid_actions:
             config = PowerConfig(low_charge_action=action)
             assert config.low_charge_action == action
-            
+
         # Invalid action
         with pytest.raises(ValidationError) as excinfo:
             PowerConfig(low_charge_action="INVALID_ACTION")
-        
+
         error_details = str(excinfo.value)
         assert "Low charge action must be one of" in error_details
 
@@ -276,9 +278,8 @@ class TestServerConfig:
         assert server_config.log_level == "INFO"
         assert server_config.image_format == "PNG"
 
-        # Dynamic default for cache_dir
-        expected_cache_dir = os.path.join(tempfile.gettempdir(), f"weather-cache-{os.getuid()}")
-        assert server_config.cache_dir == expected_cache_dir
+        # Default for cache_dir is now an empty string (using path_resolver's default)
+        assert server_config.cache_dir == ""
 
     def test_custom_values(self) -> None:
         """Test ServerConfig with custom values."""

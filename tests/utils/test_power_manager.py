@@ -1139,7 +1139,7 @@ class TestQuietHoursAndSleepTiming:
 
         # Mock get_current_state to ensure it returns QUIET_HOURS consistently
         with patch.object(power_manager, "get_current_state", return_value=PowerState.QUIET_HOURS):
-            # Calculate sleep time in QUIET_HOURS state, it should return wake_up_interval_minutes * 60  # noqa: E501
+            # Calculate sleep time in QUIET_HOURS state, it should return wake_up_interval_minutes * 60
             result = power_manager.calculate_sleep_time()
 
             # Should return 3600 seconds (60 minutes * 60 seconds)
@@ -1151,7 +1151,7 @@ class TestQuietHoursAndSleepTiming:
         # For code coverage, we'll directly test the branch condition where
         # time_until_quiet_change > 0
 
-        # Set quiet hours to be in the future to ensure time_until_quiet_change returns a positive value  # noqa: E501
+        # Set quiet hours to be in the future to ensure time_until_quiet_change returns a positive value
         config = power_manager.config.model_copy(deep=True)
         # Set quiet hours to start 1 hour from now and end 2 hours from now
         now = datetime.now()
@@ -1700,7 +1700,7 @@ class TestBatteryCoverageExtensions:
 
     def test_time_until_quiet_change_invalid_format(self, power_manager: PowerStateManager) -> None:
         """Test _time_until_quiet_change with invalid format."""
-        # Set invalid quiet hours format (already covered in another test but keeping for completeness)  # noqa: E501
+        # Set invalid quiet hours format (already covered in another test but keeping for completeness)
         config = power_manager.config.model_copy(deep=True)
         config.power.quiet_hours_start = "invalid"
         config.power.quiet_hours_end = "format"
@@ -1905,7 +1905,7 @@ class TestFinalCoverageGaps:
     """Tests to cover remaining gaps in code coverage."""
 
     def test_system_metrics_with_drain_rate(self, power_manager: PowerStateManager) -> None:
-        """Test get_system_metrics with drain rate and expected_drain_rate for abnormal detection."""  # noqa: E501
+        """Test get_system_metrics with drain rate and expected_drain_rate for abnormal detection."""
         # Mock battery_history and expected_drain_rate
         with (
             patch.object(power_manager, "_battery_history"),

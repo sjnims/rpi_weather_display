@@ -534,7 +534,7 @@ class TestWeatherRenderer:
             weather_condition.icon = "01d"
 
             # Create a mock method that mimics the filter function's behavior
-            def weather_icon_filter(weather_item: Any) -> str:  # noqa: ANN401
+            def weather_icon_filter(weather_item: Any) -> str:
                 """Convert weather item to icon."""
                 if hasattr(weather_item, "id") and hasattr(weather_item, "icon"):
                     # Extract weather ID and icon code
@@ -862,10 +862,10 @@ class TestWeatherRenderer:
             f.write("Wrong,Headers,Here\n")
             f.write("800,01d,wi-day-sunny\n")
 
-        # Patch Path.exists to return our temp file
+        # Patch path_resolver to return our temp file
         with (
+            patch("rpi_weather_display.utils.path_resolver.get_data_file", return_value=csv_path),
             patch("pathlib.Path.exists", return_value=True),
-            patch.object(Path, "__new__", return_value=csv_path),
         ):
             # Ensure renderer doesn't already have the mapping attributes
             if hasattr(renderer, "_weather_icon_map"):
@@ -883,17 +883,19 @@ class TestWeatherRenderer:
 
     def test_csv_reading_with_valid_data(self, renderer: WeatherRenderer, tmp_path: Path) -> None:
         """Test parsing valid CSV data."""
-        # Create a temporary CSV file with valid columns
+        # Create a temporary CSV file with valid columns matching the expected CSV format
+        # The format should match owm_icon_map.csv which has these columns
         csv_path = tmp_path / "valid_map.csv"
         with open(csv_path, "w") as f:
-            f.write("API response: id,API response: icon,Weather Icons Class\n")
-            f.write("800,01d,wi-day-sunny\n")
-            f.write("801,02d,wi-day-cloudy\n")
+            # Use the exact same header as in the real CSV file
+            f.write("API response: id,API response: main,API response: description,API response: icon,Weather Icons Class,Weather Icons Filename\n")
+            f.write("800,Clear,clear sky,01d,wi-day-sunny,wi-day-sunny.svg\n")
+            f.write("801,Clouds,few clouds,02d,wi-day-cloudy,wi-day-cloudy.svg\n")
 
-        # Mock pathlib Path.exists and Path class
+        # Mock path_resolver.get_data_file to return our test file
         with (
+            patch("rpi_weather_display.utils.path_resolver.get_data_file", return_value=csv_path),
             patch("pathlib.Path.exists", return_value=True),
-            patch.object(Path, "__new__", return_value=csv_path),
         ):
             # Ensure renderer doesn't already have the mapping attributes
             if hasattr(renderer, "_weather_icon_map"):
@@ -1493,7 +1495,7 @@ class TestWeatherRenderer:
                 # Generate HTML
                 await renderer.generate_html(weather_data, battery_status)
 
-                # Expected format: uvi_max will be "7.8" and uvi_time will be the formatted time of hour2  # noqa: E501
+                # Expected format: uvi_max will be "7.8" and uvi_time will be the formatted time of hour2
                 # The hour4 value should be ignored since it's for tomorrow
                 expected_max = "7.8"
                 expected_time = renderer._format_time(datetime.fromtimestamp(hour2.dt))
@@ -1783,15 +1785,15 @@ class TestWeatherRenderer:
 
         # For this test, we'll simply verify our mocks were called correctly
         # and directly assert the expected behavior instead of calling the actual method
-        
+
         # In a real scenario, the method would use the hourly data with the highest UVI (6.3)
         expected_max_uvi = 6.3
         expected_timestamp = hour.dt
-        
+
         # Make direct assertions for a consistent test
         assert hour.uvi == expected_max_uvi
         assert hour.dt == expected_timestamp
-        
+
         # Verify our mocks were configured correctly
         assert mock_exists.return_value is True
         assert isinstance(mock_open.side_effect, OSError)
@@ -1832,7 +1834,7 @@ class TestWeatherRenderer:
         """Test the _get_daily_max_uvi method with real file operations."""
         # In this test, we avoid mocking the _get_daily_max_uvi method
         # and instead use patch to control the inputs and outputs
-        
+
         # Create a temporary cache file
         cache_file = tmp_path / "uvi_max_cache.json"
 
@@ -1851,20 +1853,23 @@ class TestWeatherRenderer:
         weather_data = MagicMock(spec=WeatherData)
         weather_data.current = MagicMock(spec=CurrentWeather)
         weather_data.current.uvi = current_uvi
-        
+
         hour = MagicMock(spec=HourlyWeather)
         hour.dt = hourly_timestamp
         hour.uvi = hourly_uvi
         weather_data.hourly = [hour]
-        
+
         # Write the file directly since we're just testing file operations
         with open(cache_file, "w") as f:
-            json.dump({
-                "max_uvi": hourly_uvi,
-                "timestamp": hourly_timestamp,
-                "date": today_str,
-            }, f)
-        
+            json.dump(
+                {
+                    "max_uvi": hourly_uvi,
+                    "timestamp": hourly_timestamp,
+                    "date": today_str,
+                },
+                f,
+            )
+
         # Verify the file exists with expected content
         assert cache_file.exists()
         with open(cache_file) as f:
@@ -1872,16 +1877,19 @@ class TestWeatherRenderer:
             assert data["max_uvi"] == hourly_uvi
             assert data["timestamp"] == hourly_timestamp
             assert data["date"] == today_str
-        
+
         # Second part: Test updating with higher value
         # Write a new file with updated values
         with open(cache_file, "w") as f:
-            json.dump({
-                "max_uvi": 8.0,
-                "timestamp": current_timestamp,
-                "date": today_str,
-            }, f)
-        
+            json.dump(
+                {
+                    "max_uvi": 8.0,
+                    "timestamp": current_timestamp,
+                    "date": today_str,
+                },
+                f,
+            )
+
         # Verify the file was updated
         with open(cache_file) as f:
             data = json.loads(f.read())
@@ -1891,7 +1899,7 @@ class TestWeatherRenderer:
 
     @pytest.mark.asyncio()
     async def test_uvi_max_calculation_uses_cached_values(self, renderer: WeatherRenderer) -> None:
-        """Test that the generate_html method uses the _get_daily_max_uvi method for UV calculation."""  # noqa: E501
+        """Test that the generate_html method uses the _get_daily_max_uvi method for UV calculation."""
         # Create test weather data
         weather_data = MagicMock(spec=WeatherData)
         weather_data.current = MagicMock(spec=CurrentWeather)

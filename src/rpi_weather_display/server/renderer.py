@@ -709,21 +709,14 @@ class WeatherRenderer:
 
             try:
                 import csv
-                from pathlib import Path
+                
+                from rpi_weather_display.utils import path_resolver
 
-                # Try different approaches to find the CSV file
-                possible_paths = [
-                    Path("owm_icon_map.csv"),  # Current working directory
-                    Path(__file__).parent.parent.parent.parent / "owm_icon_map.csv",  # Project root
-                ]
+                # Use path_resolver to find the CSV file consistently
+                csv_path = path_resolver.get_data_file("owm_icon_map.csv")
 
-                csv_path = None
-                for path in possible_paths:
-                    if path.exists():
-                        csv_path = path
-                        break
-
-                if csv_path is None:
+                # Check if the CSV file exists
+                if not csv_path.exists():
                     self.logger.warning("Could not find owm_icon_map.csv file")
                     # Don't return here, continue to use the fallback mapping
                 else:

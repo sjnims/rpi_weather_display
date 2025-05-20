@@ -4,11 +4,23 @@ Defines Pydantic models for application configuration including weather API sett
 display parameters, power management options, and server configuration.
 """
 
-import os
 from pathlib import Path
-from tempfile import gettempdir
 
 from pydantic import BaseModel, Field, field_validator
+
+
+def _normalize_path(path: str | Path) -> Path:
+    """Convert a string path to a Path object.
+    
+    Internal utility function to avoid circular imports with path_resolver.
+    
+    Args:
+        path: String or Path object
+        
+    Returns:
+        A Path object.
+    """
+    return Path(path) if isinstance(path, str) else path
 
 
 class WeatherConfig(BaseModel):
@@ -27,13 +39,13 @@ class WeatherConfig(BaseModel):
     @classmethod
     def validate_update_interval(cls, v: int) -> int:
         """Validate update interval is not too frequent.
-        
+
         Args:
             v: The update interval in minutes.
-            
+
         Returns:
             The validated update interval value.
-            
+
         Raises:
             ValueError: If the update interval is less than 15 minutes.
         """
@@ -45,13 +57,13 @@ class WeatherConfig(BaseModel):
     @classmethod
     def validate_hourly_forecast_count(cls, v: int) -> int:
         """Validate the number of hourly forecasts to show.
-        
+
         Args:
             v: The number of hourly forecasts.
-            
+
         Returns:
             The validated hourly forecast count.
-            
+
         Raises:
             ValueError: If the count is less than 1 or greater than 48.
         """
@@ -89,13 +101,13 @@ class DisplayConfig(BaseModel):
     @classmethod
     def validate_pressure_units(cls, v: str) -> str:
         """Validate pressure units are one of the supported types.
-        
+
         Args:
             v: The pressure units string.
-            
+
         Returns:
             The validated pressure units value.
-            
+
         Raises:
             ValueError: If the pressure units are not one of the supported types.
         """
@@ -145,13 +157,13 @@ class PowerConfig(BaseModel):
     @classmethod
     def validate_wifi_power_save_mode(cls, v: str) -> str:
         """Validate WiFi power save mode is one of the supported types.
-        
+
         Args:
             v: The WiFi power save mode string.
-            
+
         Returns:
             The validated WiFi power save mode value.
-            
+
         Raises:
             ValueError: If the mode is not one of the supported types.
         """
@@ -164,13 +176,13 @@ class PowerConfig(BaseModel):
     @classmethod
     def validate_low_charge_action(cls, v: str) -> str:
         """Validate low charge action is valid.
-        
+
         Args:
             v: The low charge action string.
-            
+
         Returns:
             The validated low charge action value.
-            
+
         Raises:
             ValueError: If the action is not one of the supported types.
         """
@@ -196,9 +208,7 @@ class ServerConfig(BaseModel):
     timeout_seconds: int = 10
     retry_attempts: int = 3
     retry_delay_seconds: int = 5
-    cache_dir: str = Field(
-        default_factory=lambda: os.path.join(gettempdir(), f"weather-cache-{os.getuid()}")
-    )
+    cache_dir: str = ""  # Empty string means use the default from path_resolver
     log_level: str = "INFO"
     image_format: str = "PNG"
 
@@ -227,14 +237,14 @@ class AppConfig(BaseModel):
     @classmethod
     def from_yaml(cls, config_path: str | Path) -> "AppConfig":
         """Load configuration from YAML file.
-        
+
         Args:
             config_path: Path to the YAML configuration file. Can be a string path
                 or a Path object.
-                
+
         Returns:
             An initialized AppConfig object with values from the YAML file.
-            
+
         Raises:
             FileNotFoundError: If the specified config file doesn't exist.
             yaml.YAMLError: If the YAML file has invalid syntax.
@@ -242,7 +252,10 @@ class AppConfig(BaseModel):
         """
         import yaml
 
-        with open(config_path) as f:
+        # Use internal path normalization to avoid circular imports with path_resolver
+        path = _normalize_path(config_path)
+
+        with open(path) as f:
             config_data = yaml.safe_load(f)
 
         return cls.model_validate(config_data)
