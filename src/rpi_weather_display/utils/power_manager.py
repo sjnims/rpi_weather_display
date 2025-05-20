@@ -669,14 +669,23 @@ class PowerStateManager:
 
     def _get_refresh_interval(self) -> timedelta:
         """Get the appropriate refresh interval based on battery status and power state.
+        
+        Calculates the optimal refresh interval by taking into account various factors
+        that affect power consumption, allowing the system to conserve battery when
+        needed and refresh more frequently when power is not a concern.
 
         Takes into account:
         - Current power state (NORMAL, CONSERVING, CRITICAL, CHARGING)
         - Battery level
         - Configuration settings
+        - Whether the device is in quiet hours
 
+        Args:
+            None
+            
         Returns:
-            The appropriate refresh interval as timedelta
+            timedelta: The appropriate refresh interval as a timedelta object, with minutes
+                      adjusted based on the current power conditions.
         """
         # Get current state and battery status
         current_state = self.get_current_state()
@@ -950,11 +959,20 @@ class PowerStateManager:
         - Expected battery life
         - Abnormal discharge detection
 
+        The adjustment logic uses multiple factors:
+        - In CHARGING state: reduces wakeup time by BATTERY_CHARGING_FACTOR 
+        - In CRITICAL state: increases wakeup time by CRITICAL_SLEEP_FACTOR
+        - In CONSERVING state: scales wakeup time based on battery level between 
+          CONSERVING_MIN_FACTOR and CONSERVING_MAX_FACTOR
+        - In QUIET_HOURS: uses the configured wake_up_interval_minutes
+        - With abnormal discharge: increases wakeup time by ABNORMAL_SLEEP_FACTOR
+
         Args:
-            base_minutes: Base minutes to schedule wakeup
+            base_minutes: Base minutes to schedule wakeup (default interval)
 
         Returns:
-            Adjusted minutes for wakeup scheduling
+            int: Adjusted minutes for wakeup scheduling, always between 
+                MIN_SLEEP_MINUTES and MAX_SLEEP_MINUTES
         """
         # Get current battery status and power state
         battery_status = self.get_battery_status()
@@ -1146,9 +1164,26 @@ class PowerStateManager:
 
     def is_discharge_rate_abnormal(self) -> bool:
         """Check if the current discharge rate is abnormally high.
-
+        
+        Compares the current battery discharge rate to the expected rate
+        to detect situations where the battery is draining faster than normal.
+        This can help identify problems and adjust power settings to compensate.
+        
+        The method uses the battery_utils.is_discharge_rate_abnormal function
+        to perform the actual comparison, which typically considers a discharge
+        rate abnormal if it exceeds the expected rate by a significant threshold
+        (defined in constants.py).
+        
+        Args:
+            None
+            
         Returns:
-            True if discharge rate is abnormally high compared to expected rate
+            bool: True if discharge rate is abnormally high compared to expected rate,
+                 False if discharge rate is normal or cannot be determined
+                 
+        Note:
+            Returns False if there is insufficient battery history data to 
+            calculate a reliable discharge rate.
         """
         drain_rate = calculate_drain_rate(list(self._battery_history))
         if drain_rate is None:
@@ -1158,9 +1193,24 @@ class PowerStateManager:
 
     def get_expected_battery_life(self) -> int | None:
         """Estimate expected battery life based on current drain rate.
-
+        
+        Calculates the remaining battery life in hours using either:
+        1. The calculated drain rate from battery history, if available
+        2. The time_remaining value reported by the battery, if available
+        
+        This estimate is used for power management decisions like determining
+        how long the device can safely sleep between operations.
+        
+        Args:
+            None
+        
         Returns:
-            Estimated hours of battery life remaining, or None if unknown
+            int: Estimated hours of battery life remaining
+            None: If battery is charging or if remaining life cannot be calculated
+            
+        Note:
+            When using the drain rate method, the calculation is: 
+            battery_level / drain_rate_per_hour = hours_remaining
         """
         battery_status = self.get_battery_status()
 

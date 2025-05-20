@@ -11,12 +11,19 @@ from datetime import time as dt_time
 def is_quiet_hours(quiet_hours_start: str, quiet_hours_end: str) -> bool:
     """Check if current time is within quiet hours.
 
+    Determines if the current time falls within the configured quiet hours period,
+    during which certain operations (like screen refreshes) may be limited to 
+    conserve power. Handles cases where quiet hours span across midnight.
+
     Args:
         quiet_hours_start: Quiet hours start time in format "HH:MM".
         quiet_hours_end: Quiet hours end time in format "HH:MM".
 
     Returns:
         True if current time is within quiet hours, False otherwise.
+        
+    Raises:
+        ValueError: If the quiet hours time strings are not in the correct format.
     """
     logger = logging.getLogger(__name__)
 

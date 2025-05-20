@@ -110,12 +110,21 @@ class NetworkManager:
 
     def _calculate_backoff_delay(self, attempt: int) -> float:
         """Calculate delay for exponential backoff.
+        
+        Implements an exponential backoff algorithm with jitter to determine the
+        wait time between retry attempts. The algorithm uses the formula:
+        delay = initial_delay * (backoff_factor ^ attempt) * (1 + random_jitter)
+        
+        This approach helps prevent multiple clients from retrying simultaneously
+        (avoiding the "thundering herd" problem) and gradually increases wait times
+        for persistent failures.
 
         Args:
             attempt: The current attempt number (0-based)
 
         Returns:
-            Delay in seconds for the next retry
+            Delay in seconds for the next retry, with an upper limit defined by
+            retry_max_delay_seconds from the config and a lower limit of 0.1 seconds.
         """
         # Calculate base delay with exponential backoff
         delay = self.config.retry_initial_delay_seconds * (
@@ -135,14 +144,18 @@ class NetworkManager:
 
     def with_retry(self, operation: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:  # noqa: ANN401
         """Execute an operation with exponential backoff retries.
+        
+        Attempts to execute the provided function repeatedly until it succeeds
+        or the maximum number of retry attempts is reached. Uses exponential
+        backoff between attempts to avoid overwhelming the system.
 
         Args:
             operation: The function to retry
-            *args: Arguments to pass to the operation
-            **kwargs: Keyword arguments to pass to the operation
+            *args: Positional arguments to pass to the operation function
+            **kwargs: Keyword arguments to pass to the operation function
 
         Returns:
-            Result of the operation or None if all attempts fail
+            Result of the operation if successful, or None if all attempts fail
         """
         attempt = 0
 
@@ -269,9 +282,15 @@ class NetworkManager:
 
     def _try_connect(self) -> bool:
         """Try to establish network connectivity.
+        
+        Attempts to establish a network connection by repeatedly checking for
+        connectivity within the timeout period specified in the configuration.
 
         Returns:
             True if connected, False otherwise.
+            
+        Raises:
+            ConnectionError: If connection cannot be established within the timeout period.
         """
         # Wait for connection
         start_time = time.time()

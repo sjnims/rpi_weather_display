@@ -32,12 +32,26 @@ class BatteryStatus(BaseModel):
 
     @property
     def is_low(self) -> bool:
-        """Check if battery level is low."""
+        """Check if battery level is low.
+        
+        This property determines if the battery level is considered low (below 20%)
+        and the device is currently discharging.
+        
+        Returns:
+            True if battery level is below 20% and discharging, False otherwise.
+        """
         return self.level < 20 and self.state == BatteryState.DISCHARGING
 
     @property
     def is_critical(self) -> bool:
-        """Check if battery level is critical."""
+        """Check if battery level is critical.
+        
+        This property determines if the battery level is considered critically low 
+        (below 10%) and the device is currently discharging.
+        
+        Returns:
+            True if battery level is below 10% and discharging, False otherwise.
+        """
         return self.level < 10 and self.state == BatteryState.DISCHARGING
 
 

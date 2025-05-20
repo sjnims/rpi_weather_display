@@ -36,7 +36,16 @@ AutoEPDDisplayType = TypeVar("AutoEPDDisplayType")
 
 
 def _import_it8951() -> Any | None:
-    """Import IT8951 library or return None if not available."""
+    """Import IT8951 library or return None if not available.
+    
+    The IT8951 library provides the driver interface for the Waveshare e-paper display.
+    This function uses conditional import to handle environments where the library
+    might not be available (such as development machines without the hardware).
+    
+    Returns:
+        The AutoEPDDisplay class from the IT8951.display module if available,
+        or None if the library cannot be imported.
+    """
     try:
         from IT8951.display import AutoEPDDisplay  # type: ignore
 
@@ -46,7 +55,16 @@ def _import_it8951() -> Any | None:
 
 
 def _import_numpy() -> Any | None:
-    """Import numpy or return None if not available."""
+    """Import numpy or return None if not available.
+    
+    NumPy is used for efficient image processing operations, particularly when
+    calculating differences between images for partial refresh. This function
+    uses conditional import to handle environments where NumPy might not be
+    available.
+    
+    Returns:
+        The numpy module if available, or None if the library cannot be imported.
+    """
     try:
         import numpy as np  # type: ignore
 
@@ -219,7 +237,12 @@ class EPaperDisplay:
 
         Takes the non-zero pixel positions from the difference image and
         calculates a bounding box that contains all changed pixels, with
-        a margin to ensure smooth updates.
+        a margin to ensure smooth updates. This is used during partial refresh
+        to determine which section of the display needs to be updated.
+        
+        The function adds a margin (defined by DISPLAY_MARGIN constant) around
+        the detected changes to ensure a clean update with no artifacts, while
+        keeping the refresh area as small as possible to save power.
 
         Args:
             non_zero: Tuple of arrays with non-zero pixel indices (rows, columns)
@@ -247,6 +270,17 @@ class EPaperDisplay:
         Compares the previous and new images to determine which areas have changed
         significantly. Uses configurable thresholds that adapt based on battery status
         to optimize power usage.
+        
+        The algorithm works by:
+        1. Converting images to NumPy arrays
+        2. Calculating absolute difference between pixel values
+        3. Finding pixels that exceed the difference threshold
+        4. Checking if enough pixels have changed to warrant an update
+        5. Computing a bounding box around the changed areas
+        
+        This approach significantly reduces power consumption by only updating
+        the portions of the display that have actually changed, which is especially
+        important for battery-powered operation.
 
         Args:
             old_image: Previously displayed image
@@ -293,10 +327,24 @@ class EPaperDisplay:
         """Get the pixel difference threshold based on battery status.
 
         Implements battery-aware thresholds to reduce refresh frequency
-        when battery is low, extending overall battery life.
-
+        when battery is low, extending overall battery life. The threshold
+        determines how different a pixel must be before it's considered "changed".
+        
+        Higher thresholds mean fewer pixels are considered different, reducing
+        refresh frequency at the cost of potential minor display inconsistencies.
+        
+        Threshold values are determined by battery status:
+        - While charging: standard threshold from config
+        - Critical battery (≤10%): highest threshold to minimize refreshes
+        - Low battery (≤20%): elevated threshold to reduce refreshes
+        - Normal battery: standard threshold from config
+        
+        Args:
+            None
+            
         Returns:
-            The threshold value to use for pixel differences
+            int: The threshold value to use for pixel differences (0-255)
+                Higher values mean larger differences are required to trigger refresh
         """
         # If battery-aware thresholds are disabled, return the default threshold
         if not self.config.battery_aware_threshold or self._current_battery_status is None:
@@ -325,9 +373,24 @@ class EPaperDisplay:
         Implements battery-aware thresholds to ensure refreshes only occur when
         there are enough changed pixels to warrant an update, which helps reduce
         power consumption when battery is low.
-
+        
+        This method works together with _get_pixel_diff_threshold() to determine
+        when a display refresh should occur:
+        1. First, pixels must exceed the difference threshold to be considered "changed"
+        2. Then, the total count of changed pixels must exceed the minimum returned here
+        
+        Minimum changed pixel counts are determined by battery status:
+        - While charging: standard minimum from config
+        - Critical battery (≤10%): highest minimum to minimize refreshes
+        - Low battery (≤20%): elevated minimum to reduce refreshes
+        - Normal battery: standard minimum from config
+        
+        Args:
+            None
+            
         Returns:
-            The minimum number of changed pixels required to trigger a refresh
+            int: The minimum number of changed pixels required to trigger a refresh.
+                Higher values mean more content must change before refresh occurs.
         """
         # If battery-aware thresholds are disabled, return the default threshold
         if not self.config.battery_aware_threshold or self._current_battery_status is None:

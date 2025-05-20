@@ -315,13 +315,29 @@ class WeatherDisplayClient:
 
         For longer sleep intervals, uses the PiJuice's hardware wake-up timer
         to completely shut down the system and save power, rather than keeping
-        the CPU running.
+        the CPU running. This approach dramatically reduces power consumption
+        during long idle periods by turning off the entire system except for
+        the PiJuice RTC (Real-Time Clock) that will wake the system at the 
+        scheduled time.
+
+        Deep sleep is only triggered for intervals longer than 10 minutes
+        and when not in debug mode, as specified in the configuration.
+        When activated, it performs these steps:
+        1. Schedules a wakeup time with the PiJuice RTC
+        2. Puts the e-paper display into sleep mode
+        3. Initiates system shutdown
 
         Args:
             minutes: Number of minutes to schedule for deep sleep.
+                    This may be adjusted dynamically based on battery status.
 
         Returns:
-            True if the system will be shut down for deep sleep, False otherwise.
+            bool: True if the system will be shut down for deep sleep
+                 False if normal sleep is used instead (shorter duration or debug mode)
+            
+        Raises:
+            RuntimeError: If there is a critical error during the sleep process
+                         that prevents proper shutdown.
         """
         # For battery conservation, only schedule wakeup and shutdown if:
         # 1. The sleep duration is significant (more than 10 minutes)

@@ -39,17 +39,38 @@ class CurrentWeather(BaseModel):
 
     @property
     def timestamp(self) -> datetime:
-        """Convert Unix timestamp to datetime."""
+        """Convert Unix timestamp to datetime.
+        
+        This property converts the Unix timestamp (dt) to a Python datetime object
+        for easier handling and formatting of dates and times.
+        
+        Returns:
+            A datetime object representing the time of this weather data point.
+        """
         return datetime.fromtimestamp(self.dt)
 
     @property
     def sunrise_time(self) -> datetime:
-        """Convert Unix timestamp to datetime."""
+        """Convert sunrise Unix timestamp to datetime.
+        
+        This property converts the Unix timestamp for sunrise to a Python datetime object
+        for easier handling and formatting.
+        
+        Returns:
+            A datetime object representing the sunrise time.
+        """
         return datetime.fromtimestamp(self.sunrise)
 
     @property
     def sunset_time(self) -> datetime:
-        """Convert Unix timestamp to datetime."""
+        """Convert sunset Unix timestamp to datetime.
+        
+        This property converts the Unix timestamp for sunset to a Python datetime object
+        for easier handling and formatting.
+        
+        Returns:
+            A datetime object representing the sunset time.
+        """
         return datetime.fromtimestamp(self.sunset)
 
 
@@ -98,7 +119,14 @@ class DailyWeather(BaseModel):
 
     @property
     def timestamp(self) -> datetime:
-        """Convert Unix timestamp to datetime."""
+        """Convert Unix timestamp to datetime.
+        
+        This property converts the Unix timestamp (dt) to a Python datetime object
+        for easier handling and formatting of dates and times.
+        
+        Returns:
+            A datetime object representing the time of this weather data point.
+        """
         return datetime.fromtimestamp(self.dt)
 
 
@@ -122,7 +150,14 @@ class HourlyWeather(BaseModel):
 
     @property
     def timestamp(self) -> datetime:
-        """Convert Unix timestamp to datetime."""
+        """Convert Unix timestamp to datetime.
+        
+        This property converts the Unix timestamp (dt) to a Python datetime object
+        for easier handling and formatting of dates and times.
+        
+        Returns:
+            A datetime object representing the time of this weather data point.
+        """
         return datetime.fromtimestamp(self.dt)
 
 
@@ -149,12 +184,31 @@ class AirPollutionData(BaseModel):
 
     @property
     def timestamp(self) -> datetime:
-        """Convert Unix timestamp to datetime."""
+        """Convert Unix timestamp to datetime.
+        
+        This property converts the Unix timestamp (dt) to a Python datetime object
+        for easier handling and formatting of dates and times.
+        
+        Returns:
+            A datetime object representing the time of this weather data point.
+        """
         return datetime.fromtimestamp(self.dt)
 
     @property
     def aqi(self) -> int:
-        """Get air quality index."""
+        """Get air quality index.
+        
+        This property extracts the Air Quality Index (AQI) value from the main data dictionary.
+        The AQI is a value from 1-5 where:
+        1: Good
+        2: Fair
+        3: Moderate
+        4: Poor
+        5: Very Poor
+        
+        Returns:
+            An integer from 1-5 representing the air quality index.
+        """
         return self.main["aqi"]
 
 

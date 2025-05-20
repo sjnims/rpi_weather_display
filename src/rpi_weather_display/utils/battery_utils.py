@@ -133,11 +133,16 @@ def get_battery_text_description(status: BatteryStatus) -> str:
 def estimate_remaining_time(status: BatteryStatus) -> int | None:
     """Estimate remaining battery time in minutes.
 
+    Uses the time_remaining property from the BatteryStatus object,
+    which is typically calculated based on battery capacity and 
+    current discharge rate.
+
     Args:
-        status: Current battery status
+        status: Current battery status containing time_remaining data
 
     Returns:
-        Estimated battery time in minutes, or None if charging or unknown
+        int: Estimated battery time in minutes
+        None: If battery is charging or if time cannot be estimated
     """
     return status.time_remaining
 
@@ -145,12 +150,19 @@ def estimate_remaining_time(status: BatteryStatus) -> int | None:
 def calculate_drain_rate(status_history: list[BatteryStatus]) -> float | None:
     """Calculate battery drain rate in percent per hour.
 
+    Analyzes the battery level changes over time to determine the rate at which
+    the battery is discharging. This is used for power management decisions and
+    to estimate remaining battery life.
+
     Args:
-        status_history: List of battery status readings, most recent first
-                        Each status should have a timestamp
+        status_history: List of battery status readings, most recent first.
+                        Each status must have a valid timestamp property set.
+                        The list should contain at least 2 BatteryStatus objects
+                        with consecutive DISCHARGING state for valid calculation.
 
     Returns:
-        Drain rate in percent per hour, or None if insufficient data
+        float: Drain rate in percent per hour (positive value)
+        None: If insufficient data or if timestamps are missing/invalid
     """
     if len(status_history) < 2:
         return None

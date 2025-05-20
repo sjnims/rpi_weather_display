@@ -96,6 +96,7 @@ class WeatherRenderer:
         Args:
             dt: Datetime object or Unix timestamp.
             format_str: Format string to use (or None to use config's time_format or default).
+                        Should be a valid strftime format string like "%H:%M" or "%I:%M %p".
 
         Returns:
             Formatted time string.
@@ -127,11 +128,13 @@ class WeatherRenderer:
 
         Args:
             dt: Datetime object or Unix timestamp
-            format_str: Optional format string to override config
+            format_str: Optional format string to override config. Should be a valid strftime
+                       format string like "%m/%d/%Y %I:%M %p"
 
         Returns:
-            Formatted datetime string
-        """
+            Formatted datetime string in the format specified by config.display.display_datetime_format,
+            or if not configured, defaults to "MM/DD/YYYY HH:MM AM/PM" format without leading zeros
+        """  # noqa: E501
         if isinstance(dt, int):
             dt = datetime.fromtimestamp(dt)
 
@@ -749,12 +752,18 @@ class WeatherRenderer:
     def _get_daily_max_uvi(self, weather_data: WeatherData, now: datetime) -> tuple[float, int]:
         """Calculate the max UVI for today, persisting between API calls.
 
+        Finds the maximum UV index value from hourly forecasts for the current day
+        and persists it in a cache file to maintain the max value between API calls.
+        This ensures we track the highest UV value even as it passes.
+
         Args:
-            weather_data: Current weather data
-            now: Current datetime
+            weather_data: Current weather data object containing hourly forecasts
+            now: Current datetime representing the time of the API call
 
         Returns:
-            Tuple of (max_uvi, max_uvi_timestamp)
+            Tuple of (max_uvi, max_uvi_timestamp) where max_uvi is the maximum UV index
+            value for today and max_uvi_timestamp is the Unix timestamp when that maximum
+            value is expected
         """
         cache_file = Path(UVI_CACHE_FILENAME)
         today = now.date()

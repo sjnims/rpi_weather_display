@@ -26,7 +26,17 @@ class WeatherConfig(BaseModel):
     @field_validator("update_interval_minutes")
     @classmethod
     def validate_update_interval(cls, v: int) -> int:
-        """Validate update interval is not too frequent."""
+        """Validate update interval is not too frequent.
+        
+        Args:
+            v: The update interval in minutes.
+            
+        Returns:
+            The validated update interval value.
+            
+        Raises:
+            ValueError: If the update interval is less than 15 minutes.
+        """
         if v < 15:
             raise ValueError("Update interval must be at least 15 minutes to conserve battery")
         return v
@@ -34,7 +44,17 @@ class WeatherConfig(BaseModel):
     @field_validator("hourly_forecast_count")
     @classmethod
     def validate_hourly_forecast_count(cls, v: int) -> int:
-        """Validate the number of hourly forecasts to show."""
+        """Validate the number of hourly forecasts to show.
+        
+        Args:
+            v: The number of hourly forecasts.
+            
+        Returns:
+            The validated hourly forecast count.
+            
+        Raises:
+            ValueError: If the count is less than 1 or greater than 48.
+        """
         if v < 1 or v > 48:
             raise ValueError("Hourly forecast count must be between 1 and 48")
         return v
@@ -68,7 +88,17 @@ class DisplayConfig(BaseModel):
     @field_validator("pressure_units")
     @classmethod
     def validate_pressure_units(cls, v: str) -> str:
-        """Validate pressure units are one of the supported types."""
+        """Validate pressure units are one of the supported types.
+        
+        Args:
+            v: The pressure units string.
+            
+        Returns:
+            The validated pressure units value.
+            
+        Raises:
+            ValueError: If the pressure units are not one of the supported types.
+        """
         valid_units = ["hPa", "mmHg", "inHg"]
         if v not in valid_units:
             raise ValueError(f"Pressure units must be one of: {', '.join(valid_units)}")
@@ -114,7 +144,17 @@ class PowerConfig(BaseModel):
     @field_validator("wifi_power_save_mode")
     @classmethod
     def validate_wifi_power_save_mode(cls, v: str) -> str:
-        """Validate WiFi power save mode is one of the supported types."""
+        """Validate WiFi power save mode is one of the supported types.
+        
+        Args:
+            v: The WiFi power save mode string.
+            
+        Returns:
+            The validated WiFi power save mode value.
+            
+        Raises:
+            ValueError: If the mode is not one of the supported types.
+        """
         valid_modes = ["auto", "off", "on", "aggressive"]
         if v not in valid_modes:
             raise ValueError(f"WiFi power save mode must be one of: {', '.join(valid_modes)}")
@@ -123,7 +163,17 @@ class PowerConfig(BaseModel):
     @field_validator("low_charge_action")
     @classmethod
     def validate_low_charge_action(cls, v: str) -> str:
-        """Validate low charge action is valid."""
+        """Validate low charge action is valid.
+        
+        Args:
+            v: The low charge action string.
+            
+        Returns:
+            The validated low charge action value.
+            
+        Raises:
+            ValueError: If the action is not one of the supported types.
+        """
         valid_actions = [
             "NO_ACTION",
             "SYSTEM_HALT",
@@ -176,7 +226,20 @@ class AppConfig(BaseModel):
 
     @classmethod
     def from_yaml(cls, config_path: str | Path) -> "AppConfig":
-        """Load configuration from YAML file."""
+        """Load configuration from YAML file.
+        
+        Args:
+            config_path: Path to the YAML configuration file. Can be a string path
+                or a Path object.
+                
+        Returns:
+            An initialized AppConfig object with values from the YAML file.
+            
+        Raises:
+            FileNotFoundError: If the specified config file doesn't exist.
+            yaml.YAMLError: If the YAML file has invalid syntax.
+            ValidationError: If the configuration values don't match the expected schema.
+        """
         import yaml
 
         with open(config_path) as f:
