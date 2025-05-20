@@ -79,13 +79,7 @@ def setup_logging(config: LoggingConfig, name: str) -> logging.Logger:
         ],
     )
     
-    # Add console handler by default
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setFormatter(formatter)
-    console_handler.setLevel(level)
-    logger.addHandler(console_handler)
-
-    # Add file handler if configured
+    # Choose where to send logs based on configuration
     if config.file:
         try:
             # Ensure directory exists
@@ -104,6 +98,17 @@ def setup_logging(config: LoggingConfig, name: str) -> logging.Logger:
         except Exception as e:
             error_msg = f"Failed to set up file logging: {e}"
             print(error_msg, file=sys.stderr)
-            logger.error(error_msg)
+            
+            # Fall back to console logging if file logging fails
+            console_handler = logging.StreamHandler(sys.stdout)
+            console_handler.setFormatter(formatter)
+            console_handler.setLevel(level)
+            logger.addHandler(console_handler)
+    else:
+        # Add console handler when no file is configured
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setFormatter(formatter)
+        console_handler.setLevel(level)
+        logger.addHandler(console_handler)
 
     return logger
