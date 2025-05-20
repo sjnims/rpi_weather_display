@@ -104,6 +104,9 @@ def setup_logging(config: LoggingConfig, name: str) -> logging.Logger:
             console_handler.setFormatter(formatter)
             console_handler.setLevel(level)
             logger.addHandler(console_handler)
+            
+            # Log the error through the logger
+            logger.error(error_msg)
     else:
         # Add console handler when no file is configured
         console_handler = logging.StreamHandler(sys.stdout)
