@@ -41,6 +41,7 @@ from rpi_weather_display.utils.battery_utils import (
     is_discharge_rate_abnormal,
     should_conserve_power,
 )
+from rpi_weather_display.utils.file_utils import read_text
 from rpi_weather_display.utils.time_utils import is_quiet_hours
 
 
@@ -669,7 +670,7 @@ class PowerStateManager:
 
     def _get_refresh_interval(self) -> timedelta:
         """Get the appropriate refresh interval based on battery status and power state.
-        
+
         Calculates the optimal refresh interval by taking into account various factors
         that affect power consumption, allowing the system to conserve battery when
         needed and refresh more frequently when power is not a concern.
@@ -682,7 +683,7 @@ class PowerStateManager:
 
         Args:
             None
-            
+
         Returns:
             timedelta: The appropriate refresh interval as a timedelta object, with minutes
                       adjusted based on the current power conditions.
@@ -960,9 +961,9 @@ class PowerStateManager:
         - Abnormal discharge detection
 
         The adjustment logic uses multiple factors:
-        - In CHARGING state: reduces wakeup time by BATTERY_CHARGING_FACTOR 
+        - In CHARGING state: reduces wakeup time by BATTERY_CHARGING_FACTOR
         - In CRITICAL state: increases wakeup time by CRITICAL_SLEEP_FACTOR
-        - In CONSERVING state: scales wakeup time based on battery level between 
+        - In CONSERVING state: scales wakeup time based on battery level between
           CONSERVING_MIN_FACTOR and CONSERVING_MAX_FACTOR
         - In QUIET_HOURS: uses the configured wake_up_interval_minutes
         - With abnormal discharge: increases wakeup time by ABNORMAL_SLEEP_FACTOR
@@ -971,7 +972,7 @@ class PowerStateManager:
             base_minutes: Base minutes to schedule wakeup (default interval)
 
         Returns:
-            int: Adjusted minutes for wakeup scheduling, always between 
+            int: Adjusted minutes for wakeup scheduling, always between
                 MIN_SLEEP_MINUTES and MAX_SLEEP_MINUTES
         """
         # Get current battery status and power state
@@ -1058,9 +1059,9 @@ class PowerStateManager:
         try:
             # CPU temperature
             try:
-                with open("/sys/class/thermal/thermal_zone0/temp") as f:
-                    temp = int(f.read().strip()) / 1000.0
-                    metrics["cpu_temp"] = temp
+                temp_content = read_text("/sys/class/thermal/thermal_zone0/temp")
+                temp = int(temp_content.strip()) / 1000.0
+                metrics["cpu_temp"] = temp
             except (FileNotFoundError, ValueError):
                 pass
 
@@ -1089,11 +1090,10 @@ class PowerStateManager:
             # This ensures we return an empty dict when testing command_not_found
             if Path(TOP_PATH).exists() or Path(DF_PATH).exists():
                 try:
-                    with open("/proc/meminfo") as f:
-                        meminfo = f.read()
-                        total = int(meminfo.split("MemTotal:")[1].split("kB")[0].strip()) * 1024
-                        free = int(meminfo.split("MemFree:")[1].split("kB")[0].strip()) * 1024
-                        metrics["memory_usage"] = (total - free) / total * 100.0
+                    meminfo = read_text("/proc/meminfo")
+                    total = int(meminfo.split("MemTotal:")[1].split("kB")[0].strip()) * 1024
+                    free = int(meminfo.split("MemFree:")[1].split("kB")[0].strip()) * 1024
+                    metrics["memory_usage"] = (total - free) / total * 100.0
                 except (FileNotFoundError, ValueError, IndexError):
                     pass
 
@@ -1164,25 +1164,25 @@ class PowerStateManager:
 
     def is_discharge_rate_abnormal(self) -> bool:
         """Check if the current discharge rate is abnormally high.
-        
+
         Compares the current battery discharge rate to the expected rate
         to detect situations where the battery is draining faster than normal.
         This can help identify problems and adjust power settings to compensate.
-        
+
         The method uses the battery_utils.is_discharge_rate_abnormal function
         to perform the actual comparison, which typically considers a discharge
         rate abnormal if it exceeds the expected rate by a significant threshold
         (defined in constants.py).
-        
+
         Args:
             None
-            
+
         Returns:
             bool: True if discharge rate is abnormally high compared to expected rate,
                  False if discharge rate is normal or cannot be determined
-                 
+
         Note:
-            Returns False if there is insufficient battery history data to 
+            Returns False if there is insufficient battery history data to
             calculate a reliable discharge rate.
         """
         drain_rate = calculate_drain_rate(list(self._battery_history))
@@ -1193,23 +1193,23 @@ class PowerStateManager:
 
     def get_expected_battery_life(self) -> int | None:
         """Estimate expected battery life based on current drain rate.
-        
+
         Calculates the remaining battery life in hours using either:
         1. The calculated drain rate from battery history, if available
         2. The time_remaining value reported by the battery, if available
-        
+
         This estimate is used for power management decisions like determining
         how long the device can safely sleep between operations.
-        
+
         Args:
             None
-        
+
         Returns:
             int: Estimated hours of battery life remaining
             None: If battery is charging or if remaining life cannot be calculated
-            
+
         Note:
-            When using the drain rate method, the calculation is: 
+            When using the drain rate method, the calculation is:
             battery_level / drain_rate_per_hour = hours_remaining
         """
         battery_status = self.get_battery_status()

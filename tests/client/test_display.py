@@ -151,11 +151,16 @@ class TestEPaperDisplay:
 
     def test_display_image(self) -> None:
         """Test display_image method."""
-        # Mock the PIL Image.open method
+        # Mock the read_bytes and PIL Image.open methods
         mock_image = MagicMock()
+        mock_image_data = b"mock image data"
         mock_pil_image_open = MagicMock(return_value=mock_image)
+        mock_read_bytes = MagicMock(return_value=mock_image_data)
 
-        with patch("PIL.Image.open", mock_pil_image_open):
+        with (
+            patch("PIL.Image.open", mock_pil_image_open),
+            patch("rpi_weather_display.client.display.read_bytes", mock_read_bytes),
+        ):
             # Mock the display_pil_image method
             self.display.display_pil_image = MagicMock()
 
@@ -163,13 +168,15 @@ class TestEPaperDisplay:
             self.display.display_image("test.png")
 
             # Verify method calls
-            mock_pil_image_open.assert_called_once_with("test.png")
+            mock_read_bytes.assert_called_once_with("test.png")
+            mock_pil_image_open.assert_called_once()
             self.display.display_pil_image.assert_called_once_with(mock_image)
 
             # Test with Path object
+            mock_read_bytes.reset_mock()
             self.display.display_pil_image.reset_mock()
             self.display.display_image(Path("test.png"))
-            mock_pil_image_open.assert_called_with(Path("test.png"))
+            mock_read_bytes.assert_called_once_with(Path("test.png"))
             self.display.display_pil_image.assert_called_once_with(mock_image)
 
     def test_display_pil_image_not_initialized(self) -> None:
