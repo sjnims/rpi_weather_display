@@ -3,8 +3,12 @@
 Provides abstraction for interacting with the Waveshare e-paper display,
 handling image rendering, partial refreshes, and power management.
 """
+
 # ruff: noqa: S101, ANN401
 # ^ Ignores "Use of assert detected" and "Any type" warnings
+
+# pyright: reportUnknownVariableType=false
+# pyright: reportUnknownMemberType=false
 
 from io import BytesIO
 from typing import Any, TypeVar
@@ -30,10 +34,6 @@ from rpi_weather_display.utils.file_utils import PathLike, read_bytes
 
 # Define type variables for conditional imports
 AutoEPDDisplayType = TypeVar("AutoEPDDisplayType")
-
-# pyright: reportUnknownVariableType=false
-# pyright: reportUnknownArgumentType=false
-# pyright: reportUnknownMemberType=false
 
 
 def _import_it8951() -> Any | None:

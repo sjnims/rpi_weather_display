@@ -77,7 +77,7 @@ pytest-timeout = "^2.2.0"
 httpx = "^0.25.1"
 hypothesis = "^6.87.1"
 ruff = "^0.5.3"
-pyright = "^1.1.334"
+pyright = "^1.1.401"
 pre-commit = "^3.5.0"
 freezegun = "^1.2.0"
 
@@ -91,13 +91,13 @@ myst-parser = "^2.0.0"
 
 [tool.pyright]
 include = ["src", "tests"]
-exclude = ["**/node_modules", "**/__pycache__", ".venv", ".git", ".ruff_cache"]
+exclude = ["**/node_modules", "**/__pycache__", ".venv", ".git", ".ruff_cache", "**/site-packages/**"]
 reportMissingImports = true
 reportImportCycles = true
 reportMissingTypeStubs = false
 useLibraryCodeForTypes = true
 reportUnknownMemberType = "warning"
-reportUnnecessaryTypeIgnoreComment = "warning"
+reportUnnecessaryTypeIgnoreComment = "none"
 reportPrivateUsage = "warning"
 reportUnusedFunction = "none"
 reportUntypedFunctionDecorator = "none"

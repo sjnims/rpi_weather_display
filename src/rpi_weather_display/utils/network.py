@@ -1,6 +1,3 @@
-# pyright: reportGeneralTypeIssues=false
-# security: ignore=subprocess
-
 """Network management utilities for the Raspberry Pi weather display.
 
 Provides functionality for checking network connectivity, managing WiFi power
@@ -15,7 +12,6 @@ import time
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 from rpi_weather_display.constants import (
@@ -23,15 +19,12 @@ from rpi_weather_display.constants import (
     BROADCAST_PORT,
     GOOGLE_DNS,
     GOOGLE_DNS_PORT,
-    IFCONFIG_PATH,
-    IW_PATH,
-    IWCONFIG_PATH,
-    IWGETID_PATH,
-    SUDO_PATH,
     WIFI_SLEEP_SCRIPT,
 )
 from rpi_weather_display.models.config import AppConfig, PowerConfig
 from rpi_weather_display.models.system import BatteryStatus, NetworkState, NetworkStatus
+from rpi_weather_display.utils.file_utils import file_exists
+from rpi_weather_display.utils.path_utils import path_resolver
 
 
 class NetworkManager:
@@ -110,11 +103,11 @@ class NetworkManager:
 
     def _calculate_backoff_delay(self, attempt: int) -> float:
         """Calculate delay for exponential backoff.
-        
+
         Implements an exponential backoff algorithm with jitter to determine the
         wait time between retry attempts. The algorithm uses the formula:
         delay = initial_delay * (backoff_factor ^ attempt) * (1 + random_jitter)
-        
+
         This approach helps prevent multiple clients from retrying simultaneously
         (avoiding the "thundering herd" problem) and gradually increases wait times
         for persistent failures.
@@ -144,7 +137,7 @@ class NetworkManager:
 
     def with_retry(self, operation: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:  # noqa: ANN401
         """Execute an operation with exponential backoff retries.
-        
+
         Attempts to execute the provided function repeatedly until it succeeds
         or the maximum number of retry attempts is reached. Uses exponential
         backoff between attempts to avoid overwhelming the system.
@@ -185,9 +178,9 @@ class NetworkManager:
         """
         try:
             # SECURITY: Safe command with fixed arguments - reviewed for injection risk
-            cmd_path = Path(IWGETID_PATH)
-            if not cmd_path.exists():
-                self.logger.warning(f"Command not found: {IWGETID_PATH}")
+            cmd_path = path_resolver.get_bin_path("iwgetid")
+            if not file_exists(cmd_path):
+                self.logger.warning(f"Command not found: {cmd_path}")
                 return None
 
             result = subprocess.run(  # nosec # noqa: S603
@@ -227,9 +220,9 @@ class NetworkManager:
         """
         try:
             # SECURITY: Safe command with fixed arguments - reviewed for injection risk
-            cmd_path = Path(IWCONFIG_PATH)
-            if not cmd_path.exists():
-                self.logger.warning(f"Command not found: {IWCONFIG_PATH}")
+            cmd_path = path_resolver.get_bin_path("iwconfig")
+            if not file_exists(cmd_path):
+                self.logger.warning(f"Command not found: {cmd_path}")
                 return None
 
             result = subprocess.run(  # nosec # noqa: S603
@@ -282,13 +275,13 @@ class NetworkManager:
 
     def _try_connect(self) -> bool:
         """Try to establish network connectivity.
-        
+
         Attempts to establish a network connection by repeatedly checking for
         connectivity within the timeout period specified in the configuration.
 
         Returns:
             True if connected, False otherwise.
-            
+
         Raises:
             ConnectionError: If connection cannot be established within the timeout period.
         """
@@ -306,13 +299,13 @@ class NetworkManager:
         """Enable WiFi."""
         try:
             # Use wifi-sleep.sh script for better power management
-            sudo_path = Path(SUDO_PATH)
-            wifi_script = Path(WIFI_SLEEP_SCRIPT)
+            sudo_path = path_resolver.get_bin_path("sudo")
+            wifi_script = path_resolver.normalize_path(WIFI_SLEEP_SCRIPT)
 
-            if not sudo_path.exists() or not wifi_script.exists():
+            if not file_exists(sudo_path) or not file_exists(wifi_script):
                 self.logger.warning(
-                    f"Required commands not found: sudo={sudo_path.exists()}, "
-                    f"wifi-sleep.sh={wifi_script.exists()}"
+                    f"Required commands not found: sudo={file_exists(sudo_path)}, "
+                    f"wifi-sleep.sh={file_exists(wifi_script)}"
                 )
                 # Fall back to old method if script doesn't exist
                 self._enable_wifi_legacy()
@@ -340,10 +333,10 @@ class NetworkManager:
         """Enable WiFi using legacy ifconfig method as fallback."""
         try:
             # SECURITY: Safe command with fixed arguments - reviewed for injection risk
-            sudo_path = Path(SUDO_PATH)
-            ifconfig_path = Path(IFCONFIG_PATH)
+            sudo_path = path_resolver.get_bin_path("sudo")
+            ifconfig_path = path_resolver.get_bin_path("ifconfig")
 
-            if not sudo_path.exists() or not ifconfig_path.exists():
+            if not file_exists(sudo_path) or not file_exists(ifconfig_path):
                 self.logger.warning("Commands not found for enabling WiFi")
                 return
 
@@ -374,13 +367,13 @@ class NetworkManager:
         """Disable WiFi to save power."""
         try:
             # Use wifi-sleep.sh script for better power management
-            sudo_path = Path(SUDO_PATH)
-            wifi_script = Path(WIFI_SLEEP_SCRIPT)
+            sudo_path = path_resolver.get_bin_path("sudo")
+            wifi_script = path_resolver.normalize_path(WIFI_SLEEP_SCRIPT)
 
-            if not sudo_path.exists() or not wifi_script.exists():
+            if not file_exists(sudo_path) or not file_exists(wifi_script):
                 self.logger.warning(
-                    f"Required commands not found: sudo={sudo_path.exists()}, "
-                    f"wifi-sleep.sh={wifi_script.exists()}"
+                    f"Required commands not found: sudo={file_exists(sudo_path)}, "
+                    f"wifi-sleep.sh={file_exists(wifi_script)}"
                 )
                 # Fall back to old method if script doesn't exist
                 self._disable_wifi_legacy()
@@ -402,10 +395,10 @@ class NetworkManager:
         """Disable WiFi using legacy ifconfig method as fallback."""
         try:
             # SECURITY: Safe command with fixed arguments - reviewed for injection risk
-            sudo_path = Path(SUDO_PATH)
-            ifconfig_path = Path(IFCONFIG_PATH)
+            sudo_path = path_resolver.get_bin_path("sudo")
+            ifconfig_path = path_resolver.get_bin_path("ifconfig")
 
-            if not sudo_path.exists() or not ifconfig_path.exists():
+            if not file_exists(sudo_path) or not file_exists(ifconfig_path):
                 self.logger.warning("Commands not found for disabling WiFi")
                 return
 
@@ -463,13 +456,13 @@ class NetworkManager:
 
         try:
             # Check if iw command is available
-            iw_path = Path(IW_PATH)
-            sudo_path = Path(SUDO_PATH)
+            iw_path = path_resolver.get_bin_path("iw")
+            sudo_path = path_resolver.get_bin_path("sudo")
 
-            if not iw_path.exists() or not sudo_path.exists():
+            if not file_exists(iw_path) or not file_exists(sudo_path):
                 self.logger.warning(
-                    f"Required commands not found: sudo={sudo_path.exists()}, "
-                    f"iw={iw_path.exists()}"
+                    f"Required commands not found: sudo={file_exists(sudo_path)}, "
+                    f"iw={file_exists(iw_path)}"
                 )
                 return False
 
@@ -487,8 +480,9 @@ class NetworkManager:
             # If using aggressive mode, we need additional settings
             if mode == "aggressive":
                 # Set beacon interval to maximum to reduce wakeups
+                iwconfig_path = path_resolver.get_bin_path("iwconfig")
                 subprocess.run(  # nosec # noqa: S603
-                    [str(sudo_path), str(IWCONFIG_PATH), "wlan0", "power", "timeout", "3600"],
+                    [str(sudo_path), str(iwconfig_path), "wlan0", "power", "timeout", "3600"],
                     check=True,
                     timeout=self.config.wifi_timeout_seconds,
                     shell=False,

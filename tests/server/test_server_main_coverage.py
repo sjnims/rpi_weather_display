@@ -1,8 +1,8 @@
 """Tests for improving coverage of the server main module."""
-# ruff: noqa: S101, RUF009
+
 # ^ Ignores "Use of assert detected" and "protected-access" in test files, which are common in tests
 # pyright: reportPrivateUsage=false, reportFunctionMemberAccess=false, reportUnknownVariableType=false
-# pyright: reportGeneralTypeIssues=false, reportAttributeAccessIssue=false, reportUnknownMemberType=false, reportUnknownArgumentType=false
+# pyright: reportGeneralTypeIssues=false
 
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -17,7 +17,7 @@ from rpi_weather_display.server.main import (
     RenderRequest,
     WeatherDisplayServer,
 )
-from rpi_weather_display.utils import path_resolver
+from rpi_weather_display.utils.path_utils import path_resolver
 
 
 def test_cache_dir_fallback() -> None:
@@ -53,7 +53,8 @@ def test_cache_dir_fallback() -> None:
         patch("rpi_weather_display.server.main.path_resolver.cache_dir", mock_cache_dir),
         patch("rpi_weather_display.server.main.path_resolver.ensure_dir_exists"),
         patch("pathlib.Path.exists", return_value=True),
-        patch("os.path.isdir", return_value=True),
+        patch("rpi_weather_display.utils.file_utils.dir_exists", return_value=True),
+        patch("os.path.isdir", return_value=True),  # Add patch for os.path.isdir
     ):
         # Create server with mock app factory
         server = WeatherDisplayServer(Path("test_config.yaml"), app_factory=app_factory)
@@ -62,18 +63,20 @@ def test_cache_dir_fallback() -> None:
         assert server.cache_dir == mock_cache_dir
 
 
-
 def test_main_function_with_config_path() -> None:
     """Test the main function when a config path is provided."""
     mock_config_path = MagicMock()
     mock_config_path.exists.return_value = True
-    
+
     # Mock WeatherDisplayServer
     mock_server_instance = MagicMock()
 
     with (
         patch("argparse.ArgumentParser.parse_args") as mock_parse_args,
-        patch("rpi_weather_display.server.main.WeatherDisplayServer", return_value=mock_server_instance) as mock_server_class,
+        patch(
+            "rpi_weather_display.server.main.WeatherDisplayServer",
+            return_value=mock_server_instance,
+        ) as mock_server_class,
     ):
         # Configure mock args with explicit config path
         mock_args = MagicMock()
@@ -84,13 +87,15 @@ def test_main_function_with_config_path() -> None:
 
         # Call main function
         from rpi_weather_display.server.main import main
+
         main()
 
         # Verify server was created with the provided config path
         mock_server_class.assert_called_once_with(mock_config_path)
-        
+
         # Verify run was called with the provided host and port
         mock_server_instance.run.assert_called_once_with(host="user-host", port=1234)
+
 
 def test_main_function_no_config_found() -> None:
     """Test the main function when no config is provided and default config is found."""
@@ -136,6 +141,7 @@ def test_main_function_no_config_found() -> None:
 
         # Verify server was created with the found config path
         mock_server.assert_called_once_with(mock_path)
+
 
 def test_main_function_no_config() -> None:
     """Test the main function when no config is provided and no default config is found."""
@@ -185,10 +191,10 @@ def test_main_function_no_config() -> None:
 
         # Verify the error message about config not found was printed
         mock_print.assert_any_call(f"Error: Configuration file not found at {mock_path}")
-        
+
         # In the main() function, we check config_path.exists() before creating a server,
         # but sometimes during testing, the mock behavior can be inconsistent or the behavior
-        # may vary when asserting not_called. What's most important is verifying that 
+        # may vary when asserting not_called. What's most important is verifying that
         # the error message was printed, which we've done above.
 
 
@@ -239,7 +245,9 @@ async def test_route_handlers(monkeypatch) -> None:
         ),
         patch("rpi_weather_display.server.main.path_resolver.ensure_dir_exists"),
         patch("pathlib.Path.exists", return_value=True),
+        patch("pathlib.Path.is_dir", return_value=True),
         patch("os.path.isdir", return_value=True),
+        patch("rpi_weather_display.utils.file_utils.dir_exists", return_value=True),
     ):
         # Create server with mock app factory
         server = WeatherDisplayServer(Path("test_config.yaml"), app_factory=app_factory)
@@ -332,12 +340,14 @@ async def test_handle_render() -> None:
         ),
         patch("rpi_weather_display.server.main.path_resolver.ensure_dir_exists"),
         patch("pathlib.Path.exists", return_value=True),
+        patch("pathlib.Path.is_dir", return_value=True),
         patch("os.path.isdir", return_value=True),
+        patch("rpi_weather_display.utils.file_utils.dir_exists", return_value=True),
         patch("rpi_weather_display.server.main.get_error_location", return_value="test_location"),
     ):
         # Create server
         server = WeatherDisplayServer(Path("test_config.yaml"), app_factory=app_factory)
-        
+
         # Replace the server logger with our mock
         server.logger = mock_logger
 
@@ -375,7 +385,7 @@ async def test_handle_render() -> None:
             # Test error handling
             error_msg = "Test error"
             server.api_client.get_weather_data = AsyncMock(side_effect=Exception(error_msg))
-            
+
             # Reset the logger mock
             mock_logger.reset_mock()
 
@@ -389,7 +399,7 @@ async def test_handle_render() -> None:
             mock_logger.error.assert_called_once_with(
                 f"Error rendering weather image [test_location]: {error_msg}"
             )
-            
+
             assert excinfo.value.status_code == 500
             assert error_msg in excinfo.value.detail
 
@@ -421,7 +431,9 @@ async def test_handle_weather() -> None:
         ),
         patch("rpi_weather_display.server.main.path_resolver.ensure_dir_exists"),
         patch("pathlib.Path.exists", return_value=True),
+        patch("pathlib.Path.is_dir", return_value=True),
         patch("os.path.isdir", return_value=True),
+        patch("rpi_weather_display.utils.file_utils.dir_exists", return_value=True),
     ):
         # Create server
         server = WeatherDisplayServer(Path("test_config.yaml"), app_factory=app_factory)
@@ -467,9 +479,13 @@ def test_static_files_not_found() -> None:
     def app_factory() -> FastAPI:
         """Create a mock FastAPI app for testing."""
         return mock_app
-        
+
     # Mock function to return False only for paths containing 'static'
     def mock_exists(path: Path) -> bool:
+        return "static" not in str(path)
+
+    def mock_is_dir(path: Path) -> bool:
+        # Same behavior as exists for directories
         return "static" not in str(path)
 
     with (
@@ -486,13 +502,16 @@ def test_static_files_not_found() -> None:
         patch("rpi_weather_display.server.main.path_resolver.ensure_dir_exists"),
         # The key difference: static directory doesn't exist
         patch("pathlib.Path.exists", mock_exists),
+        patch("pathlib.Path.is_dir", mock_is_dir),
+        patch("os.path.isdir", mock_is_dir),  # Add os.path.isdir mock
+        patch("rpi_weather_display.utils.file_utils.dir_exists", mock_exists),
     ):
         # Create server
         server = WeatherDisplayServer(Path("test_config.yaml"), app_factory=app_factory)
-        
+
         # Replace the server's logger with our mock to ensure we capture the warning
         server.logger = mock_logger
-        
+
         # Force call to _setup_static_files to ensure it logs the warning
         server._setup_static_files()
 
@@ -540,12 +559,14 @@ def test_server_run_method() -> None:
         ),
         patch("rpi_weather_display.server.main.path_resolver.ensure_dir_exists"),
         patch("pathlib.Path.exists", return_value=True),
+        patch("pathlib.Path.is_dir", return_value=True),
         patch("os.path.isdir", return_value=True),
+        patch("rpi_weather_display.utils.file_utils.dir_exists", return_value=True),
         patch("uvicorn.run", mock_uvicorn.run),
     ):
         # Create the server
         server = WeatherDisplayServer(Path("test_config.yaml"), app_factory=app_factory)
-        
+
         # Replace the server's logger
         server.logger = mock_logger
 
@@ -579,7 +600,12 @@ def test_server() -> WeatherDisplayServer:
         """Create a mock FastAPI app for testing."""
         return mock_app
 
-    with patch("pathlib.Path.exists", return_value=True), patch("os.path.isdir", return_value=True):
+    with (
+        patch("pathlib.Path.exists", return_value=True),
+        patch("pathlib.Path.is_dir", return_value=True),
+        patch("os.path.isdir", return_value=True),
+        patch("rpi_weather_display.utils.file_utils.dir_exists", return_value=True),
+    ):
         # Create mock config
         mock_config = MagicMock()
         mock_config.logging = LoggingConfig(level="INFO")

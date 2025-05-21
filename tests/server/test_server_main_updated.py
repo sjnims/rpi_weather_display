@@ -1,8 +1,7 @@
 """Tests for server main module using path_resolver."""
-# ruff: noqa: S101, RUF009
-# ^ Ignores "Use of assert detected" and "protected-access" in test files, which are common in tests
-# pyright: reportPrivateUsage=false, reportFunctionMemberAccess=false, reportUnknownVariableType=false
-# pyright: reportGeneralTypeIssues=false, reportAttributeAccessIssue=false, reportUnknownMemberType=false, reportUnknownArgumentType=false
+
+# pyright: reportPrivateUsage=false, reportUnknownVariableType=false
+# pyright: reportGeneralTypeIssues=false
 
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -37,19 +36,22 @@ def test_path_resolver_integration() -> None:
 
     # Mock StaticFiles to avoid directory check
     mock_static_files = MagicMock()
-    
+
     # Create a temporary directory for tests
     import tempfile
+
     test_static_dir = tempfile.mkdtemp()
     test_templates_dir = tempfile.mkdtemp()
-    
+
     try:
         # Must create real directories for the test
         static_dir_path = Path(test_static_dir)
         templates_dir_path = Path(test_templates_dir)
-        
+
         with (
-            patch("rpi_weather_display.models.config.AppConfig.from_yaml", return_value=mock_config),
+            patch(
+                "rpi_weather_display.models.config.AppConfig.from_yaml", return_value=mock_config
+            ),
             patch("rpi_weather_display.utils.logging.setup_logging", return_value=mock_logger),
             patch(
                 "rpi_weather_display.utils.path_resolver.get_templates_dir",
@@ -63,19 +65,18 @@ def test_path_resolver_integration() -> None:
             patch("fastapi.staticfiles.StaticFiles", return_value=mock_static_files),
         ):
             # Create server with mock app factory
-            server = WeatherDisplayServer(
-                Path("test_config.yaml"), app_factory=app_factory
-            )
-            
+            server = WeatherDisplayServer(Path("test_config.yaml"), app_factory=app_factory)
+
             # Verify the server uses path_resolver methods
             assert server.template_dir == templates_dir_path
             assert server.static_dir == static_dir_path
-            
+
             # Verify that mount was called for the static files
             mock_app.mount.assert_called_once()
     finally:
         # Cleanup temporary directories
         import shutil
+
         shutil.rmtree(test_static_dir, ignore_errors=True)
         shutil.rmtree(test_templates_dir, ignore_errors=True)
 
@@ -101,12 +102,15 @@ def test_cache_dir_fallback() -> None:
 
     # Create a temporary directory for tests
     import tempfile
+
     test_static_dir = tempfile.mkdtemp()
     test_templates_dir = tempfile.mkdtemp()
-    
+
     try:
         with (
-            patch("rpi_weather_display.models.config.AppConfig.from_yaml", return_value=mock_config),
+            patch(
+                "rpi_weather_display.models.config.AppConfig.from_yaml", return_value=mock_config
+            ),
             patch("rpi_weather_display.utils.logging.setup_logging", return_value=MagicMock()),
             patch(
                 "rpi_weather_display.utils.path_resolver.get_templates_dir",
@@ -128,6 +132,7 @@ def test_cache_dir_fallback() -> None:
     finally:
         # Cleanup temporary directories
         import shutil
+
         shutil.rmtree(test_static_dir, ignore_errors=True)
         shutil.rmtree(test_templates_dir, ignore_errors=True)
 
@@ -136,14 +141,19 @@ def test_main_function_with_config_path() -> None:
     """Test the main function when a config path is provided."""
     mock_config_path = MagicMock()
     mock_config_path.exists.return_value = True
-    
+
     # Mock WeatherDisplayServer
     mock_server_instance = MagicMock()
 
     with (
         patch("argparse.ArgumentParser.parse_args") as mock_parse_args,
-        patch("rpi_weather_display.server.main.WeatherDisplayServer", return_value=mock_server_instance) as mock_server_class,
-        patch("rpi_weather_display.server.main.validate_config_path", return_value=mock_config_path),
+        patch(
+            "rpi_weather_display.server.main.WeatherDisplayServer",
+            return_value=mock_server_instance,
+        ) as mock_server_class,
+        patch(
+            "rpi_weather_display.server.main.validate_config_path", return_value=mock_config_path
+        ),
     ):
         # Configure mock args with explicit config path
         mock_args = MagicMock()
@@ -154,11 +164,12 @@ def test_main_function_with_config_path() -> None:
 
         # Call main function
         from rpi_weather_display.server.main import main
+
         main()
 
         # Verify server was created with the provided config path
         mock_server_class.assert_called_once_with(mock_config_path)
-        
+
         # Verify run was called with the provided host and port
         mock_server_instance.run.assert_called_once_with(host="user-host", port=1234)
 
@@ -201,32 +212,33 @@ def test_validate_config_path_in_tests() -> None:
     ):
         # Create a non-existent path that we can check with our patched Path.exists
         test_path = Path("/test/config.yaml")
-        
+
         # From our docstring analysis, validate_config_path does the following:
         # 1. If path is None, it uses path_resolver.get_config_path() (we'll mock that)
         # 2. It checks if path exists, and if not, prints error messages
         # 3. In a test environment, it returns the path without exiting
         # 4. In production, it would exit with code 1
-        
+
         # Create a test double for path_resolver.get_config_path
-        with patch("rpi_weather_display.utils.path_utils.path_resolver.get_config_path",
-                  return_value=test_path):
-            
+        with patch(
+            "rpi_weather_display.utils.path_utils.path_resolver.get_config_path",
+            return_value=test_path,
+        ):
             # Make sure we recognize we're in a test environment
             with patch("inspect.stack") as mock_stack:
                 mock_frame = MagicMock()
                 mock_frame.filename = "/path/containing/pytest/file.py"
                 mock_stack.return_value = [mock_frame]
-                
+
                 # Now import and use the real function
                 from rpi_weather_display.utils.path_utils import validate_config_path
-                
+
                 # Call with None to test auto-resolution
                 result = validate_config_path(None)
-                
+
                 # Should return the path even though it doesn't exist
                 assert result == test_path
-                
+
                 # Should NOT have called sys.exit in a test environment
                 mock_exit.assert_not_called()
 
@@ -235,20 +247,20 @@ def test_validate_config_path_exit_behavior() -> None:
     """Test that validate_config_path calls sys.exit when not in a test environment."""
     # We'll replace the entire in_test check function to control behavior
     from rpi_weather_display.utils.path_utils import validate_config_path
-    
+
     # Create a version of the function with mocked test environment detection
     with patch("inspect.stack") as mock_stack:
         # First, make it return non-test environment
         mock_stack.return_value = []  # No frames at all, so 'pytest' won't be found
-        
+
         # Also mock sys.exit and Path.exists
         with patch("sys.exit") as mock_exit, patch("pathlib.Path.exists", return_value=False):
             # Test with a non-existent path in "production" mode
-            non_existent_path = Path("/fake/path.yaml")  
-            
+            non_existent_path = Path("/fake/path.yaml")
+
             # This should try to call sys.exit(1) due to our mocked production environment
             validate_config_path(non_existent_path)
-            
+
             # Verify sys.exit was called as expected
             mock_exit.assert_called_once_with(1)
 
@@ -258,7 +270,7 @@ def test_validate_config_path_search_locations() -> None:
     # For this test, we need to patch print and check what's printed
     with patch("builtins.print") as mock_print:
         from rpi_weather_display.utils.path_utils import validate_config_path
-        
+
         # Make all paths appear not to exist
         with patch("pathlib.Path.exists", return_value=False):
             # Make sure we're in a test env so sys.exit isn't called
@@ -267,28 +279,34 @@ def test_validate_config_path_search_locations() -> None:
                 mock_frame = MagicMock()
                 mock_frame.filename = "/path/with/pytest/test_file.py"
                 mock_stack.return_value = [mock_frame]
-                
+
                 # Test auto-resolved path (None)
                 auto_path = Path("/auto/config.yaml")
-                with patch("rpi_weather_display.utils.path_utils.path_resolver.get_config_path", 
-                           return_value=auto_path):
+                with patch(
+                    "rpi_weather_display.utils.path_utils.path_resolver.get_config_path",
+                    return_value=auto_path,
+                ):
                     # Call with None to use auto-resolution
                     validate_config_path(None)
-                    
+
                     # Should have printed search locations
                     printed_messages = [call[0][0] for call in mock_print.call_args_list]
-                    assert any("Searched in the following locations:" in msg for msg in printed_messages)
-                
+                    assert any(
+                        "Searched in the following locations:" in msg for msg in printed_messages
+                    )
+
                 # Reset the mock_print
                 mock_print.reset_mock()
-                
+
                 # Test explicit path
                 explicit_path = Path("/explicit/config.yaml")
                 validate_config_path(explicit_path)
-                
+
                 # Should NOT have printed search locations
                 printed_messages = [call[0][0] for call in mock_print.call_args_list]
-                assert not any("Searched in the following locations:" in msg for msg in printed_messages)
+                assert not any(
+                    "Searched in the following locations:" in msg for msg in printed_messages
+                )
 
 
 # End of validate_config_path tests
@@ -309,15 +327,18 @@ def test_static_files_not_found() -> None:
     def app_factory() -> FastAPI:
         """Create a mock FastAPI app for testing."""
         return mock_app
-    
+
     # Create a temporary directory for templates
     import tempfile
+
     test_templates_dir = tempfile.mkdtemp()
     nonexistent_static_dir = "/nonexistent/static/dir"
-    
+
     try:
         with (
-            patch("rpi_weather_display.models.config.AppConfig.from_yaml", return_value=mock_config),
+            patch(
+                "rpi_weather_display.models.config.AppConfig.from_yaml", return_value=mock_config
+            ),
             patch("rpi_weather_display.utils.logging.setup_logging", return_value=mock_logger),
             patch(
                 "rpi_weather_display.utils.path_resolver.get_templates_dir",
@@ -335,28 +356,29 @@ def test_static_files_not_found() -> None:
             mock_path = MagicMock()
             mock_path.exists.return_value = False
             mock_normalize.return_value = mock_path
-            
-            # Create server 
+
+            # Create server
             server = WeatherDisplayServer(Path("test_config.yaml"), app_factory=app_factory)
-            
+
             # Replace the server's logger with our mock
             server.logger = mock_logger
-            
+
             # Reset logger to start with clean slate
             mock_logger.reset_mock()
-            
+
             # Call method directly
             server._setup_static_files()
-            
+
             # Verify warning was logged
             warning_message = f"Static files directory not found at {Path(nonexistent_static_dir)}. Some resources may not load correctly."
             mock_logger.warning.assert_called_with(warning_message)
-            
+
             # Verify mount was NOT called
             mock_app.mount.assert_not_called()
     finally:
         # Cleanup temporary directories
         import shutil
+
         shutil.rmtree(test_templates_dir, ignore_errors=True)
 
 
@@ -396,12 +418,15 @@ async def test_route_handlers(monkeypatch) -> None:
 
     # Create temporary directories for tests
     import tempfile
+
     test_static_dir = tempfile.mkdtemp()
     test_templates_dir = tempfile.mkdtemp()
-    
+
     try:
         with (
-            patch("rpi_weather_display.models.config.AppConfig.from_yaml", return_value=mock_config),
+            patch(
+                "rpi_weather_display.models.config.AppConfig.from_yaml", return_value=mock_config
+            ),
             patch("rpi_weather_display.utils.logging.setup_logging", return_value=MagicMock()),
             patch(
                 "rpi_weather_display.utils.path_resolver.get_templates_dir",
@@ -474,6 +499,7 @@ async def test_route_handlers(monkeypatch) -> None:
     finally:
         # Cleanup temporary directories
         import shutil
+
         shutil.rmtree(test_static_dir, ignore_errors=True)
         shutil.rmtree(test_templates_dir, ignore_errors=True)
 
@@ -498,12 +524,15 @@ async def test_handle_render() -> None:
 
     # Create temporary directories for tests
     import tempfile
+
     test_static_dir = tempfile.mkdtemp()
     test_templates_dir = tempfile.mkdtemp()
-    
+
     try:
         with (
-            patch("rpi_weather_display.models.config.AppConfig.from_yaml", return_value=mock_config),
+            patch(
+                "rpi_weather_display.models.config.AppConfig.from_yaml", return_value=mock_config
+            ),
             patch("rpi_weather_display.utils.logging.setup_logging", return_value=mock_logger),
             patch(
                 "rpi_weather_display.utils.path_resolver.get_templates_dir",
@@ -515,11 +544,13 @@ async def test_handle_render() -> None:
             ),
             patch("rpi_weather_display.server.main.path_resolver.ensure_dir_exists"),
             patch("fastapi.staticfiles.StaticFiles", return_value=MagicMock()),
-            patch("rpi_weather_display.server.main.get_error_location", return_value="test_location"),
+            patch(
+                "rpi_weather_display.server.main.get_error_location", return_value="test_location"
+            ),
         ):
             # Create server
             server = WeatherDisplayServer(Path("test_config.yaml"), app_factory=app_factory)
-            
+
             # Replace the server logger with our mock
             server.logger = mock_logger
 
@@ -534,7 +565,11 @@ async def test_handle_render() -> None:
             # Create the request object
             request = RenderRequest(
                 battery=BatteryInfo(
-                    level=85, state=BatteryState.FULL.value, voltage=3.9, current=0.5, temperature=25.0
+                    level=85,
+                    state=BatteryState.FULL.value,
+                    voltage=3.9,
+                    current=0.5,
+                    temperature=25.0,
                 )
             )
 
@@ -557,7 +592,7 @@ async def test_handle_render() -> None:
                 # Test error handling
                 error_msg = "Test error"
                 server.api_client.get_weather_data = AsyncMock(side_effect=Exception(error_msg))
-                
+
                 # Reset the logger mock
                 mock_logger.reset_mock()
 
@@ -571,12 +606,13 @@ async def test_handle_render() -> None:
                 mock_logger.error.assert_called_once_with(
                     f"Error rendering weather image [test_location]: {error_msg}"
                 )
-                
+
                 assert excinfo.value.status_code == 500
                 assert error_msg in excinfo.value.detail
     finally:
         # Cleanup temporary directories
         import shutil
+
         shutil.rmtree(test_static_dir, ignore_errors=True)
         shutil.rmtree(test_templates_dir, ignore_errors=True)
 
@@ -597,12 +633,15 @@ async def test_handle_weather() -> None:
 
     # Create temporary directories for tests
     import tempfile
+
     test_static_dir = tempfile.mkdtemp()
     test_templates_dir = tempfile.mkdtemp()
-    
+
     try:
         with (
-            patch("rpi_weather_display.models.config.AppConfig.from_yaml", return_value=mock_config),
+            patch(
+                "rpi_weather_display.models.config.AppConfig.from_yaml", return_value=mock_config
+            ),
             patch("rpi_weather_display.utils.logging.setup_logging", return_value=MagicMock()),
             patch(
                 "rpi_weather_display.utils.path_resolver.get_templates_dir",
@@ -645,6 +684,7 @@ async def test_handle_weather() -> None:
     finally:
         # Cleanup temporary directories
         import shutil
+
         shutil.rmtree(test_static_dir, ignore_errors=True)
         shutil.rmtree(test_templates_dir, ignore_errors=True)
 
@@ -672,12 +712,15 @@ def test_server_run_method() -> None:
 
     # Create temporary directories for tests
     import tempfile
+
     test_static_dir = tempfile.mkdtemp()
     test_templates_dir = tempfile.mkdtemp()
-    
+
     try:
         with (
-            patch("rpi_weather_display.models.config.AppConfig.from_yaml", return_value=mock_config),
+            patch(
+                "rpi_weather_display.models.config.AppConfig.from_yaml", return_value=mock_config
+            ),
             patch("rpi_weather_display.utils.logging.setup_logging", return_value=mock_logger),
             patch(
                 "rpi_weather_display.utils.path_resolver.get_templates_dir",
@@ -693,7 +736,7 @@ def test_server_run_method() -> None:
         ):
             # Create the server
             server = WeatherDisplayServer(Path("test_config.yaml"), app_factory=app_factory)
-            
+
             # Replace the server's logger
             server.logger = mock_logger
 
@@ -718,5 +761,6 @@ def test_server_run_method() -> None:
     finally:
         # Cleanup temporary directories
         import shutil
+
         shutil.rmtree(test_static_dir, ignore_errors=True)
         shutil.rmtree(test_templates_dir, ignore_errors=True)

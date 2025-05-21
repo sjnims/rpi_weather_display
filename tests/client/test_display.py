@@ -6,7 +6,6 @@ This file combines all tests from:
 - test_display_additional.py (additional coverage tests)
 """
 
-# ruff: noqa: S101, ANN401, S102
 # pyright: reportPrivateUsage=false
 
 from pathlib import Path

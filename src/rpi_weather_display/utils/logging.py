@@ -1,6 +1,3 @@
-# pyright: reportUnknownVariableType=false, reportUnknownMemberType=false
-# pyright: reportUnknownArgumentType=false
-
 """Logging configuration module for the weather display application.
 
 Provides structured logging setup with support for console and file output
@@ -10,12 +7,12 @@ in both JSON and human-readable formats.
 import logging
 import sys
 from logging.handlers import RotatingFileHandler
-from pathlib import Path
 
 import structlog
 from structlog.stdlib import ProcessorFormatter
 
 from rpi_weather_display.models.config import LoggingConfig
+from rpi_weather_display.utils.path_utils import path_resolver
 
 
 def setup_logging(config: LoggingConfig, name: str) -> logging.Logger:
@@ -85,7 +82,7 @@ def setup_logging(config: LoggingConfig, name: str) -> logging.Logger:
             # Ensure directory exists
             from rpi_weather_display.utils import file_utils
 
-            log_path = Path(config.file)
+            log_path = path_resolver.normalize_path(config.file)
             file_utils.ensure_dir_exists(log_path.parent)
 
             # Create file handler

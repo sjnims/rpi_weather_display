@@ -1,8 +1,5 @@
 """Additional tests to improve coverage for client main module."""
-# ruff: noqa: S101, A002, PLR2004, SLF001
-# ^ Ignores "Use of assert detected" in test files
-# pyright: reportPrivateUsage=false
-# ^ Allows tests to access protected members
+
 # pyright: reportAttributeAccessIssue=false
 # ^ Allows tests to access dynamically created attributes
 # pyright: reportFunctionMemberAccess=false
@@ -257,18 +254,20 @@ class TestAdditionalClientCoverage:
 
         # Create a mock for validate_config_path that returns a Path
         mock_path = Path("/etc/rpi_weather_display/config.yaml")
-        
+
         # Create a mock for the parser
         mock_parser = MagicMock()
         mock_parser.parse_args.return_value = mock_args
-        
+
         # Create a mock for the client
         mock_client = MagicMock()
 
         # Use patching to control the behavior
         with (
             patch("argparse.ArgumentParser", return_value=mock_parser),
-            patch("rpi_weather_display.client.main.validate_config_path", return_value=mock_path) as mock_validate_config_path,
+            patch(
+                "rpi_weather_display.client.main.validate_config_path", return_value=mock_path
+            ) as mock_validate_config_path,
             patch("rpi_weather_display.client.main.WeatherDisplayClient", return_value=mock_client),
         ):
             # Call the main function
@@ -288,7 +287,9 @@ class TestAdditionalClientCoverage:
         mock_parser.parse_args.return_value = mock_args
 
         # Define a simpler behavior for the validate_config_path mock that avoids recursion
-        def validate_side_effect(config_path) -> None:  # typing.Never would be more accurate, but we'll use None for simplicity
+        def validate_side_effect(
+            config_path,
+        ) -> None:  # typing.Never would be more accurate, but we'll use None for simplicity
             # Print error messages manually (simpler version to avoid recursion)
             # These prints will be captured by the patch.object(builtins, "print", wraps=print) below
             print("Error: Configuration file not found at /etc/rpi_weather_display/config.yaml")
@@ -300,10 +301,13 @@ class TestAdditionalClientCoverage:
             # Simulate SystemExit
             raise SystemExit(1)
 
-        # Use a simpler approach with wraps=print 
+        # Use a simpler approach with wraps=print
         with (
             patch("argparse.ArgumentParser", return_value=mock_parser),
-            patch("rpi_weather_display.client.main.validate_config_path", side_effect=validate_side_effect),
+            patch(
+                "rpi_weather_display.client.main.validate_config_path",
+                side_effect=validate_side_effect,
+            ),
             patch("rpi_weather_display.client.main.WeatherDisplayClient"),
             patch.object(builtins, "print", wraps=print) as mock_print,
         ):
@@ -312,9 +316,13 @@ class TestAdditionalClientCoverage:
                 main()
 
             # Assert each expected print call individually to avoid complex logic
-            mock_print.assert_any_call("Error: Configuration file not found at /etc/rpi_weather_display/config.yaml")
+            mock_print.assert_any_call(
+                "Error: Configuration file not found at /etc/rpi_weather_display/config.yaml"
+            )
             mock_print.assert_any_call("Searched in the following locations:")
             mock_print.assert_any_call("  - Current directory: /current/dir/config.yaml")
-            mock_print.assert_any_call("  - User config: /home/user/.config/rpi_weather_display/config.yaml")
+            mock_print.assert_any_call(
+                "  - User config: /home/user/.config/rpi_weather_display/config.yaml"
+            )
             mock_print.assert_any_call("  - System config: /etc/rpi_weather_display/config.yaml")
             mock_print.assert_any_call("  - Project root: /opt/rpi_weather_display/config.yaml")

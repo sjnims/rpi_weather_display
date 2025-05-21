@@ -1,6 +1,4 @@
-# pyright: reportUnknownMemberType=false, reportGeneralTypeIssues=false
-# pyright: reportMissingImports=false, reportUnknownVariableType=false
-# pyright: reportUnknownParameterType=false
+# pyright: reportUnknownMemberType=false
 
 """Server application for the Raspberry Pi weather display.
 
@@ -74,8 +72,6 @@ class RenderRequest(BaseModel):
     metrics: dict[str, float] = {}
 
 
-
-
 class WeatherDisplayServer:
     """Main server application for the weather display.
 
@@ -138,7 +134,7 @@ class WeatherDisplayServer:
 
         # Cache directory
         if self.config.server.cache_dir:
-            self.cache_dir = Path(self.config.server.cache_dir)
+            self.cache_dir = path_resolver.normalize_path(self.config.server.cache_dir)
             path_resolver.ensure_dir_exists(self.cache_dir)
         else:
             self.cache_dir = path_resolver.cache_dir
@@ -304,7 +300,6 @@ class WeatherDisplayServer:
             self.logger.error(f"Error getting weather data [{error_location}]: {e}")
             raise HTTPException(status_code=500, detail=str(e)) from e
 
-
     def _setup_static_files(self) -> None:
         """Set up static files handling.
 
@@ -336,15 +331,11 @@ class WeatherDisplayServer:
         bind_port = port or self.config.server.port
 
         self.logger.info(f"Starting Weather Display Server on {bind_host}:{bind_port}")
-        
+
         # Force Uvicorn to use standard logging
         print(f"Starting Uvicorn on http://{bind_host}:{bind_port}")
-        
-        uvicorn.run(
-            self.app, 
-            host=bind_host, 
-            port=bind_port
-        )
+
+        uvicorn.run(self.app, host=bind_host, port=bind_port)
 
 
 def main() -> None:

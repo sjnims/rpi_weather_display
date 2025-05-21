@@ -378,7 +378,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Weather Display Client")
     parser.add_argument(
         "--config",
-        type=Path,
+        type=str,  # Changed from Path to str to allow path_resolver to handle normalization
         default=None,  # Will use path_resolver to determine default
         help=f"Path to configuration file (default: {DEFAULT_CONFIG_PATH})",
     )

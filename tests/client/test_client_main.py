@@ -1,9 +1,8 @@
 """Tests for the client main module."""
-# ruff: noqa: S101, A002, PLR2004, SLF001
-# ^ Ignores "Use of assert detected" in test files
+
+
 # pyright: reportPrivateUsage=false
 # ^ Allows tests to access protected members
-# pyright: reportUnknownMemberType=false
 # pyright: reportAttributeAccessIssue=false
 # pyright: reportFunctionMemberAccess=false
 # ^ Ignores "Cannot access attribute X for class function"
@@ -645,7 +644,9 @@ class TestWeatherDisplayClient:
         mock_parser.parse_args.return_value = mock_args
 
         # For this test, let's define a validate_config_path function that prints and exits
-        def validate_side_effect(config_path) -> None:  # typing.Never would be more accurate, but we'll use None for simplicity
+        def validate_side_effect(
+            config_path,
+        ) -> None:  # typing.Never would be more accurate, but we'll use None for simplicity
             print("Error: Configuration file not found")
             raise SystemExit(1)
 
@@ -653,7 +654,10 @@ class TestWeatherDisplayClient:
             patch("argparse.ArgumentParser", return_value=mock_parser),
             patch("builtins.print", wraps=print) as mock_print,
             patch("rpi_weather_display.client.main.WeatherDisplayClient"),
-            patch("rpi_weather_display.client.main.validate_config_path", side_effect=validate_side_effect),
+            patch(
+                "rpi_weather_display.client.main.validate_config_path",
+                side_effect=validate_side_effect,
+            ),
         ):
             # Call the main function
             from rpi_weather_display.client.main import main
@@ -713,13 +717,15 @@ class TestMainFunction:
         mock_parser.parse_args.return_value = mock_args
 
         # Mock validate_config_path to exit
-        with patch("rpi_weather_display.client.main.validate_config_path", side_effect=SystemExit(1)):
+        with patch(
+            "rpi_weather_display.client.main.validate_config_path", side_effect=SystemExit(1)
+        ):
             # Set return value here to satisfy test assertion - this will handle the case where
             # WeatherDisplayClient is called with __call__ but we'll exit with SystemExit before it's actually created
             with patch.object(mock_client_cls, "__call__", return_value=None):
                 # Call main function and expect a SystemExit
                 with pytest.raises(SystemExit):
                     main()
-                
+
             # Note: In tests with SystemExit, asserting mock_client_cls.assert_not_called() is not reliable
             # since the execution doesn't complete normally - this is why we patched __call__ above

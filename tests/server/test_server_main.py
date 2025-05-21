@@ -1,8 +1,5 @@
 """Tests for the server main module."""
-# ruff: noqa: S101, RUF009
-# ^ Ignores "Use of assert detected" and "protected-access" in test files, which are common in tests
 
-import tempfile
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -15,13 +12,17 @@ from rpi_weather_display.constants import CLIENT_CACHE_DIR_NAME
 from rpi_weather_display.models.config import LoggingConfig
 from rpi_weather_display.models.system import BatteryState
 from rpi_weather_display.server.main import WeatherDisplayServer
+from rpi_weather_display.utils.file_utils import create_temp_file
+from rpi_weather_display.utils.path_utils import path_resolver
 
 
 @pytest.fixture()
 def test_server(test_config_path: str) -> WeatherDisplayServer:
     """Create a test server instance."""
     with patch("pathlib.Path.exists", return_value=True):
-        server = WeatherDisplayServer(Path(test_config_path))
+        # Use path_resolver to normalize the path
+        config_path = path_resolver.normalize_path(test_config_path)
+        server = WeatherDisplayServer(config_path)
     return server
 
 
@@ -131,6 +132,7 @@ def test_alt_static_dir() -> None:
     # Custom directory check for StaticFiles
     def custom_dir_check(directory: Path | str) -> bool:
         """Custom implementation of directory check for testing."""
+        # This is a mock function for testing
         return True
 
     with (
@@ -138,7 +140,7 @@ def test_alt_static_dir() -> None:
         patch("rpi_weather_display.utils.logging.setup_logging", return_value=MagicMock()),
         patch("fastapi.staticfiles.StaticFiles", return_value=mock_static_files),
         patch("rpi_weather_display.utils.path_resolver", mock_path_resolver),
-        patch("os.path.isdir", side_effect=custom_dir_check),
+        patch("rpi_weather_display.utils.file_utils.dir_exists", side_effect=custom_dir_check),
     ):
         # Create the server with our app factory
         WeatherDisplayServer(Path("test_config.yaml"), app_factory=app_factory)
@@ -177,49 +179,48 @@ async def test_render_endpoint(test_server: WeatherDisplayServer) -> None:
     mock_weather_data = MagicMock()
     test_server.api_client.get_weather_data = AsyncMock(return_value=mock_weather_data)
 
-    # Create a real temporary file for the test
-    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-        tmp_path = Path(tmp.name)
+    # Create a temporary file for the test
+    tmp_path = create_temp_file(suffix=".png")
 
-        try:
-            # Set up the renderer mock to return this real file
-            test_server.renderer.render_weather_image = AsyncMock(return_value=tmp_path)
+    try:
+        # Set up the renderer mock to return this real file
+        test_server.renderer.render_weather_image = AsyncMock(return_value=tmp_path)
 
-            # Create a mock for FileResponse that doesn't try to read the file
-            mock_response = Response(content=b"test image data", media_type="image/png")
+        # Create a mock for FileResponse that doesn't try to read the file
+        mock_response = Response(content=b"test image data", media_type="image/png")
 
-            # Create test client and patch FileResponse
-            with patch("fastapi.responses.FileResponse", return_value=mock_response):
-                client = TestClient(test_server.app)
+        # Create test client and patch FileResponse
+        with patch("fastapi.responses.FileResponse", return_value=mock_response):
+            client = TestClient(test_server.app)
 
-                # Create sample battery info
-                battery_info = {
-                    "level": 85,
-                    "state": "full",
-                    "voltage": 3.9,
-                    "current": 0.5,
-                    "temperature": 25.0,
-                }
+            # Create sample battery info
+            battery_info = {
+                "level": 85,
+                "state": "full",
+                "voltage": 3.9,
+                "current": 0.5,
+                "temperature": 25.0,
+            }
 
-                # Make request
-                response = client.post("/render", json={"battery": battery_info})
+            # Make request
+            response = client.post("/render", json={"battery": battery_info})
 
-                # Check response
-                assert response.status_code == 200
+            # Check response
+            assert response.status_code == 200
 
-                # Verify API client and renderer were called
-                test_server.api_client.get_weather_data.assert_called_once()
-                test_server.renderer.render_weather_image.assert_called_once()
+            # Verify API client and renderer were called
+            test_server.api_client.get_weather_data.assert_called_once()
+            test_server.renderer.render_weather_image.assert_called_once()
 
-                # Check that BatteryStatus was created correctly
-                args, _ = test_server.renderer.render_weather_image.call_args
-                battery_status = args[1]
-                assert battery_status.level == 85
-                assert battery_status.state == BatteryState.FULL
-        finally:
-            # Clean up temp file
-            if tmp_path.exists():
-                tmp_path.unlink()
+            # Check that BatteryStatus was created correctly
+            args, _ = test_server.renderer.render_weather_image.call_args
+            battery_status = args[1]
+            assert battery_status.level == 85
+            assert battery_status.state == BatteryState.FULL
+    finally:
+        # Clean up temp file
+        if tmp_path.exists():
+            tmp_path.unlink()
 
 
 @pytest.mark.asyncio()
@@ -413,8 +414,8 @@ def test_main_function_config_not_found() -> None:
         # Set up a return value for the server class to handle potential calls
         mock_instance = MagicMock()
         mock_server.return_value = mock_instance
-        
-        # Call main function 
+
+        # Call main function
         from rpi_weather_display.server.main import main
 
         main()
@@ -422,7 +423,7 @@ def test_main_function_config_not_found() -> None:
         # Verify error was printed
         mock_print.assert_called_once()
         assert "Error: Configuration file not found" in mock_print.call_args[0][0]
-        
+
         # In main(), we check if config exists before creating server, but since
         # we're mocking Path.exists to always return False, no server should be created.
         # However, the test may be failing because the mock isn't properly capturing this behavior,

@@ -1,13 +1,13 @@
 """Tests for the API client."""
-# ruff: noqa: S101, RUF009
-# ^ Ignores "Use of assert detected" and "protected-access" in test files, which are common in tests
 
-import json
-import os
+# File-level directive to ignore protected usage warnings
+# pyright: reportPrivateUsage=false
+
 from collections.abc import Generator
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any
+
+# No need for additional typing imports
 from unittest.mock import AsyncMock, patch
 
 import httpx
@@ -17,19 +17,19 @@ from httpx import Request, Response
 from rpi_weather_display.models.config import AppConfig
 from rpi_weather_display.models.weather import WeatherData
 from rpi_weather_display.server.api import WeatherAPIClient
-
-# File-level directive to ignore protected usage warnings
-# pyright: reportPrivateUsage=false
+from rpi_weather_display.utils.file_utils import JsonData, read_json
+from rpi_weather_display.utils.path_utils import path_resolver
 
 
 @pytest.fixture()
-def mock_weather_data() -> dict[str, Any]:
+def mock_weather_data() -> JsonData:
     """Load mock weather data from file."""
-    data_file = (
-        Path(os.path.dirname(os.path.dirname(__file__))) / "data" / "mock_weather_response.json"
+    # Use path_resolver to locate the test data file relative to the current file
+    data_file = path_resolver.normalize_path(
+        Path(__file__).parent.parent / "data" / "mock_weather_response.json"
     )
-    with open(data_file) as f:
-        return json.load(f)
+    # Use file_utils to read and parse JSON in one operation
+    return read_json(data_file)
 
 
 # Define a recursive type for JSON data
@@ -176,9 +176,7 @@ async def test_get_coordinates_http_error(
 
 
 @pytest.mark.asyncio()
-async def test_get_weather_data_cached(
-    app_config: AppConfig, mock_weather_data: dict[str, Any]
-) -> None:
+async def test_get_weather_data_cached(app_config: AppConfig, mock_weather_data: JsonData) -> None:
     """Test that cached weather data is returned when available."""
     # Create API client
     api_client = WeatherAPIClient(app_config.weather)
@@ -198,7 +196,7 @@ async def test_get_weather_data_cached(
 
 @pytest.mark.asyncio()
 async def test_get_weather_data_force_refresh(
-    app_config: AppConfig, mock_weather_data: dict[str, Any], mock_httpx_client: AsyncMock
+    app_config: AppConfig, mock_weather_data: JsonData, mock_httpx_client: AsyncMock
 ) -> None:
     """Test getting weather data with force refresh."""
     # Set up mock responses
@@ -272,7 +270,7 @@ async def test_get_weather_data_http_error(
 
 @pytest.mark.asyncio()
 async def test_get_weather_data_http_error_with_cache(
-    app_config: AppConfig, mock_weather_data: dict[str, Any], mock_httpx_client: AsyncMock
+    app_config: AppConfig, mock_weather_data: JsonData, mock_httpx_client: AsyncMock
 ) -> None:
     """Test that cached data is returned when API call fails but cache is available."""
     # Set up the mock to raise an HTTP error
@@ -293,7 +291,7 @@ async def test_get_weather_data_http_error_with_cache(
 
 @pytest.mark.asyncio()
 async def test_get_weather_data_cache_expired(
-    app_config: AppConfig, mock_weather_data: dict[str, Any], mock_httpx_client: AsyncMock
+    app_config: AppConfig, mock_weather_data: JsonData, mock_httpx_client: AsyncMock
 ) -> None:
     """Test that new data is fetched when cache is expired."""
     # Set up mock responses
@@ -452,7 +450,7 @@ async def test_get_coordinates_general_exception(
 
 @pytest.mark.asyncio()
 async def test_get_weather_data_empty_air_data(
-    app_config: AppConfig, mock_weather_data: dict[str, Any], mock_httpx_client: AsyncMock
+    app_config: AppConfig, mock_weather_data: JsonData, mock_httpx_client: AsyncMock
 ) -> None:
     """Test handling of empty air pollution data."""
     # Set up mock responses
@@ -494,7 +492,7 @@ async def test_get_weather_data_general_exception(
 
 @pytest.mark.asyncio()
 async def test_get_weather_data_general_exception_with_cache(
-    app_config: AppConfig, mock_weather_data: dict[str, Any], mock_httpx_client: AsyncMock
+    app_config: AppConfig, mock_weather_data: JsonData, mock_httpx_client: AsyncMock
 ) -> None:
     """Test that cached data is returned when general exception occurs but cache is available."""
     # Set up the mock to raise a general exception

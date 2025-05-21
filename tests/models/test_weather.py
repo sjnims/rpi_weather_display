@@ -4,8 +4,6 @@ This module tests the Pydantic models for weather information, ensuring
 that models correctly validate input data and compute derived properties.
 """
 
-# ruff: noqa: S101  # Allow assert usage in tests
-
 from datetime import datetime
 from typing import Any
 

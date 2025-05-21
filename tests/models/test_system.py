@@ -4,8 +4,6 @@ This module tests the Pydantic models for system information, including
 battery status, network conditions, and overall system metrics.
 """
 
-# ruff: noqa: S101  # Allow assert usage in tests
-
 from datetime import datetime, timedelta
 from typing import Any
 

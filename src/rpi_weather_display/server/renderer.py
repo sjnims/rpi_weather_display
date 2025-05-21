@@ -131,9 +131,10 @@ class WeatherRenderer:
                        format string like "%m/%d/%Y %I:%M %p"
 
         Returns:
-            Formatted datetime string in the format specified by config.display.display_datetime_format,
+            Formatted datetime string in the format specified by
+            config.display.display_datetime_format,
             or if not configured, defaults to "MM/DD/YYYY HH:MM AM/PM" format without leading zeros
-        """  # noqa: E501
+        """
         if isinstance(dt, int):
             dt = datetime.fromtimestamp(dt)
 
@@ -759,7 +760,7 @@ class WeatherRenderer:
             value for today and max_uvi_timestamp is the Unix timestamp when that maximum
             value is expected
         """
-        cache_file = Path(UVI_CACHE_FILENAME)
+        cache_file = path_resolver.get_cache_file(UVI_CACHE_FILENAME)
         today = now.date()
 
         # Initialize with current API data

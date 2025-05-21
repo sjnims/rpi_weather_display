@@ -8,6 +8,9 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field, field_validator
 
+# Note: We avoid importing path_resolver directly to prevent circular imports
+# with battery_utils.py which imports PowerConfig from this module
+
 
 def _normalize_path(path: str | Path) -> Path:
     """Convert a string path to a Path object.
@@ -255,7 +258,7 @@ class AppConfig(BaseModel):
         # Use direct import to avoid circular imports
         from rpi_weather_display.utils.file_utils import read_text
 
-        # Use internal path normalization to avoid circular imports with path_resolver
+        # Use internal normalization to avoid circular imports
         path = _normalize_path(config_path)
 
         # Read the YAML file

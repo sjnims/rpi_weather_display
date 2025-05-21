@@ -1,6 +1,5 @@
 """Tests for dynamic wakeup scheduling functionality."""
 
-# ruff: noqa: S101, A002, PLR2004
 # pyright: reportPrivateUsage=false
 
 from datetime import datetime
@@ -57,31 +56,28 @@ class TestDynamicWakeupScheduling:
     ) -> None:
         """Test that when dynamic=False, the original minutes are used."""
         base_minutes = 120
-        
+
         # Mock internal calculation method to verify it's not called
         with patch.object(
-            power_manager_with_config, 
-            "_calculate_dynamic_wakeup_minutes"
+            power_manager_with_config, "_calculate_dynamic_wakeup_minutes"
         ) as mock_calculate:
             # Call with dynamic=False
             power_manager_with_config.schedule_wakeup(base_minutes, dynamic=False)
-            
+
             # Verify calculation method wasn't called
             mock_calculate.assert_not_called()
 
     def test_dynamic_scheduling_enabled(self, power_manager_with_config: PowerStateManager) -> None:
         """Test that when dynamic=True, the calculation method is called."""
         base_minutes = 120
-        
+
         # Mock the calculation method to return a specific value
         with patch.object(
-            power_manager_with_config, 
-            "_calculate_dynamic_wakeup_minutes",
-            return_value=240
+            power_manager_with_config, "_calculate_dynamic_wakeup_minutes", return_value=240
         ) as mock_calculate:
             # Call with dynamic=True (default)
             power_manager_with_config.schedule_wakeup(base_minutes)
-            
+
             # Verify calculation method was called with base_minutes
             mock_calculate.assert_called_once_with(base_minutes)
 
@@ -90,7 +86,7 @@ class TestDynamicWakeupScheduling:
     ) -> None:
         """Test dynamic wakeup calculation in NORMAL power state."""
         base_minutes = 120
-        
+
         # Create a normal battery status
         battery_status = BatteryStatus(
             level=50,
@@ -101,7 +97,7 @@ class TestDynamicWakeupScheduling:
             time_remaining=300,
             timestamp=datetime.now(),
         )
-        
+
         with (
             patch.object(
                 power_manager_with_config, "get_battery_status", return_value=battery_status
@@ -112,13 +108,11 @@ class TestDynamicWakeupScheduling:
             patch.object(
                 power_manager_with_config, "is_discharge_rate_abnormal", return_value=False
             ),
-            patch.object(
-                power_manager_with_config, "get_expected_battery_life", return_value=10
-            ),
+            patch.object(power_manager_with_config, "get_expected_battery_life", return_value=10),
         ):
             # In NORMAL state with no abnormal discharge, should return base minutes
             result = power_manager_with_config._calculate_dynamic_wakeup_minutes(base_minutes)
-            
+
             # Should return the base minutes (capped by 25% of battery life)
             # 10 hours remaining * 60 min/hour * 0.25 = 150 minutes max
             assert result == 120  # Base minutes are below the max
@@ -128,7 +122,7 @@ class TestDynamicWakeupScheduling:
     ) -> None:
         """Test dynamic wakeup calculation in CHARGING power state."""
         base_minutes = 120
-        
+
         # Create a charging battery status
         battery_status = BatteryStatus(
             level=50,
@@ -139,7 +133,7 @@ class TestDynamicWakeupScheduling:
             time_remaining=None,
             timestamp=datetime.now(),
         )
-        
+
         with (
             patch.object(
                 power_manager_with_config, "get_battery_status", return_value=battery_status
@@ -150,7 +144,7 @@ class TestDynamicWakeupScheduling:
         ):
             # In CHARGING state, should return 80% of base minutes, but not below 30
             result = power_manager_with_config._calculate_dynamic_wakeup_minutes(base_minutes)
-            
+
             # Should return 80% of the base minutes: 120 * 0.8 = 96
             assert result == 96
 
@@ -159,7 +153,7 @@ class TestDynamicWakeupScheduling:
     ) -> None:
         """Test dynamic wakeup calculation in CRITICAL power state."""
         base_minutes = 120
-        
+
         # Create a critical battery status
         battery_status = BatteryStatus(
             level=5,
@@ -170,7 +164,7 @@ class TestDynamicWakeupScheduling:
             time_remaining=30,
             timestamp=datetime.now(),
         )
-        
+
         with (
             patch.object(
                 power_manager_with_config, "get_battery_status", return_value=battery_status
@@ -181,13 +175,11 @@ class TestDynamicWakeupScheduling:
             patch.object(
                 power_manager_with_config, "is_discharge_rate_abnormal", return_value=False
             ),
-            patch.object(
-                power_manager_with_config, "get_expected_battery_life", return_value=0.5
-            ),
+            patch.object(power_manager_with_config, "get_expected_battery_life", return_value=0.5),
         ):
             # In CRITICAL state, should return 8x base minutes
             result = power_manager_with_config._calculate_dynamic_wakeup_minutes(base_minutes)
-            
+
             # Should be 8 times base: 120 * 8 = 960
             # Currently the implementation doesn't apply the battery life limit in CRITICAL state
             assert result == 960  # Full 8x multiplier in CRITICAL state
@@ -197,7 +189,7 @@ class TestDynamicWakeupScheduling:
     ) -> None:
         """Test dynamic wakeup calculation in CONSERVING power state."""
         base_minutes = 120
-        
+
         # Create a battery status at the low threshold
         battery_status = BatteryStatus(
             level=20,  # At the low_battery_threshold
@@ -208,7 +200,7 @@ class TestDynamicWakeupScheduling:
             time_remaining=90,
             timestamp=datetime.now(),
         )
-        
+
         with (
             patch.object(
                 power_manager_with_config, "get_battery_status", return_value=battery_status
@@ -219,13 +211,11 @@ class TestDynamicWakeupScheduling:
             patch.object(
                 power_manager_with_config, "is_discharge_rate_abnormal", return_value=False
             ),
-            patch.object(
-                power_manager_with_config, "get_expected_battery_life", return_value=8
-            ),
+            patch.object(power_manager_with_config, "get_expected_battery_life", return_value=8),
         ):
             # At the low threshold, should use factor of 3.0
             result = power_manager_with_config._calculate_dynamic_wakeup_minutes(base_minutes)
-            
+
             # Expected: 120 * 3.0 = 360
             # Max allowed by battery life: 8 * 60 * 0.25 = 120
             assert result == 120  # Capped by battery life
@@ -235,7 +225,7 @@ class TestDynamicWakeupScheduling:
     ) -> None:
         """Test dynamic wakeup with battery level between low and critical thresholds."""
         base_minutes = 120
-        
+
         # Create a battery status between low and critical thresholds
         battery_status = BatteryStatus(
             level=15,  # Between low (20) and critical (10)
@@ -246,7 +236,7 @@ class TestDynamicWakeupScheduling:
             time_remaining=60,
             timestamp=datetime.now(),
         )
-        
+
         with (
             patch.object(
                 power_manager_with_config, "get_battery_status", return_value=battery_status
@@ -257,14 +247,12 @@ class TestDynamicWakeupScheduling:
             patch.object(
                 power_manager_with_config, "is_discharge_rate_abnormal", return_value=False
             ),
-            patch.object(
-                power_manager_with_config, "get_expected_battery_life", return_value=5
-            ),
+            patch.object(power_manager_with_config, "get_expected_battery_life", return_value=5),
         ):
             # Between thresholds, should use a factor between 3.0 and 6.0
             # With level=15, low=20, critical=10, expect factor = 4.5
             result = power_manager_with_config._calculate_dynamic_wakeup_minutes(base_minutes)
-            
+
             # Expected: 120 * 4.5 = 540
             # Max allowed by battery life: 5 * 60 * 0.25 = 75
             assert result == 75  # Capped by battery life
@@ -274,7 +262,7 @@ class TestDynamicWakeupScheduling:
     ) -> None:
         """Test dynamic wakeup calculation during quiet hours."""
         base_minutes = 120
-        
+
         # Create a battery status
         battery_status = BatteryStatus(
             level=50,
@@ -285,7 +273,7 @@ class TestDynamicWakeupScheduling:
             time_remaining=300,
             timestamp=datetime.now(),
         )
-        
+
         with (
             patch.object(
                 power_manager_with_config, "get_battery_status", return_value=battery_status
@@ -296,7 +284,7 @@ class TestDynamicWakeupScheduling:
         ):
             # During quiet hours, should use configured wake_up_interval_minutes
             result = power_manager_with_config._calculate_dynamic_wakeup_minutes(base_minutes)
-            
+
             # Should return the configured wake_up_interval_minutes (60)
             assert result == 60
 
@@ -305,7 +293,7 @@ class TestDynamicWakeupScheduling:
     ) -> None:
         """Test dynamic wakeup with abnormal discharge rate."""
         base_minutes = 120
-        
+
         # Create a battery status
         battery_status = BatteryStatus(
             level=50,
@@ -316,7 +304,7 @@ class TestDynamicWakeupScheduling:
             time_remaining=300,
             timestamp=datetime.now(),
         )
-        
+
         with (
             patch.object(
                 power_manager_with_config, "get_battery_status", return_value=battery_status
@@ -327,13 +315,11 @@ class TestDynamicWakeupScheduling:
             patch.object(
                 power_manager_with_config, "is_discharge_rate_abnormal", return_value=True
             ),
-            patch.object(
-                power_manager_with_config, "get_expected_battery_life", return_value=10
-            ),
+            patch.object(power_manager_with_config, "get_expected_battery_life", return_value=10),
         ):
             # With abnormal discharge, should add 50% to base minutes
             result = power_manager_with_config._calculate_dynamic_wakeup_minutes(base_minutes)
-            
+
             # Expected: 120 * 1.5 = 180
             # Max allowed by battery life: 10 * 60 * 0.25 = 150
             assert result == 150  # Capped by battery life
@@ -351,14 +337,12 @@ class TestDynamicWakeupScheduling:
             patch.object(
                 power_manager_with_config, "is_discharge_rate_abnormal", return_value=False
             ),
-            patch.object(
-                power_manager_with_config, "get_expected_battery_life", return_value=1
-            ),
+            patch.object(power_manager_with_config, "get_expected_battery_life", return_value=1),
         ):
             # Very low base minutes should be bounded to minimum 30
             result = power_manager_with_config._calculate_dynamic_wakeup_minutes(10)
             assert result == 30
-            
+
         # Test maximum bound (24 hours)
         with (
             patch.object(power_manager_with_config, "get_battery_status"),
@@ -368,9 +352,7 @@ class TestDynamicWakeupScheduling:
             patch.object(
                 power_manager_with_config, "is_discharge_rate_abnormal", return_value=False
             ),
-            patch.object(
-                power_manager_with_config, "get_expected_battery_life", return_value=100
-            ),
+            patch.object(power_manager_with_config, "get_expected_battery_life", return_value=100),
         ):
             # Very high base minutes with 8x multiplier should be bounded to 24 hours
             result = power_manager_with_config._calculate_dynamic_wakeup_minutes(200)
@@ -383,7 +365,7 @@ class TestDynamicWakeupScheduling:
     ) -> None:
         """Test dynamic wakeup when no battery life estimate is available."""
         base_minutes = 120
-        
+
         # Create a battery status
         battery_status = BatteryStatus(
             level=50,
@@ -394,7 +376,7 @@ class TestDynamicWakeupScheduling:
             time_remaining=None,
             timestamp=datetime.now(),
         )
-        
+
         with (
             patch.object(
                 power_manager_with_config, "get_battery_status", return_value=battery_status
@@ -405,13 +387,11 @@ class TestDynamicWakeupScheduling:
             patch.object(
                 power_manager_with_config, "is_discharge_rate_abnormal", return_value=False
             ),
-            patch.object(
-                power_manager_with_config, "get_expected_battery_life", return_value=None
-            ),
+            patch.object(power_manager_with_config, "get_expected_battery_life", return_value=None),
         ):
             # Without a battery life estimate, should return base minutes
             result = power_manager_with_config._calculate_dynamic_wakeup_minutes(base_minutes)
-            
+
             # Expected: 120 (unchanged without battery life information)
             assert result == 120
 
@@ -420,11 +400,11 @@ class TestDynamicWakeupScheduling:
     ) -> None:
         """Test when low and critical thresholds are equal (edge case)."""
         base_minutes = 120
-        
+
         # Set low_battery_threshold equal to critical_battery_threshold
         power_manager_with_config.config.power.low_battery_threshold = 10
         power_manager_with_config.config.power.critical_battery_threshold = 10
-        
+
         # Create a battery status at the threshold
         battery_status = BatteryStatus(
             level=10,
@@ -435,7 +415,7 @@ class TestDynamicWakeupScheduling:
             time_remaining=45,
             timestamp=datetime.now(),
         )
-        
+
         with (
             patch.object(
                 power_manager_with_config, "get_battery_status", return_value=battery_status
@@ -446,13 +426,11 @@ class TestDynamicWakeupScheduling:
             patch.object(
                 power_manager_with_config, "is_discharge_rate_abnormal", return_value=False
             ),
-            patch.object(
-                power_manager_with_config, "get_expected_battery_life", return_value=3
-            ),
+            patch.object(power_manager_with_config, "get_expected_battery_life", return_value=3),
         ):
             # When thresholds are equal, should use middle value factor (4.5)
             result = power_manager_with_config._calculate_dynamic_wakeup_minutes(base_minutes)
-            
+
             # Expected: 120 * 4.5 = 540
             # Max allowed by battery life: 3 * 60 * 0.25 = 45
             assert result == 45  # Capped by battery life
@@ -465,16 +443,14 @@ class TestDynamicWakeupScheduling:
         mock_pijuice = MagicMock()
         power_manager_with_config._pijuice = mock_pijuice
         power_manager_with_config._initialized = True
-        
+
         # Mock the dynamic calculation to return a specific value
         with patch.object(
-            power_manager_with_config, 
-            "_calculate_dynamic_wakeup_minutes",
-            return_value=180
+            power_manager_with_config, "_calculate_dynamic_wakeup_minutes", return_value=180
         ):
             # Call with dynamic=True
             result = power_manager_with_config.schedule_wakeup(120, dynamic=True)
-            
+
             # Verify PiJuice methods were called
             mock_pijuice.rtcAlarm.SetAlarm.assert_called_once()
             mock_pijuice.rtcAlarm.SetWakeupEnabled.assert_called_once_with(True)

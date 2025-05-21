@@ -7,9 +7,6 @@ Tests validate the behavior of Pydantic models in config.py, including:
 - Inheritance and composition
 """
 
-# ruff: noqa: S101
-# pyright: reportUnknownMemberType=false
-
 from pathlib import Path
 from unittest.mock import mock_open, patch
 

@@ -10,7 +10,6 @@ from collections import deque
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from enum import Enum, auto
-from pathlib import Path
 from typing import Any, TypedDict, cast
 
 from rpi_weather_display.constants import (
@@ -21,15 +20,11 @@ from rpi_weather_display.constants import (
     CONSERVING_MIN_FACTOR,
     CRITICAL_SLEEP_FACTOR,
     DEFAULT_DRAIN_RATE,
-    DF_PATH,
     DRAIN_WEIGHT_NEW,
     DRAIN_WEIGHT_PREV,
     MAX_BATTERY_PERCENTAGE_SLEEP,
     MAX_SLEEP_MINUTES,
     MIN_SLEEP_MINUTES,
-    SHUTDOWN_PATH,
-    SUDO_PATH,
-    TOP_PATH,
     TWELVE_HOURS_IN_MINUTES,
 )
 from rpi_weather_display.models.config import AppConfig
@@ -41,7 +36,8 @@ from rpi_weather_display.utils.battery_utils import (
     is_discharge_rate_abnormal,
     should_conserve_power,
 )
-from rpi_weather_display.utils.file_utils import read_text
+from rpi_weather_display.utils.file_utils import file_exists, read_text
+from rpi_weather_display.utils.path_utils import path_resolver
 from rpi_weather_display.utils.time_utils import is_quiet_hours
 
 
@@ -886,10 +882,10 @@ class PowerStateManager:
         self.logger.info("Shutting down system")
         try:
             # SECURITY: Safe command with fixed arguments - reviewed for injection risk
-            sudo_path = Path(SUDO_PATH)
-            shutdown_path = Path(SHUTDOWN_PATH)
+            sudo_path = path_resolver.get_bin_path("sudo")
+            shutdown_path = path_resolver.get_bin_path("shutdown")
 
-            if not sudo_path.exists() or not shutdown_path.exists():
+            if not file_exists(sudo_path) or not file_exists(shutdown_path):
                 self.logger.warning("Commands not found for shutdown")
                 return
 
@@ -1068,9 +1064,9 @@ class PowerStateManager:
             # CPU usage
             try:
                 # SECURITY: Safe command with fixed arguments - reviewed for injection risk
-                top_path = Path(TOP_PATH)
-                if not top_path.exists():
-                    self.logger.warning(f"Command not found: {TOP_PATH}")
+                top_path = path_resolver.get_bin_path("top")
+                if not file_exists(top_path):
+                    self.logger.warning(f"Command not found: {top_path}")
                 else:
                     cpu_usage = subprocess.check_output(  # nosec # noqa: S603
                         [str(top_path), "-bn1"],
@@ -1088,7 +1084,9 @@ class PowerStateManager:
 
             # Memory usage - only check if we have access to command-line tools
             # This ensures we return an empty dict when testing command_not_found
-            if Path(TOP_PATH).exists() or Path(DF_PATH).exists():
+            top_exists = file_exists(path_resolver.get_bin_path("top"))
+            df_exists = file_exists(path_resolver.get_bin_path("df"))
+            if top_exists or df_exists:
                 try:
                     meminfo = read_text("/proc/meminfo")
                     total = int(meminfo.split("MemTotal:")[1].split("kB")[0].strip()) * 1024
@@ -1100,9 +1098,9 @@ class PowerStateManager:
             # Disk usage
             try:
                 # SECURITY: Safe command with fixed arguments - reviewed for injection risk
-                df_path = Path(DF_PATH)
-                if not df_path.exists():
-                    self.logger.warning(f"Command not found: {DF_PATH}")
+                df_path = path_resolver.get_bin_path("df")
+                if not file_exists(df_path):
+                    self.logger.warning(f"Command not found: {df_path}")
                 else:
                     disk_usage = subprocess.check_output(  # nosec # noqa: S603
                         [str(df_path), "-h", "/"],

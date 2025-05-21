@@ -1,6 +1,4 @@
 """Tests for the battery_utils module."""
-# ruff: noqa: S101, A002, PLR2004
-# ^ Ignores "Use of assert detected" in test files
 
 from datetime import datetime, timedelta
 

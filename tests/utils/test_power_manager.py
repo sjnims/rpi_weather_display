@@ -1,6 +1,5 @@
 """Comprehensive tests for the PowerStateManager class."""
 
-# ruff: noqa: S101, A002, PLR2004
 # pyright: reportPrivateUsage=false
 
 import subprocess
@@ -1261,7 +1260,7 @@ class TestSystemMetricsAndShutdown:
     def test_get_system_metrics_mock(self, power_manager: PowerStateManager) -> None:
         """Test get_system_metrics in mock mode."""
         with (
-            patch("pathlib.Path.exists", return_value=False),
+            patch("rpi_weather_display.utils.power_manager.file_exists", return_value=False),
             patch("builtins.open", side_effect=FileNotFoundError),
         ):
             metrics = power_manager.get_system_metrics()
@@ -1277,7 +1276,7 @@ class TestSystemMetricsAndShutdown:
 
         # Setup for a successful metrics gathering
         with (
-            patch("pathlib.Path.exists", return_value=True),
+            patch("rpi_weather_display.utils.power_manager.file_exists", return_value=True),
             patch("builtins.open") as mock_open,
             patch("subprocess.check_output") as mock_output,
         ):
@@ -1321,7 +1320,7 @@ class TestSystemMetricsAndShutdown:
     def test_get_system_metrics_errors(self, power_manager: PowerStateManager) -> None:
         """Test get_system_metrics handling errors."""
         with (
-            patch("pathlib.Path.exists", return_value=True),
+            patch("rpi_weather_display.utils.power_manager.file_exists", return_value=True),
             patch("builtins.open", side_effect=FileNotFoundError),
             patch("subprocess.check_output", side_effect=subprocess.SubprocessError()),
         ):
@@ -1343,7 +1342,7 @@ class TestSystemMetricsAndShutdown:
         """Test the edge cases in get_system_metrics method."""
         # Test case: Memory info parsing errors
         with (
-            patch("pathlib.Path.exists", return_value=True),
+            patch("rpi_weather_display.utils.power_manager.file_exists", return_value=True),
             patch(
                 "builtins.open",
                 side_effect=[
@@ -1374,7 +1373,7 @@ class TestSystemMetricsAndShutdown:
         """Test system metrics with different parsing errors."""
         # Test case: CPU usage parsing errors
         with (
-            patch("pathlib.Path.exists", return_value=True),
+            patch("rpi_weather_display.utils.power_manager.file_exists", return_value=True),
             patch("builtins.open") as mock_open_fn,
             patch("subprocess.check_output") as mock_output,
         ):
@@ -1420,7 +1419,7 @@ class TestSystemMetricsAndShutdown:
         """Test shutdown_system when commands not found."""
         with (
             patch.object(power_manager, "_initialized", True),
-            patch("pathlib.Path.exists", return_value=False),
+            patch("rpi_weather_display.utils.power_manager.file_exists", return_value=False),
         ):
             # Should log warning but not run command
             power_manager.shutdown_system()
@@ -1430,7 +1429,7 @@ class TestSystemMetricsAndShutdown:
         """Test shutdown_system success."""
         with (
             patch.object(power_manager, "_initialized", True),
-            patch("pathlib.Path.exists", return_value=True),
+            patch("rpi_weather_display.utils.power_manager.file_exists", return_value=True),
             patch("subprocess.run") as mock_run,
         ):
             power_manager.shutdown_system()
@@ -1442,7 +1441,7 @@ class TestSystemMetricsAndShutdown:
         """Test shutdown_system with error."""
         with (
             patch.object(power_manager, "_initialized", True),
-            patch("pathlib.Path.exists", return_value=True),
+            patch("rpi_weather_display.utils.power_manager.file_exists", return_value=True),
             patch("subprocess.run", side_effect=subprocess.SubprocessError("Test error")),
         ):
             # Should log error but not crash
@@ -1868,7 +1867,7 @@ class TestRemainingCoverageGaps:
         """Test additional branches in get_system_metrics."""
         # Test the branch where we check for TOP_PATH and DF_PATH existence for memory usage
         with (
-            patch("pathlib.Path.exists", side_effect=[True, True, True, True]),  # All paths exist
+            patch("rpi_weather_display.utils.power_manager.file_exists", side_effect=[True, True, True, True]),  # All paths exist
             patch("builtins.open") as mock_open,
             patch("subprocess.check_output") as mock_output,
         ):
@@ -1917,7 +1916,7 @@ class TestFinalCoverageGaps:
                 "rpi_weather_display.utils.power_manager.is_discharge_rate_abnormal",
                 return_value=True,
             ),
-            patch("pathlib.Path.exists", return_value=False),  # Skip other metrics
+            patch("rpi_weather_display.utils.power_manager.file_exists", return_value=False),  # Skip other metrics
         ):
             # Execute the method
             metrics = power_manager.get_system_metrics()
@@ -1944,7 +1943,7 @@ class TestFinalCoverageGaps:
                 "rpi_weather_display.utils.power_manager.is_discharge_rate_abnormal",
                 return_value=False,  # Trigger normal drain case
             ),
-            patch("pathlib.Path.exists", return_value=False),  # Skip other metrics
+            patch("rpi_weather_display.utils.power_manager.file_exists", return_value=False),  # Skip other metrics
         ):
             # Execute the method
             metrics = power_manager.get_system_metrics()
@@ -1968,7 +1967,7 @@ class TestFinalCoverageGaps:
                 "rpi_weather_display.utils.power_manager.is_discharge_rate_abnormal",
                 return_value=False,
             ),
-            patch("pathlib.Path.exists", return_value=False),  # Skip other metrics
+            patch("rpi_weather_display.utils.power_manager.file_exists", return_value=False),  # Skip other metrics
         ):
             # Execute the method
             metrics = power_manager.get_system_metrics()
@@ -1995,7 +1994,7 @@ class TestFinalCoverageGaps:
                 "rpi_weather_display.utils.power_manager.is_discharge_rate_abnormal",
                 side_effect=Exception("This should not be called"),
             ),
-            patch("pathlib.Path.exists", return_value=False),  # Skip other metrics
+            patch("rpi_weather_display.utils.power_manager.file_exists", return_value=False),  # Skip other metrics
         ):
             # Execute the method
             metrics = power_manager.get_system_metrics()
@@ -2018,7 +2017,7 @@ class TestFinalCoverageGaps:
                 "rpi_weather_display.utils.power_manager.is_discharge_rate_abnormal",
                 side_effect=Exception("This should not be called"),
             ),
-            patch("pathlib.Path.exists", return_value=False),  # Skip other metrics
+            patch("rpi_weather_display.utils.power_manager.file_exists", return_value=False),  # Skip other metrics
         ):
             # Execute the method
             metrics = power_manager.get_system_metrics()
@@ -2039,7 +2038,7 @@ class TestFinalCoverageGaps:
             patch(
                 "rpi_weather_display.utils.power_manager.calculate_drain_rate", return_value=-1.0
             ),
-            patch("pathlib.Path.exists", return_value=False),
+            patch("rpi_weather_display.utils.power_manager.file_exists", return_value=False),
         ):
             # Call the method
             metrics = power_manager.get_system_metrics()

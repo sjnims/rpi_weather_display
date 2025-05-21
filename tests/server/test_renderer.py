@@ -4,14 +4,14 @@ This module tests the functionality of the renderer module, which is responsible
 for generating HTML and images from weather data.
 """
 
-# ruff: noqa: S101
 # pyright: reportPrivateUsage=false
 
 import json
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from pathlib import Path
-from tempfile import TemporaryDirectory
+
+# TemporaryDirectory replaced with file_utils.create_temp_dir
 from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, mock_open, patch
 
@@ -38,6 +38,7 @@ from rpi_weather_display.models.weather import (
     WeatherData,
 )
 from rpi_weather_display.server.renderer import WeatherRenderer
+from rpi_weather_display.utils.file_utils import create_temp_dir, create_temp_file, write_text
 
 
 @pytest.fixture()
@@ -71,14 +72,15 @@ def config() -> AppConfig:
 
 
 @pytest.fixture()
-def template_dir(tmp_path: Path) -> Path:
+def template_dir() -> Path:
     """Create a temporary template directory with a minimal template."""
-    template_dir = tmp_path / "templates"
-    template_dir.mkdir()
+    template_dir = create_temp_dir(prefix="templates_")
 
     # Create a minimal template file
     template_file = template_dir / "dashboard.html.j2"
-    template_file.write_text("""
+    write_text(
+        template_file,
+        """
     <!DOCTYPE html>
     <html>
     <head><title>Weather</title></head>
@@ -92,7 +94,8 @@ def template_dir(tmp_path: Path) -> Path:
         </div>
     </body>
     </html>
-    """)
+    """,
+    )
 
     return template_dir
 
@@ -322,10 +325,10 @@ class TestWeatherRenderer:
                 await renderer.generate_html(weather_data, battery_status)
 
     @pytest.mark.asyncio()
-    async def test_render_image(self, renderer: WeatherRenderer, tmp_path: Path) -> None:
+    async def test_render_image(self, renderer: WeatherRenderer) -> None:
         """Test rendering HTML to an image."""
         html = "<html><body>Test</body></html>"
-        output_path = tmp_path / "test_image.png"
+        output_path = create_temp_file(suffix=".png")
 
         # Mock Playwright to avoid actual browser usage
         mock_browser = MagicMock()
@@ -377,12 +380,11 @@ class TestWeatherRenderer:
         renderer: WeatherRenderer,
         weather_data: WeatherData,
         battery_status: BatteryStatus,
-        tmp_path: Path,
     ) -> None:
         """Test rendering weather data to an image."""
         # Mock the generate_html and render_image methods
         html = "<html><body>Test</body></html>"
-        output_path = tmp_path / "test_weather_image.png"
+        output_path = create_temp_file(suffix=".png")
 
         # Create mocks for the async methods
         mock_generate_html = AsyncMock(return_value=html)
@@ -598,7 +600,7 @@ class TestWeatherRenderer:
         assert hasattr(renderer, "_weather_id_to_icon")
         assert mock_read_text.called
         assert mock_reader.called
-        
+
         # Verify the mappings have the expected values
         assert "800_01d" in renderer._weather_icon_map
         assert renderer._weather_icon_map["800_01d"] == "wi-day-sunny"
@@ -856,12 +858,10 @@ class TestWeatherRenderer:
             assert isinstance(result, str)
             assert result == "0"  # Current implementation returns "0"
 
-    def test_csv_reading_with_invalid_columns(
-        self, renderer: WeatherRenderer, tmp_path: Path
-    ) -> None:
+    def test_csv_reading_with_invalid_columns(self, renderer: WeatherRenderer) -> None:
         """Test handling of CSV files with invalid columns."""
         # Create a temporary CSV file with invalid columns
-        csv_path = tmp_path / "invalid_map.csv"
+        csv_path = create_temp_file(suffix=".csv")
         with open(csv_path, "w") as f:
             f.write("Wrong,Headers,Here\n")
             f.write("800,01d,wi-day-sunny\n")
@@ -885,14 +885,16 @@ class TestWeatherRenderer:
             assert hasattr(renderer, "_weather_id_to_icon")
             assert len(renderer._weather_icon_map) == 0  # Should be empty due to error
 
-    def test_csv_reading_with_valid_data(self, renderer: WeatherRenderer, tmp_path: Path) -> None:
+    def test_csv_reading_with_valid_data(self, renderer: WeatherRenderer) -> None:
         """Test parsing valid CSV data."""
         # Create a temporary CSV file with valid columns matching the expected CSV format
         # The format should match owm_icon_map.csv which has these columns
-        csv_path = tmp_path / "valid_map.csv"
+        csv_path = create_temp_file(suffix=".csv")
         with open(csv_path, "w") as f:
             # Use the exact same header as in the real CSV file
-            f.write("API response: id,API response: main,API response: description,API response: icon,Weather Icons Class,Weather Icons Filename\n")
+            f.write(
+                "API response: id,API response: main,API response: description,API response: icon,Weather Icons Class,Weather Icons Filename\n"
+            )
             f.write("800,Clear,clear sky,01d,wi-day-sunny,wi-day-sunny.svg\n")
             f.write("801,Clouds,few clouds,02d,wi-day-cloudy,wi-day-cloudy.svg\n")
 
@@ -1148,7 +1150,10 @@ class TestWeatherRenderer:
             delattr(renderer, "_weather_id_to_icon")
 
         # Use a more targeted patch approach for the csv import
-        with patch("rpi_weather_display.utils.file_utils.read_text", side_effect=Exception("CSV read error")):
+        with patch(
+            "rpi_weather_display.utils.file_utils.read_text",
+            side_effect=Exception("CSV read error"),
+        ):
             # Create a situation where the paths exist but reading the file fails
             with patch("rpi_weather_display.utils.file_utils.file_exists", return_value=True):
                 # This should handle the error and create empty maps
@@ -1488,13 +1493,17 @@ class TestWeatherRenderer:
         mock_template.render.return_value = "<html>UV Max Test</html>"
 
         # Create a temporary cache file path and ensure it doesn't exist
-        with TemporaryDirectory() as temp_dir:
-            cache_file = Path(temp_dir) / "uvi_max_cache.json"
+        temp_dir = create_temp_dir()
+        try:
+            cache_file = temp_dir / "uvi_max_cache.json"
 
-            # Patch the cache file path
+            # Patch the cache file path - updated for path_resolver
             with (
                 patch.object(renderer.jinja_env, "get_template", return_value=mock_template),
-                patch.object(Path, "__new__", return_value=cache_file),
+                patch(
+                    "rpi_weather_display.utils.path_utils.path_resolver.get_cache_file",
+                    return_value=cache_file,
+                ),
             ):
                 # Generate HTML
                 await renderer.generate_html(weather_data, battery_status)
@@ -1513,6 +1522,11 @@ class TestWeatherRenderer:
                 # Check the values
                 assert context["uvi_max"] == expected_max
                 assert context["uvi_time"] == expected_time
+        finally:
+            # Clean up the temporary directory
+            import shutil
+
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
     @pytest.mark.asyncio()
     async def test_uvi_max_calculation_with_current(self, renderer: WeatherRenderer) -> None:
@@ -1555,13 +1569,17 @@ class TestWeatherRenderer:
         mock_template.render.return_value = "<html>UV Max Test</html>"
 
         # Create a temporary cache file path and ensure it doesn't exist
-        with TemporaryDirectory() as temp_dir:
-            cache_file = Path(temp_dir) / "uvi_max_cache.json"
+        temp_dir = create_temp_dir()
+        try:
+            cache_file = temp_dir / "uvi_max_cache.json"
 
-            # Patch the cache file path
+            # Patch the cache file path - updated for path_resolver
             with (
                 patch.object(renderer.jinja_env, "get_template", return_value=mock_template),
-                patch.object(Path, "__new__", return_value=cache_file),
+                patch(
+                    "rpi_weather_display.utils.path_utils.path_resolver.get_cache_file",
+                    return_value=cache_file,
+                ),
             ):
                 # Generate HTML
                 await renderer.generate_html(weather_data, battery_status)
@@ -1579,7 +1597,13 @@ class TestWeatherRenderer:
 
                 # Check the values
                 assert context["uvi_max"] == expected_max
-                assert context["uvi_time"] == expected_time
+        finally:
+            # Clean up the temporary directory
+            import shutil
+
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+        assert context["uvi_time"] == expected_time
 
     def test_format_time_default(self, renderer: WeatherRenderer) -> None:
         """Test formatting time with the default AM/PM format (no leading zeros)."""
@@ -1832,15 +1856,13 @@ class TestWeatherRenderer:
         mock_file.assert_called_once()
 
     @pytest.mark.asyncio()
-    async def test_get_daily_max_uvi_integration(
-        self, renderer: WeatherRenderer, tmp_path: Path
-    ) -> None:
+    async def test_get_daily_max_uvi_integration(self, renderer: WeatherRenderer) -> None:
         """Test the _get_daily_max_uvi method with real file operations."""
         # In this test, we avoid mocking the _get_daily_max_uvi method
         # and instead use patch to control the inputs and outputs
 
         # Create a temporary cache file
-        cache_file = tmp_path / "uvi_max_cache.json"
+        cache_file = create_temp_file(suffix=".json")
 
         # Use today's date
         now = datetime.now()

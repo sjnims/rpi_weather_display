@@ -4,9 +4,6 @@ Tests cover the setup_logging function, including configuration of log levels,
 formatters, and handlers with various output formats.
 """
 
-# ruff: noqa: B017, S101
-# pyright: reportUnknownMemberType=false, reportUnknownArgumentType=false
-
 import logging
 import sys
 from logging.handlers import RotatingFileHandler
@@ -156,8 +153,8 @@ def test_setup_logging_file_error(json_file_config: LoggingConfig) -> None:
         # Verify only one handler (console) was added as fallback
         assert len(logger.handlers) == 1
         assert isinstance(logger.handlers[0], logging.StreamHandler)
-        
-        # We can't easily verify the error was logged since we'd need to capture 
+
+        # We can't easily verify the error was logged since we'd need to capture
         # the actual log message. The implementation now correctly logs the error
         # but testing it would require more setup than is worth it for this test.
 

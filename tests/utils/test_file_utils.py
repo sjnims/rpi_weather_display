@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from rpi_weather_display.utils import file_utils
+from rpi_weather_display.utils.path_utils import path_resolver
 
 
 class TestFileUtils:
@@ -16,10 +17,9 @@ class TestFileUtils:
     def test_read_text(self, tmpdir: Any):
         """Test reading text from a file."""
         # Create a temporary file with content
-        temp_file = Path(tmpdir) / "test.txt"
+        temp_file = path_resolver.normalize_path(Path(tmpdir) / "test.txt")
         content = "Hello, world!"
-        with open(temp_file, "w", encoding="utf-8") as f:
-            f.write(content)
+        file_utils.write_text(temp_file, content)
 
         # Read the content using file_utils
         result = file_utils.read_text(temp_file)
@@ -33,10 +33,9 @@ class TestFileUtils:
     def test_read_bytes(self, tmpdir: Any):
         """Test reading binary data from a file."""
         # Create a temporary file with binary content
-        temp_file = Path(tmpdir) / "test.bin"
+        temp_file = path_resolver.normalize_path(Path(tmpdir) / "test.bin")
         content = b"\x00\x01\x02\x03"
-        with open(temp_file, "wb") as f:
-            f.write(content)
+        file_utils.write_bytes(temp_file, content)
 
         # Read the content using file_utils
         result = file_utils.read_bytes(temp_file)
@@ -45,10 +44,9 @@ class TestFileUtils:
     def test_read_json(self, tmpdir: Any):
         """Test reading and parsing JSON from a file."""
         # Create a temporary JSON file
-        temp_file = Path(tmpdir) / "test.json"
+        temp_file = path_resolver.normalize_path(Path(tmpdir) / "test.json")
         data = {"name": "test", "value": 42, "items": [1, 2, 3]}
-        with open(temp_file, "w", encoding="utf-8") as f:
-            json.dump(data, f)
+        file_utils.write_json(temp_file, data)
 
         # Read the JSON data using file_utils
         result = file_utils.read_json(temp_file)
@@ -57,9 +55,8 @@ class TestFileUtils:
     def test_read_json_invalid(self, tmpdir: Any):
         """Test reading invalid JSON from a file."""
         # Create a temporary file with invalid JSON
-        temp_file = Path(tmpdir) / "invalid.json"
-        with open(temp_file, "w", encoding="utf-8") as f:
-            f.write("This is not valid JSON")
+        temp_file = path_resolver.normalize_path(Path(tmpdir) / "invalid.json")
+        file_utils.write_text(temp_file, "This is not valid JSON")
 
         # Attempt to read the invalid JSON
         with pytest.raises(json.JSONDecodeError):
@@ -68,10 +65,9 @@ class TestFileUtils:
     def test_read_lines(self, tmpdir: Any):
         """Test reading lines from a file."""
         # Create a temporary file with multiple lines
-        temp_file = Path(tmpdir) / "lines.txt"
+        temp_file = path_resolver.normalize_path(Path(tmpdir) / "lines.txt")
         lines = ["Line 1\n", "Line 2\n", "Line 3"]
-        with open(temp_file, "w", encoding="utf-8") as f:
-            f.writelines(lines)
+        file_utils.write_text(temp_file, "".join(lines))
 
         # Read the lines using file_utils
         result = file_utils.read_lines(temp_file)
@@ -80,21 +76,20 @@ class TestFileUtils:
     def test_write_text(self, tmpdir: Any):
         """Test writing text to a file."""
         # Set up a temporary file path
-        temp_file = Path(tmpdir) / "output.txt"
+        temp_file = path_resolver.normalize_path(Path(tmpdir) / "output.txt")
         content = "Hello, world!"
 
         # Write content using file_utils
         file_utils.write_text(temp_file, content)
 
         # Verify the content was written correctly
-        assert temp_file.exists()
-        with open(temp_file, encoding="utf-8") as f:
-            assert f.read() == content
+        assert path_resolver.normalize_path(temp_file).exists()
+        assert file_utils.read_text(temp_file) == content
 
     def test_write_text_with_make_dirs(self, tmpdir: Any):
         """Test writing text to a file with parent directory creation."""
         # Set up a temporary file path with nonexistent parent directories
-        temp_dir = Path(tmpdir) / "new" / "nested" / "dir"
+        temp_dir = path_resolver.normalize_path(Path(tmpdir) / "new" / "nested" / "dir")
         temp_file = temp_dir / "output.txt"
         content = "Hello, world!"
 
@@ -102,10 +97,9 @@ class TestFileUtils:
         file_utils.write_text(temp_file, content, make_dirs=True)
 
         # Verify the content was written correctly and directories were created
-        assert temp_dir.exists()
-        assert temp_file.exists()
-        with open(temp_file, encoding="utf-8") as f:
-            assert f.read() == content
+        assert file_utils.dir_exists(temp_dir)
+        assert file_utils.file_exists(temp_file)
+        assert file_utils.read_text(temp_file) == content
 
     def test_write_bytes(self, tmpdir: Any):
         """Test writing binary data to a file."""
@@ -242,10 +236,10 @@ class TestFileUtils:
                 mock_files = [
                     temp_dir / "file1.txt",
                     temp_dir / "file2.txt",
-                    temp_dir / "image.png"
+                    temp_dir / "image.png",
                 ]
                 mock_glob.return_value = mock_files
-                
+
                 # Mock is_file to return True for all files
                 with patch("pathlib.Path.is_file", return_value=True):
                     files = file_utils.list_files(temp_dir)
@@ -256,12 +250,9 @@ class TestFileUtils:
         with patch("pathlib.Path.is_dir", return_value=True):
             with patch("pathlib.Path.glob") as mock_glob:
                 # Mock the glob result for pattern call
-                mock_files = [
-                    temp_dir / "file1.txt",
-                    temp_dir / "file2.txt"
-                ]
+                mock_files = [temp_dir / "file1.txt", temp_dir / "file2.txt"]
                 mock_glob.return_value = mock_files
-                
+
                 # Mock is_file to return True for all files
                 with patch("pathlib.Path.is_file", return_value=True):
                     txt_files = file_utils.list_files(temp_dir, pattern="*.txt")
@@ -276,10 +267,10 @@ class TestFileUtils:
                     temp_dir / "file1.txt",
                     temp_dir / "file2.txt",
                     temp_dir / "image.png",
-                    sub_dir / "subfile.txt"
+                    sub_dir / "subfile.txt",
                 ]
                 mock_glob.return_value = mock_files
-                
+
                 # Mock is_file to return True for all files
                 with patch("pathlib.Path.is_file", return_value=True):
                     all_files = file_utils.list_files(temp_dir, recursive=True)
