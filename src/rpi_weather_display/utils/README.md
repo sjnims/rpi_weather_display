@@ -65,6 +65,126 @@ The path resolver searches for files in the following locations (in order of pri
 3. **System config directory** - For system-wide configurations (`/etc/rpi-weather-display/`)
 4. **Project root directory** - For running directly from the repository
 
+## File Utilities (`file_utils.py`)
+
+The `file_utils.py` module provides a consistent file system abstraction layer for the entire project. It standardizes file operations with proper error handling, path normalization, and type annotations.
+
+### Key Features
+
+- Consistent error handling across all file operations
+- Path normalization using pathlib.Path objects
+- Type annotations for better IDE support and type checking
+- Atomic file operations where appropriate for data safety
+- Support for both text and binary file operations
+- Specialized utilities for JSON and YAML files
+
+### Usage Examples
+
+#### Reading Files
+
+```python
+from rpi_weather_display.utils.file_utils import read_text, read_bytes, read_json
+
+# Read text content
+content = read_text("config.yaml")  
+
+# Read binary content
+image_data = read_bytes("image.png")
+
+# Read and parse JSON
+config = read_json("config.json")
+```
+
+#### Writing Files
+
+```python
+from rpi_weather_display.utils.file_utils import write_text, write_bytes, write_json
+
+# Write text content
+write_text("output.txt", "Hello, world!")
+
+# Write binary content
+write_bytes("image.png", image_data)
+
+# Write JSON data (with pretty formatting)
+write_json("config.json", config_data, pretty=True)
+```
+
+#### File Operations
+
+```python
+from rpi_weather_display.utils.file_utils import (
+    file_exists, 
+    copy_file, 
+    move_file, 
+    delete_file,
+    ensure_dir_exists
+)
+
+# Check if a file exists
+if file_exists("data.csv"):
+    # Process the file
+    pass
+
+# Copy a file
+copy_file("source.txt", "destination.txt")
+
+# Move/rename a file
+move_file("old_name.txt", "new_name.txt")
+
+# Delete a file
+delete_file("temporary.txt")
+
+# Ensure a directory exists (create if needed)
+ensure_dir_exists("output/logs")
+```
+
+#### Directory Operations
+
+```python
+from rpi_weather_display.utils.file_utils import (
+    ensure_dir_exists,
+    delete_dir,
+    list_files
+)
+
+# Create directory if it doesn't exist
+ensure_dir_exists("data/cache")
+
+# List files in a directory (optional pattern matching)
+json_files = list_files("config", "*.json")
+
+# Delete a directory and its contents
+delete_dir("temp", recursive=True)
+```
+
+### Error Handling
+
+All functions in `file_utils.py` use consistent error handling:
+
+- `FileNotFoundError`: When a file doesn't exist
+- `PermissionError`: When permissions are insufficient
+- `IsADirectoryError`/`NotADirectoryError`: When the wrong type is provided
+- `OSError`: For general file system errors
+- `ValueError`/`TypeError`: For invalid arguments
+
+### Testing
+
+When testing code that uses `file_utils.py`, you can mock the functions to avoid actual file system operations:
+
+```python
+def test_function_using_file_utils(mocker):
+    # Mock file_exists to return True
+    mocker.patch("rpi_weather_display.utils.file_utils.file_exists", return_value=True)
+    
+    # Mock read_text to return specific content
+    mocker.patch("rpi_weather_display.utils.file_utils.read_text", return_value="test content")
+    
+    # Test your function that uses file_utils
+    result = function_to_test()
+    assert result == expected_result
+```
+
 ## Other Utilities
 
 - **Battery Utilities** (`battery_utils.py`) - Functions for battery state management

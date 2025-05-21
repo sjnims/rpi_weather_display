@@ -4,7 +4,6 @@ Provides functionality to render weather data into HTML and convert it to
 images suitable for display on the e-paper screen using Playwright.
 """
 
-import json
 import logging
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -20,7 +19,7 @@ from rpi_weather_display.models.weather import (
     WeatherCondition,
     WeatherData,
 )
-from rpi_weather_display.utils import get_battery_icon
+from rpi_weather_display.utils import file_utils, get_battery_icon, path_resolver
 from rpi_weather_display.utils.error_utils import get_error_location
 
 
@@ -709,31 +708,33 @@ class WeatherRenderer:
 
             try:
                 import csv
-                
-                from rpi_weather_display.utils import path_resolver
+                from io import StringIO
 
                 # Use path_resolver to find the CSV file consistently
                 csv_path = path_resolver.get_data_file("owm_icon_map.csv")
 
                 # Check if the CSV file exists
-                if not csv_path.exists():
+                if not file_utils.file_exists(csv_path):
                     self.logger.warning("Could not find owm_icon_map.csv file")
                     # Don't return here, continue to use the fallback mapping
                 else:
                     try:
-                        with open(csv_path) as f:
-                            reader = csv.DictReader(f)
-                            for row in reader:
-                                weather_id = row["API response: id"].strip()
-                                icon_code_from_csv = row["API response: icon"].strip()
-                                weather_icon_class = row["Weather Icons Class"].strip()
+                        # Read the CSV file content
+                        csv_content = file_utils.read_text(csv_path)
 
-                                # Store by ID and icon code
-                                key = f"{weather_id}_{icon_code_from_csv}"
-                                self._weather_icon_map[key] = weather_icon_class
+                        # Parse using csv reader
+                        reader = csv.DictReader(StringIO(csv_content))
+                        for row in reader:
+                            weather_id = row["API response: id"].strip()
+                            icon_code_from_csv = row["API response: icon"].strip()
+                            weather_icon_class = row["Weather Icons Class"].strip()
 
-                                # Also store just by ID for fallback
-                                self._weather_id_to_icon[weather_id] = weather_icon_class
+                            # Store by ID and icon code
+                            key = f"{weather_id}_{icon_code_from_csv}"
+                            self._weather_icon_map[key] = weather_icon_class
+
+                            # Also store just by ID for fallback
+                            self._weather_id_to_icon[weather_id] = weather_icon_class
                     except Exception as e:
                         self.logger.error(f"Error reading weather icon mapping: {e}")
             except Exception as e:
@@ -790,15 +791,17 @@ class WeatherRenderer:
         persisted_date = None
 
         try:
-            if cache_file.exists():
-                with open(cache_file) as f:
-                    data = json.loads(f.read())
+            if file_utils.file_exists(cache_file):
+                # Read and parse the JSON data
+                data = file_utils.read_json(cache_file)
+                # Ensure we're working with a dict
+                if isinstance(data, dict):
                     persisted_max_uvi = data.get("max_uvi", 0.0)
                     persisted_timestamp = data.get("timestamp", 0)
                     persisted_date_str = data.get("date", "")
-                    if persisted_date_str:
+                    if isinstance(persisted_date_str, str) and persisted_date_str:
                         persisted_date = datetime.strptime(persisted_date_str, "%Y-%m-%d").date()
-        except (json.JSONDecodeError, OSError, ValueError) as e:
+        except (OSError, ValueError) as e:
             self.logger.warning(f"Error reading UVI cache file: {e}")
 
         # If persisted data is from today and has higher UVI, use it
@@ -808,15 +811,15 @@ class WeatherRenderer:
         else:
             # Otherwise, save the current max (either it's higher or from a different day)
             try:
-                with open(cache_file, "w") as f:
-                    json.dump(
-                        {
-                            "max_uvi": max_uvi,
-                            "timestamp": max_uvi_timestamp,
-                            "date": today.strftime("%Y-%m-%d"),
-                        },
-                        f,
-                    )
+                # Write the data as JSON
+                file_utils.write_json(
+                    cache_file,
+                    {
+                        "max_uvi": max_uvi,
+                        "timestamp": max_uvi_timestamp,
+                        "date": today.strftime("%Y-%m-%d"),
+                    },
+                )
             except OSError as e:
                 self.logger.warning(f"Error writing UVI cache file: {e}")
 

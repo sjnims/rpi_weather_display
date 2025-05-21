@@ -22,6 +22,7 @@ from rpi_weather_display.constants import (
 from rpi_weather_display.models.config import AppConfig
 from rpi_weather_display.utils import PowerStateManager, path_resolver
 from rpi_weather_display.utils.battery_utils import is_charging
+from rpi_weather_display.utils.file_utils import file_exists, write_bytes
 from rpi_weather_display.utils.logging import setup_logging
 from rpi_weather_display.utils.path_utils import validate_config_path
 from rpi_weather_display.utils.power_manager import PowerState
@@ -180,9 +181,8 @@ class WeatherDisplayClient:
                 )
                 return False
 
-            # Save the image to cache
-            with open(self.current_image_path, "wb") as f:
-                f.write(response.content)
+            # Save the image to cache using file_utils
+            write_bytes(self.current_image_path, response.content)
 
             # Record that we updated the weather data
             self.power_manager.record_weather_update()
@@ -215,7 +215,7 @@ class WeatherDisplayClient:
             self.display.update_battery_status(battery_status)
 
             # Check if we have a cached image
-            if self.current_image_path.exists():
+            if file_exists(self.current_image_path):
                 # Display the image
                 self.display.display_image(self.current_image_path)
                 # Record that we refreshed the display

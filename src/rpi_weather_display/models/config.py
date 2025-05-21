@@ -11,12 +11,12 @@ from pydantic import BaseModel, Field, field_validator
 
 def _normalize_path(path: str | Path) -> Path:
     """Convert a string path to a Path object.
-    
+
     Internal utility function to avoid circular imports with path_resolver.
-    
+
     Args:
         path: String or Path object
-        
+
     Returns:
         A Path object.
     """
@@ -252,10 +252,14 @@ class AppConfig(BaseModel):
         """
         import yaml
 
+        # Use direct import to avoid circular imports
+        from rpi_weather_display.utils.file_utils import read_text
+
         # Use internal path normalization to avoid circular imports with path_resolver
         path = _normalize_path(config_path)
 
-        with open(path) as f:
-            config_data = yaml.safe_load(f)
+        # Read the YAML file
+        yaml_content = read_text(path)
+        config_data = yaml.safe_load(yaml_content)
 
         return cls.model_validate(config_data)

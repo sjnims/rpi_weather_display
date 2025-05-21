@@ -30,21 +30,21 @@ def setup_logging(config: LoggingConfig, name: str) -> logging.Logger:
     """
     # Create logger
     logger = logging.getLogger(name)
-    
+
     # Clear existing handlers
     logger.handlers = []
 
     # Set log level
     level = getattr(logging, config.level.upper(), logging.INFO)
     logger.setLevel(level)
-    
+
     # Configure structlog renderer based on format
     renderer = (
         structlog.processors.JSONRenderer()
         if config.format.lower() == "json"
         else structlog.dev.ConsoleRenderer()
     )
-    
+
     # Configure structlog
     structlog.configure(
         processors=[
@@ -63,12 +63,12 @@ def setup_logging(config: LoggingConfig, name: str) -> logging.Logger:
         context_class=dict,
         cache_logger_on_first_use=True,
     )
-    
+
     # Configure the root structlog logger
     # We call get_logger but don't need to use the returned logger directly
     # as the configuration above applies globally
     _ = structlog.get_logger(name)
-    
+
     # Create formatter using the configured renderer
     formatter = ProcessorFormatter(
         processor=renderer,
@@ -78,13 +78,15 @@ def setup_logging(config: LoggingConfig, name: str) -> logging.Logger:
             structlog.processors.TimeStamper(fmt="iso"),
         ],
     )
-    
+
     # Choose where to send logs based on configuration
     if config.file:
         try:
             # Ensure directory exists
+            from rpi_weather_display.utils import file_utils
+
             log_path = Path(config.file)
-            log_path.parent.mkdir(parents=True, exist_ok=True)
+            file_utils.ensure_dir_exists(log_path.parent)
 
             # Create file handler
             file_handler = RotatingFileHandler(
@@ -98,13 +100,13 @@ def setup_logging(config: LoggingConfig, name: str) -> logging.Logger:
         except Exception as e:
             error_msg = f"Failed to set up file logging: {e}"
             print(error_msg, file=sys.stderr)
-            
+
             # Fall back to console logging if file logging fails
             console_handler = logging.StreamHandler(sys.stdout)
             console_handler.setFormatter(formatter)
             console_handler.setLevel(level)
             logger.addHandler(console_handler)
-            
+
             # Log the error through the logger
             logger.error(error_msg)
     else:

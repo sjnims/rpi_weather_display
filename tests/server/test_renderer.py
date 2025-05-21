@@ -558,19 +558,19 @@ class TestWeatherRenderer:
             # Test with non-WeatherCondition object
             assert weather_icon_filter("not a weather condition") == "wi-cloud"
 
-    @patch("builtins.open")
     @patch("csv.DictReader")
-    @patch("pathlib.Path.exists")
+    @patch("rpi_weather_display.utils.file_utils.read_text", return_value="mock CSV content")
+    @patch("rpi_weather_display.utils.file_utils.file_exists")
     def test_ensure_weather_icon_map_loaded(
         self,
-        mock_exists: MagicMock,
+        mock_file_exists: MagicMock,
+        mock_read_text: MagicMock,
         mock_reader: MagicMock,
-        mock_open: MagicMock,
         renderer: WeatherRenderer,
     ) -> None:
         """Test loading weather icon mappings from CSV."""
         # Set up mock data
-        mock_exists.return_value = True
+        mock_file_exists.return_value = True
         mock_reader.return_value = [
             {
                 "API response: id": "800",
@@ -596,16 +596,20 @@ class TestWeatherRenderer:
         # Verify mappings were created
         assert hasattr(renderer, "_weather_icon_map")
         assert hasattr(renderer, "_weather_id_to_icon")
-        assert mock_open.called
+        assert mock_read_text.called
         assert mock_reader.called
+        
+        # Verify the mappings have the expected values
+        assert "800_01d" in renderer._weather_icon_map
+        assert renderer._weather_icon_map["800_01d"] == "wi-day-sunny"
 
-    @patch("pathlib.Path.exists")
+    @patch("rpi_weather_display.utils.file_utils.file_exists")
     def test_ensure_weather_icon_map_loaded_file_not_found(
-        self, mock_exists: MagicMock, renderer: WeatherRenderer
+        self, mock_file_exists: MagicMock, renderer: WeatherRenderer
     ) -> None:
         """Test handling when icon mapping file is not found."""
         # Set up mock data
-        mock_exists.return_value = False
+        mock_file_exists.return_value = False
 
         # Ensure renderer doesn't already have the mapping attributes
         if hasattr(renderer, "_weather_icon_map"):
@@ -622,15 +626,15 @@ class TestWeatherRenderer:
         assert len(renderer._weather_icon_map) == 0
         assert len(renderer._weather_id_to_icon) == 0
 
-    @patch("pathlib.Path.exists")
-    @patch("builtins.open")
+    @patch("rpi_weather_display.utils.file_utils.file_exists")
+    @patch("rpi_weather_display.utils.file_utils.read_text")
     def test_ensure_weather_icon_map_loaded_file_error(
-        self, mock_open: MagicMock, mock_exists: MagicMock, renderer: WeatherRenderer
+        self, mock_read_text: MagicMock, mock_file_exists: MagicMock, renderer: WeatherRenderer
     ) -> None:
         """Test handling when there's an error reading the icon mapping file."""
         # Set up mock data
-        mock_exists.return_value = True
-        mock_open.side_effect = Exception("File error")
+        mock_file_exists.return_value = True
+        mock_read_text.side_effect = Exception("File error")
 
         # Ensure renderer doesn't already have the mapping attributes
         if hasattr(renderer, "_weather_icon_map"):
@@ -1144,9 +1148,9 @@ class TestWeatherRenderer:
             delattr(renderer, "_weather_id_to_icon")
 
         # Use a more targeted patch approach for the csv import
-        with patch("builtins.open", side_effect=Exception("CSV open error")):
-            # Create a situation where the paths exist but opening the file fails
-            with patch("pathlib.Path.exists", return_value=True):
+        with patch("rpi_weather_display.utils.file_utils.read_text", side_effect=Exception("CSV read error")):
+            # Create a situation where the paths exist but reading the file fails
+            with patch("rpi_weather_display.utils.file_utils.file_exists", return_value=True):
                 # This should handle the error and create empty maps
                 renderer._ensure_weather_icon_map_loaded()
 
