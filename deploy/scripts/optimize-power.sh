@@ -46,6 +46,10 @@ apply_once "# Weather display power optimization settings"
 apply_once "arm_freq=700"              # Limit ARM CPU frequency
 apply_once "arm_freq_min=700"          # Set minimum to same as max to prevent scaling
 
+# Enable SPI for Waveshare e-paper display
+apply_once "dtparam=spi=on"            # Enable SPI interface
+apply_once "dtoverlay=spi0-hw-cs"      # Hardware chip select for SPI0
+
 # Disable CPU cores if it's a multi-core system (Zero 2 W has 4 cores)
 # This is aggressive, but for a device that's mostly sleeping, we can use just one core
 for i in /sys/devices/system/cpu/cpu[1-3]; do
