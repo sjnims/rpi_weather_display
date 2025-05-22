@@ -15,6 +15,7 @@ from typing import Any, TypedDict, cast
 from rpi_weather_display.constants import (
     ABNORMAL_SLEEP_FACTOR,
     BATTERY_CHARGING_FACTOR,
+    BATTERY_CHARGING_MIN,
     BATTERY_HISTORY_SIZE,
     CONSERVING_MAX_FACTOR,
     CONSERVING_MIN_FACTOR,
@@ -982,7 +983,7 @@ class PowerStateManager:
         if current_state == PowerState.CHARGING:
             # When charging, we can be slightly more aggressive with wakeups
             # but still maintain a minimum to avoid too frequent wakeups
-            return int(max(adjusted_minutes * BATTERY_CHARGING_FACTOR, MIN_SLEEP_MINUTES))
+            return int(max(adjusted_minutes * BATTERY_CHARGING_FACTOR, BATTERY_CHARGING_MIN))
 
         # For critical battery, extend the time significantly to preserve battery
         if current_state == PowerState.CRITICAL:

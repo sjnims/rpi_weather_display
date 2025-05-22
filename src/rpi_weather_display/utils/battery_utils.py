@@ -4,6 +4,7 @@ Provides common battery state and power management utilities used across the app
 """
 
 from rpi_weather_display.constants import (
+    ABNORMAL_DISCHARGE_FACTOR,
     BATTERY_EMPTY_THRESHOLD,
     BATTERY_FULL_THRESHOLD,
     BATTERY_HIGH_THRESHOLD,
@@ -196,14 +197,15 @@ def calculate_drain_rate(status_history: list[BatteryStatus]) -> float | None:
 
 
 def is_discharge_rate_abnormal(
-    drain_rate: float, expected_rate: float, tolerance: float = 0.3
+    drain_rate: float, expected_rate: float, factor: float = ABNORMAL_DISCHARGE_FACTOR
 ) -> bool:
     """Check if the discharge rate is abnormally high.
 
     Args:
         drain_rate: Current drain rate in percent per hour
         expected_rate: Expected drain rate in percent per hour
-        tolerance: Tolerance factor (e.g., 0.3 means 30% above expected is abnormal)
+        factor: Factor to determine abnormal discharge 
+            (e.g., 1.5 means 50% higher than expected is abnormal)
 
     Returns:
         True if discharge rate is abnormally high
@@ -211,5 +213,5 @@ def is_discharge_rate_abnormal(
     if drain_rate <= 0 or expected_rate <= 0:
         return False
 
-    # Consider abnormal if rate exceeds expected rate by the tolerance percentage
-    return drain_rate >= (expected_rate * (1 + tolerance))
+    # Consider abnormal if rate exceeds expected rate by the factor
+    return drain_rate >= (expected_rate * factor)

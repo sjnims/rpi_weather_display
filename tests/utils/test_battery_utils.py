@@ -301,18 +301,19 @@ def test_is_discharge_rate_abnormal() -> None:
     # Normal rate (5% per hour with expected 5%)
     assert is_discharge_rate_abnormal(5.0, 5.0) is False
 
-    # Slightly above expected (not abnormal)
+    # Slightly above expected (not abnormal with default factor 1.5)
     assert is_discharge_rate_abnormal(6.0, 5.0) is False
+    assert is_discharge_rate_abnormal(7.0, 5.0) is False
 
-    # Abnormal rate (30% above expected)
-    assert is_discharge_rate_abnormal(6.5, 5.0) is True
+    # Abnormal rate (50% higher with default factor 1.5)
+    assert is_discharge_rate_abnormal(7.5, 5.0) is True
 
     # Highly abnormal rate
     assert is_discharge_rate_abnormal(10.0, 5.0) is True
 
-    # Custom tolerance
-    assert is_discharge_rate_abnormal(7.0, 5.0, tolerance=0.5) is False  # 40% above expected
-    assert is_discharge_rate_abnormal(7.6, 5.0, tolerance=0.5) is True  # 52% above expected
+    # Custom factor
+    assert is_discharge_rate_abnormal(6.0, 5.0, factor=1.2) is True  # 20% higher threshold
+    assert is_discharge_rate_abnormal(6.0, 5.0, factor=2.0) is False  # 100% higher threshold
 
     # Invalid input cases
     assert is_discharge_rate_abnormal(0, 5.0) is False

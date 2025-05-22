@@ -216,9 +216,9 @@ class TestPathResolver:
         bin_path = resolver.get_bin_path("ls")
         assert isinstance(bin_path, Path)
 
-        # Test with a constant-defined path
-        # The constant might not be defined, so we need to check first
-        with patch("rpi_weather_display.constants.SUDO_PATH", "/usr/bin/sudo"):
+        # Test path resolution without constants (current behavior)
+        # Since we removed the constants, this should use shutil.which()
+        with patch("shutil.which", return_value="/usr/bin/sudo"):
             sudo_path = resolver.get_bin_path("sudo")
             assert isinstance(sudo_path, Path)
             assert str(sudo_path) == "/usr/bin/sudo"

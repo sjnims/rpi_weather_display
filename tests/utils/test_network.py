@@ -20,13 +20,6 @@ from rpi_weather_display.models.system import BatteryState, BatteryStatus, Netwo
 from rpi_weather_display.utils.network import NetworkManager
 from rpi_weather_display.utils.path_utils import path_resolver
 
-# Mock path constants for tests (replacing the ones removed from network.py)
-SUDO_PATH = "/usr/bin/sudo"
-IFCONFIG_PATH = "/sbin/ifconfig"
-IWCONFIG_PATH = "/sbin/iwconfig"
-IWGETID_PATH = "/sbin/iwgetid"
-IW_PATH = "/sbin/iw"
-
 
 @pytest.fixture()
 def power_config() -> PowerConfig:
@@ -184,7 +177,7 @@ class TestNetworkManager:
 
             # Verify subprocess was called correctly - now checks for wifi-sleep.sh script
             mock_run.assert_called_with(
-                [str(Path(SUDO_PATH)), str(Path(WIFI_SLEEP_SCRIPT)), "on"],
+                ["/usr/bin/sudo", str(Path(WIFI_SLEEP_SCRIPT)), "on"],
                 check=True,
                 timeout=network_manager.config.wifi_timeout_seconds,
                 shell=False,
@@ -209,7 +202,7 @@ class TestNetworkManager:
 
         # Verify subprocess was called correctly - now checks for wifi-sleep.sh script
         mock_run.assert_called_with(
-            [str(Path(SUDO_PATH)), str(Path(WIFI_SLEEP_SCRIPT)), "off"],
+            ["/usr/bin/sudo", str(Path(WIFI_SLEEP_SCRIPT)), "off"],
             check=True,
             timeout=network_manager.config.wifi_timeout_seconds,
             shell=False,
@@ -486,7 +479,7 @@ class TestNetworkManager:
         # Verify result and method calls
         assert ssid == "test_ssid"
         mock_run.assert_called_with(
-            [str(Path(IWGETID_PATH)), "-r"],
+            ["iwgetid", "-r"],
             capture_output=True,
             text=True,
             timeout=network_manager.config.wifi_timeout_seconds,
@@ -607,7 +600,7 @@ class TestNetworkManager:
         # Verify result and method calls
         assert signal == -68
         mock_run.assert_called_with(
-            [str(Path(IWCONFIG_PATH)), "wlan0"],
+            ["iwconfig", "wlan0"],
             capture_output=True,
             text=True,
             timeout=network_manager.config.wifi_timeout_seconds,
@@ -760,7 +753,7 @@ class TestNetworkManager:
 
             # Verify the legacy method was called instead
             mock_run.assert_called_with(
-                [str(Path(SUDO_PATH)), str(Path(IFCONFIG_PATH)), "wlan0", "up"],
+                ["/usr/bin/sudo", "/sbin/ifconfig", "wlan0", "up"],
                 check=True,
                 timeout=network_manager.config.wifi_timeout_seconds,
                 shell=False,
@@ -789,13 +782,13 @@ class TestNetworkManager:
         mock_run.assert_has_calls(
             [
                 call(
-                    [str(Path(SUDO_PATH)), str(Path(WIFI_SLEEP_SCRIPT)), "on"],
+                    ["/usr/bin/sudo", str(Path(WIFI_SLEEP_SCRIPT)), "on"],
                     check=True,
                     timeout=network_manager.config.wifi_timeout_seconds,
                     shell=False,
                 ),
                 call(
-                    [str(Path(SUDO_PATH)), str(Path(IFCONFIG_PATH)), "wlan0", "up"],
+                    ["/usr/bin/sudo", "/sbin/ifconfig", "wlan0", "up"],
                     check=True,
                     timeout=network_manager.config.wifi_timeout_seconds,
                     shell=False,
@@ -830,7 +823,7 @@ class TestNetworkManager:
 
                 # Verify subprocess was called with ifconfig (legacy method)
                 mock_run.assert_called_with(
-                    [str(Path(SUDO_PATH)), str(Path(IFCONFIG_PATH)), "wlan0", "up"],
+                    ["/usr/bin/sudo", "/sbin/ifconfig", "wlan0", "up"],
                     check=True,
                     timeout=network_manager.config.wifi_timeout_seconds,
                     shell=False,
@@ -861,7 +854,7 @@ class TestNetworkManager:
 
             # Verify subprocess was called with ifconfig (legacy method)
             mock_run.assert_called_with(
-                [str(Path(SUDO_PATH)), str(Path(IFCONFIG_PATH)), "wlan0", "down"],
+                ["/usr/bin/sudo", "/sbin/ifconfig", "wlan0", "down"],
                 check=True,
                 timeout=network_manager.config.wifi_timeout_seconds,
                 shell=False,
@@ -985,7 +978,7 @@ class TestNetworkManager:
 
         # Verify subprocess was called correctly with 'off' argument
         mock_run.assert_called_with(
-            [str(Path(SUDO_PATH)), str(Path(IW_PATH)), "dev", "wlan0", "set", "power_save", "off"],
+            ["/usr/bin/sudo", "iw", "dev", "wlan0", "set", "power_save", "off"],
             check=True,
             timeout=network_manager.config.wifi_timeout_seconds,
             shell=False,
@@ -1013,7 +1006,7 @@ class TestNetworkManager:
 
         # Verify subprocess was called correctly with 'on' argument
         mock_run.assert_called_with(
-            [str(Path(SUDO_PATH)), str(Path(IW_PATH)), "dev", "wlan0", "set", "power_save", "on"],
+            ["/usr/bin/sudo", "iw", "dev", "wlan0", "set", "power_save", "on"],
             check=True,
             timeout=network_manager.config.wifi_timeout_seconds,
             shell=False,
@@ -1097,7 +1090,7 @@ class TestNetworkManager:
 
         # With normal battery, should select 'off' mode
         mock_run.assert_called_with(
-            [str(Path(SUDO_PATH)), str(Path(IW_PATH)), "dev", "wlan0", "set", "power_save", "off"],
+            ["/usr/bin/sudo", "iw", "dev", "wlan0", "set", "power_save", "off"],
             check=True,
             timeout=network_manager.config.wifi_timeout_seconds,
             shell=False,
@@ -1132,7 +1125,7 @@ class TestNetworkManager:
 
         # With low battery, should select 'on' mode
         mock_run.assert_called_with(
-            [str(Path(SUDO_PATH)), str(Path(IW_PATH)), "dev", "wlan0", "set", "power_save", "on"],
+            ["/usr/bin/sudo", "iw", "dev", "wlan0", "set", "power_save", "on"],
             check=True,
             timeout=network_manager.config.wifi_timeout_seconds,
             shell=False,

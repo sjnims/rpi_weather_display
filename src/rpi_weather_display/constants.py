@@ -18,15 +18,8 @@ Constants are grouped into the following categories:
 """
 
 # Path constants
-SUDO_PATH = "/usr/bin/sudo"  # Path to sudo command
-SHUTDOWN_PATH = "/sbin/shutdown"  # Path to shutdown command
-TOP_PATH = "/usr/bin/top"  # Path to top command for system monitoring
-DF_PATH = "/bin/df"  # Path to df command for disk usage
-IWGETID_PATH = "/sbin/iwgetid"  # Path to iwgetid command for WiFi SSID
-IWCONFIG_PATH = "/sbin/iwconfig"  # Path to iwconfig command for WiFi configuration
-IFCONFIG_PATH = "/sbin/ifconfig"  # Path to ifconfig command for network interface config
-WIFI_SLEEP_SCRIPT = "/usr/local/bin/wifi-sleep.sh"  # Script for enabling WiFi power save
-IW_PATH = "/sbin/iw"  # Path to iw command for wireless tools
+# Script for enabling WiFi power save, kept as a constant since it's a custom script
+WIFI_SLEEP_SCRIPT = "/usr/local/bin/wifi-sleep.sh"
 
 # Client/configuration constants
 CLIENT_CACHE_DIR_NAME = "rpi-weather-display"  # Directory name for client cache
