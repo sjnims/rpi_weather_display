@@ -84,16 +84,7 @@ jobs:
 
       - name: Type check with pyright
         run: |
-          # Create a pyrightconfig.json file to handle CI-specific settings
-          echo '{
-            "venvPath": "./.venv",
-            "venv": ".",
-            "reportUnknownVariableType": false,
-            "reportUnknownMemberType": false,
-            "reportUnknownArgumentType": false,
-            "reportGeneralTypeIssues": false,
-            "reportMissingImports": false
-          }' > pyrightconfig.json
+          # Use pyproject.toml configuration - no overrides needed for CI
           poetry run pyright .
 
   security-scan:

@@ -752,8 +752,11 @@ class TestNetworkManager:
             network_manager._enable_wifi()
 
             # Verify the legacy method was called instead
+            # Use path_resolver to get the actual resolved paths
+            sudo_path = str(path_resolver.get_bin_path("sudo"))
+            ifconfig_path = str(path_resolver.get_bin_path("ifconfig"))
             mock_run.assert_called_with(
-                ["/usr/bin/sudo", "/sbin/ifconfig", "wlan0", "up"],
+                [sudo_path, ifconfig_path, "wlan0", "up"],
                 check=True,
                 timeout=network_manager.config.wifi_timeout_seconds,
                 shell=False,
@@ -777,18 +780,22 @@ class TestNetworkManager:
         # Call the method - it should handle the exception
         network_manager._enable_wifi()
 
+        # Use path_resolver to get the actual resolved paths
+        sudo_path = str(path_resolver.get_bin_path("sudo"))
+        ifconfig_path = str(path_resolver.get_bin_path("ifconfig"))
+
         # Verify both methods were attempted
         assert mock_run.call_count == 2
         mock_run.assert_has_calls(
             [
                 call(
-                    ["/usr/bin/sudo", str(Path(WIFI_SLEEP_SCRIPT)), "on"],
+                    [sudo_path, str(Path(WIFI_SLEEP_SCRIPT)), "on"],
                     check=True,
                     timeout=network_manager.config.wifi_timeout_seconds,
                     shell=False,
                 ),
                 call(
-                    ["/usr/bin/sudo", "/sbin/ifconfig", "wlan0", "up"],
+                    [sudo_path, ifconfig_path, "wlan0", "up"],
                     check=True,
                     timeout=network_manager.config.wifi_timeout_seconds,
                     shell=False,
@@ -814,6 +821,10 @@ class TestNetworkManager:
         mock_process.returncode = 0
         mock_run.return_value = mock_process
 
+        # Use path_resolver to get the actual resolved paths
+        sudo_path = str(path_resolver.get_bin_path("sudo"))
+        ifconfig_path = str(path_resolver.get_bin_path("ifconfig"))
+
         # Patch the _apply_power_save_mode method to do nothing
         with patch.object(network_manager, "_apply_power_save_mode"):
             # Use patch.object to patch the exists method on Path instances
@@ -823,7 +834,7 @@ class TestNetworkManager:
 
                 # Verify subprocess was called with ifconfig (legacy method)
                 mock_run.assert_called_with(
-                    ["/usr/bin/sudo", "/sbin/ifconfig", "wlan0", "up"],
+                    [sudo_path, ifconfig_path, "wlan0", "up"],
                     check=True,
                     timeout=network_manager.config.wifi_timeout_seconds,
                     shell=False,
@@ -847,6 +858,10 @@ class TestNetworkManager:
         mock_process.returncode = 0
         mock_run.return_value = mock_process
 
+        # Use path_resolver to get the actual resolved paths
+        sudo_path = str(path_resolver.get_bin_path("sudo"))
+        ifconfig_path = str(path_resolver.get_bin_path("ifconfig"))
+
         # Use patch.object to patch the exists method on Path instances
         with patch.object(Path, "exists", mock_exists_impl):
             # Call the method
@@ -854,7 +869,7 @@ class TestNetworkManager:
 
             # Verify subprocess was called with ifconfig (legacy method)
             mock_run.assert_called_with(
-                ["/usr/bin/sudo", "/sbin/ifconfig", "wlan0", "down"],
+                [sudo_path, ifconfig_path, "wlan0", "down"],
                 check=True,
                 timeout=network_manager.config.wifi_timeout_seconds,
                 shell=False,

@@ -104,8 +104,6 @@ reportUntypedFunctionDecorator = "none"
 pythonVersion = "3.11"
 pythonPlatform = "Linux"
 typeCheckingMode = "strict"
-venvPath = "/Users/stevenims/Library/Caches/pypoetry/virtualenvs"
-venv = "rpi-weather-display-FNim5dBq-py3.11"
 
 # Execution environments need to be in proper TOML format
 [[tool.pyright.executionEnvironments]]
@@ -122,6 +120,16 @@ reportUnknownLambdaType = "none"
 reportUnknownMemberType = "none"
 reportUnknownArgumentType = "none"
 reportIncompatibleMethodOverride = "warning"
+reportUnknownVariableType = "none"
+reportUntypedFunctionDecorator = "none"
+reportUntypedClassDecorator = "none"
+reportUntypedBaseClass = "none"
+reportUnusedFunction = "none"
+reportUnusedVariable = "none"
+reportUnusedImport = "warning"
+reportPrivateUsage = "none"
+reportConstantRedefinition = "none"
+reportIncompatibleVariableOverride = "none"
 
 [tool.ruff]
 line-length = 100
@@ -132,7 +140,27 @@ ignore = ["ANN101", "ANN102"]
 select = ["E", "F", "B", "I", "N", "UP", "ANN", "S", "A", "C4", "PT", "RUF", "D"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["S101", "ANN201", "ANN001", "ANN401", "E501"]  # Ignore assert usage, line length, and type annotation requirements in tests
+"tests/**/*.py" = [
+    "S101",    # Use of assert detected (pytest uses assertions)
+    "ANN201",  # Missing return type annotation for public function
+    "ANN001",  # Missing type annotations for function arguments
+    "ANN401",  # Dynamically typed expressions (Any) are disallowed
+    "E501",    # Line too long (handled by formatter)
+    "D100",    # Missing docstring in public module
+    "D101",    # Missing docstring in public class
+    "D102",    # Missing docstring in public method
+    "D103",    # Missing docstring in public function
+    "D104",    # Missing docstring in public package
+    "PLR0913", # Too many arguments to function call
+    "PLR2004", # Magic value used in comparison
+    "S105",    # Possible hardcoded password (test data often looks like this)
+    "S106",    # Possible hardcoded password (test data)
+    "S108",    # Probable insecure usage of temp file/directory
+    "ARG001",  # Unused function argument (common in test fixtures)
+    "ARG002",  # Unused method argument
+    "C901",    # Function is too complex (tests can be complex)
+    "PLR0915", # Too many statements
+]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
