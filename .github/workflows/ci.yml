@@ -76,7 +76,7 @@ jobs:
         id: security
         run: |
           # Use the new safety scan command with non-interactive mode
-          poetry run safety scan --policy-file /dev/null --output text || true
+          poetry run safety scan --policy-file /dev/null --output screen || true
 
       - name: Code complexity analysis
         id: complexity
