@@ -1,0 +1,21 @@
+name: "CodeQL config"
+
+# Specify the paths to scan
+paths:
+  - src
+
+# Exclude test files and other non-production code
+paths-ignore:
+  - tests
+  - deploy/scripts
+  - "**/*_test.py"
+  - "**/test_*.py"
+
+# Additional queries to run
+queries:
+  - uses: security-extended
+  - uses: security-and-quality
+
+# Python-specific configuration
+languages:
+  - python

@@ -13,167 +13,101 @@ permissions:
   packages: write
   security-events: write
 
+# Cancel in-progress workflows when a new one starts
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  lint:
+  # Combined static analysis job to reduce duplicate setup
+  static-analysis:
     runs-on: ubuntu-latest
+    outputs:
+      lint-status: ${{ steps.lint.outcome }}
+      typecheck-status: ${{ steps.typecheck.outcome }}
+      security-status: ${{ steps.security.outcome }}
+      complexity-status: ${{ steps.complexity.outcome }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      # Improved caching for Poetry
-      - name: Cache Poetry dependencies
-        uses: actions/cache@v3
+      # Improved caching for Poetry with better key structure
+      - name: Cache Poetry installation
+        uses: actions/cache@v4
+        id: poetry-cache
         with:
-          path: |
-            ~/.cache/pypoetry
-            .venv
-          key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-poetry-
+          path: ~/.local
+          key: poetry-2.1.3-${{ runner.os }}
 
       - name: Install Poetry
+        if: steps.poetry-cache.outputs.cache-hit != 'true'
         uses: snok/install-poetry@v1
         with:
           version: 2.1.3
           virtualenvs-create: true
           virtualenvs-in-project: true
 
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-3.11-${{ hashFiles('**/poetry.lock') }}
+          restore-keys: |
+            venv-${{ runner.os }}-3.11-
+
       - name: Install dependencies
         run: |
-          poetry install --no-interaction --all-extras
+          poetry install --no-interaction --all-extras --sync
+          poetry run pip install safety radon
 
       - name: Lint with ruff
-        run: |
-          poetry run ruff check .
-
-  typecheck:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-
-      # Improved caching for Poetry
-      - name: Cache Poetry dependencies
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cache/pypoetry
-            .venv
-          key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-poetry-
-
-      - name: Install Poetry
-        uses: snok/install-poetry@v1
-        with:
-          version: 2.1.3
-          virtualenvs-create: true
-          virtualenvs-in-project: true
-
-      - name: Install dependencies
-        run: |
-          poetry install --no-interaction --all-extras
+        id: lint
+        run: poetry run ruff check . --exit-non-zero-on-fix
 
       - name: Type check with pyright
-        run: |
-          # Use pyproject.toml configuration - no overrides needed for CI
-          poetry run pyright .
+        id: typecheck
+        run: poetry run pyright .
 
-  security-scan:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-      
-      # Improved caching for Poetry
-      - name: Cache Poetry dependencies
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cache/pypoetry
-            .venv
-          key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-poetry-
-      
-      - name: Install Poetry
-        uses: snok/install-poetry@v1
-        with:
-          version: 2.1.3
-          virtualenvs-create: true
-          virtualenvs-in-project: true
-          
-      - name: Install dependencies
+      - name: Security scan with safety
+        id: security
         run: |
-          poetry install --no-interaction --all-extras
-          pip install safety
-      
-      - name: Run safety check
-        run: |
-          # Create requirements.txt from installed packages
-          pip freeze > requirements.txt
-          safety check -r requirements.txt
-  
-  code-quality:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-          
-      - name: Install code metrics tools
-        run: pip install radon
-        
-      - name: Check code complexity
+          poetry export -f requirements.txt --output requirements.txt --without-hashes
+          poetry run safety check -r requirements.txt --json
+
+      - name: Code complexity analysis
         id: complexity
         run: |
           echo "::group::Code Complexity Analysis"
-          # Generate a detailed report
-          radon cc src/ -a -nc
+          poetry run radon cc src/ -a -nc
           
-          # Count the number of complex functions (rank D or worse)
-          COMPLEX_COUNT=$(radon cc src/ -a -nc --json | grep -E '"rank": "[EF]"' | wc -l)
-          
+          COMPLEX_COUNT=$(poetry run radon cc src/ -a -nc --json | grep -E '"rank": "[EF]"' | wc -l || echo "0")
           echo "Complex functions (rank E-F): $COMPLEX_COUNT"
           echo "::endgroup::"
           
-          # Only fail if we have excessively complex functions
+          echo "::group::Maintainability Index"
+          poetry run radon mi src/ -s
+          echo "::endgroup::"
+          
           if [ "$COMPLEX_COUNT" -gt 5 ]; then
             echo "::error::Too many complex functions ($COMPLEX_COUNT > 5)"
             exit 1
           fi
-          
-      - name: Check maintainability index
-        run: |
-          echo "::group::Maintainability Index"
-          radon mi src/ -s
-          echo "::endgroup::"
   
   codeql:
     runs-on: ubuntu-latest
-    needs: []
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
           languages: python
+          config-file: ./.github/codeql/codeql-config.yml
           
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
@@ -183,198 +117,230 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
-    needs: [lint, typecheck]
+    needs: static-analysis
     strategy:
       matrix:
         test-group: [models, client, server, utils]
       fail-fast: false
     
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      # Improved caching for Poetry
-      - name: Cache Poetry dependencies
-        uses: actions/cache@v3
+      # Cache Poetry installation
+      - name: Cache Poetry installation
+        uses: actions/cache@v4
+        id: poetry-cache
         with:
-          path: |
-            ~/.cache/pypoetry
-            .venv
-          key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-poetry-
-            
-      # Playwright browsers cache - use the correct path for Ubuntu
-      - name: Cache Playwright browsers
-        uses: actions/cache@v3
-        with:
-          path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ hashFiles('**/poetry.lock') }}-v1
-          restore-keys: |
-            ${{ runner.os }}-playwright-
+          path: ~/.local
+          key: poetry-2.1.3-${{ runner.os }}
 
       - name: Install Poetry
+        if: steps.poetry-cache.outputs.cache-hit != 'true'
         uses: snok/install-poetry@v1
         with:
           version: 2.1.3
           virtualenvs-create: true
           virtualenvs-in-project: true
 
-      - name: Install dependencies
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-3.11-${{ hashFiles('**/poetry.lock') }}
+          restore-keys: |
+            venv-${{ runner.os }}-3.11-
+            
+      # Playwright browsers cache with version-specific key
+      - name: Get Playwright version
+        id: playwright-version
         run: |
-          poetry install --no-interaction --all-extras
+          PLAYWRIGHT_VERSION=$(poetry show playwright | grep "version" | awk '{print $3}')
+          echo "version=$PLAYWRIGHT_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
+
+      - name: Install dependencies
+        run: poetry install --no-interaction --all-extras --sync
           
       - name: Install Playwright browsers
-        run: |
-          poetry run playwright install chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: poetry run playwright install chromium --with-deps
 
       - name: Run tests for ${{ matrix.test-group }}
         run: |
-          # Create a temporary .coveragerc to override the fail_under setting
-          echo "[report]
-          fail_under = 0" > .coveragerc
-          
-          # Run tests with the local .coveragerc to override the settings in pyproject.toml
-          # Only measure coverage for the specific module being tested
-          poetry run pytest tests/${{ matrix.test-group }}/ --cov=src/rpi_weather_display/${{ matrix.test-group }}/ --cov-branch --cov-report=xml -v
-          
-          # Rename the coverage file to avoid overwrites
-          mv coverage.xml coverage-${{ matrix.test-group }}.xml
+          # Run tests with coverage for the specific module
+          poetry run pytest tests/${{ matrix.test-group }}/ \
+            --cov=src/rpi_weather_display/${{ matrix.test-group }}/ \
+            --cov-branch \
+            --cov-report=xml:coverage-${{ matrix.test-group }}.xml \
+            --cov-report=term \
+            --cov-fail-under=0 \
+            -v
 
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v5
+      - name: Upload coverage artifacts
+        uses: actions/upload-artifact@v4
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: false
-          flags: ${{ matrix.test-group }}
-          files: coverage-${{ matrix.test-group }}.xml
+          name: coverage-${{ matrix.test-group }}
+          path: coverage-${{ matrix.test-group }}.xml
+          retention-days: 1
 
-  upload-combined-coverage:
+  coverage:
     runs-on: ubuntu-latest
     needs: test
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       
       - name: Set up Python 3.11
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          
-      # Improved caching for Poetry
-      - name: Cache Poetry dependencies
-        uses: actions/cache@v3
+
+      # Download all coverage artifacts
+      - name: Download coverage artifacts
+        uses: actions/download-artifact@v4
         with:
-          path: |
-            ~/.cache/pypoetry
-            .venv
-          key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-poetry-
-            
+          pattern: coverage-*
+          merge-multiple: true
+
+      # Cache Poetry installation
+      - name: Cache Poetry installation
+        uses: actions/cache@v4
+        id: poetry-cache
+        with:
+          path: ~/.local
+          key: poetry-2.1.3-${{ runner.os }}
+
       - name: Install Poetry
+        if: steps.poetry-cache.outputs.cache-hit != 'true'
         uses: snok/install-poetry@v1
         with:
           version: 2.1.3
           virtualenvs-create: true
           virtualenvs-in-project: true
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-3.11-${{ hashFiles('**/poetry.lock') }}
+          restore-keys: |
+            venv-${{ runner.os }}-3.11-
             
       - name: Install dependencies
+        run: poetry install --no-interaction --all-extras --sync
+
+      # Cache Playwright browsers
+      - name: Get Playwright version
+        id: playwright-version
         run: |
-          poetry install --no-interaction --all-extras
+          PLAYWRIGHT_VERSION=$(poetry show playwright | grep "version" | awk '{print $3}')
+          echo "version=$PLAYWRIGHT_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
+
+      - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: poetry run playwright install chromium --with-deps
             
-      - name: Run all tests with coverage and JUnit report
+      - name: Run all tests with coverage
         run: |
-          # Remove any .coveragerc file that might have been created
-          rm -f .coveragerc
-          
-          # Run with the settings from pyproject.toml (94% minimum)
-          poetry run pytest --cov=src/rpi_weather_display/ --cov-branch --cov-report=xml --cov-report=term --junitxml=junit.xml -o junit_family=legacy
+          poetry run pytest \
+            --cov=src/rpi_weather_display/ \
+            --cov-branch \
+            --cov-report=xml \
+            --cov-report=term \
+            --junitxml=junit.xml
         
-      - name: Upload combined coverage to Codecov
+      - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
+          # CODECOV_TOKEN is optional for public repos but recommended
           token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml,./coverage-*.xml
           flags: combined
           name: combined-coverage
           fail_ci_if_error: false
-          verbose: true
+        continue-on-error: true
             
-      - name: Upload JUnit test results to Codecov
+      - name: Upload test results to Codecov
         if: ${{ !cancelled() }}
         uses: codecov/test-results-action@v1
         with:
+          # CODECOV_TOKEN is optional for public repos but recommended
           token: ${{ secrets.CODECOV_TOKEN }}
+          files: junit.xml
+        continue-on-error: true
 
   build-and-push:
     runs-on: ubuntu-latest
-    needs: [lint, typecheck, test, security-scan, code-quality, codeql, upload-combined-coverage]
+    needs: [static-analysis, test, codeql, coverage]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
-        id: buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata for Docker
+      - name: Extract metadata
         id: meta
-        uses: docker/metadata-action@v4
+        uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository }}/rpi-weather-display
           tags: |
             type=sha,format=short
             type=ref,event=branch
             type=semver,pattern={{version}}
-            latest
+            type=raw,value=latest,enable={{is_default_branch}}
 
-      # Cache Docker layers - use paths that exist with buildx
-      - name: Setup Docker buildx cache
-        uses: actions/cache@v3
-        with:
-          path: /home/runner/.docker/buildx
-          key: ${{ runner.os }}-buildx-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-
-
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v4
+      - name: Build and push multi-arch Docker image
+        uses: docker/build-push-action@v5
         with:
           context: .
+          platforms: linux/amd64,linux/arm64,linux/arm/v7
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # Use GitHub cache
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          # Enable BuildKit
-          builder: ${{ steps.buildx.outputs.name }}
-          # Additional optimizations
           build-args: |
             BUILDKIT_INLINE_CACHE=1
+          provenance: false
 
   deploy:
     runs-on: ubuntu-latest
     needs: build-and-push
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
-      - name: Deploy to server
-        # This is a placeholder. In a real environment, you would have
-        # steps to deploy to your Unraid server via SSH, Docker Compose,
-        # or other deployment methods.
+      - name: Deploy notification
         run: |
-          echo "Deploying to server - this is a placeholder"
-          echo "In a real deployment, you would add steps to:"
-          echo "- SSH into your Unraid server"
-          echo "- Pull the latest Docker image"
-          echo "- Restart the container"
+          echo "::notice title=Deployment Ready::Docker image has been pushed to ghcr.io"
+          echo "Image: ghcr.io/${{ github.repository }}/rpi-weather-display:latest"
+          echo "To deploy on your Unraid server:"
+          echo "1. docker pull ghcr.io/${{ github.repository }}/rpi-weather-display:latest"
+          echo "2. docker stop rpi-weather-display"
+          echo "3. docker run -d --name rpi-weather-display -p 8000:8000 -v /path/to/config.yaml:/app/config.yaml ghcr.io/${{ github.repository }}/rpi-weather-display:latest"
