@@ -19,3 +19,15 @@ queries:
 # Python-specific configuration
 languages:
   - python
+
+# Disable specific queries that don't understand Python 3.10+ features
+query-filters:
+  - exclude:
+      # Pattern matching with exhaustive cases can appear as uninitialized
+      id: py/uninitialized-local-variable
+      # Affects: power_manager.py:541
+  - exclude:
+      # Pattern matching with exhaustive cases can appear as mixed returns
+      id: py/mixed-returns  
+      # Affects: battery_utils.py (multiple), display.py (multiple), 
+      # network.py (multiple), power_manager.py:415

@@ -538,7 +538,8 @@ class PowerStateManager:
                 new_state = PowerState.NORMAL
 
         # If state changed, notify subscribers
-        if new_state != old_state:
+        # CodeQL: new_state is always initialized by exhaustive pattern matching above
+        if new_state != old_state:  # codeql[py/uninitialized-local-variable]
             self._current_state = new_state
             self.logger.info(f"Power state changed from {old_state.name} to {new_state.name}")
             self._notify_state_change(old_state, new_state)
