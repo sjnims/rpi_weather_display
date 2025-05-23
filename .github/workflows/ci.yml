@@ -75,9 +75,8 @@ jobs:
       - name: Security scan with safety
         id: security
         run: |
-          # Generate requirements.txt from installed packages
-          poetry run pip freeze > requirements.txt
-          poetry run safety check -r requirements.txt --continue-on-error
+          # Use the new safety scan command (check is deprecated)
+          poetry run safety scan --output json
 
       - name: Code complexity analysis
         id: complexity
