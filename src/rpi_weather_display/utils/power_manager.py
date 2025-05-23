@@ -1123,8 +1123,8 @@ class PowerStateManager:
                 temp_content = read_text("/sys/class/thermal/thermal_zone0/temp")
                 temp = int(temp_content.strip()) / 1000.0
                 metrics["cpu_temp"] = temp
-            except (FileNotFoundError, ValueError):
-                pass
+            except (FileNotFoundError, ValueError) as e:
+                self.logger.warning(f"Could not read CPU temperature: {e}")
 
             # CPU usage
             try:
@@ -1144,8 +1144,8 @@ class PowerStateManager:
                             cpu_pct = float(cpu_info.replace("%id", "").strip())
                             metrics["cpu_usage"] = 100.0 - cpu_pct
                             break
-            except (subprocess.SubprocessError, ValueError, IndexError):
-                pass
+            except (subprocess.SubprocessError, ValueError, IndexError) as e:
+                self.logger.warning(f"Could not get CPU usage: {e}")
 
             # Memory usage - only check if we have access to command-line tools
             # This ensures we return an empty dict when testing command_not_found
@@ -1157,8 +1157,8 @@ class PowerStateManager:
                     total = int(meminfo.split("MemTotal:")[1].split("kB")[0].strip()) * 1024
                     free = int(meminfo.split("MemFree:")[1].split("kB")[0].strip()) * 1024
                     metrics["memory_usage"] = (total - free) / total * 100.0
-                except (FileNotFoundError, ValueError, IndexError):
-                    pass
+                except (FileNotFoundError, ValueError, IndexError) as e:
+                    self.logger.warning(f"Could not read memory info: {e}")
 
             # Disk usage
             try:
@@ -1174,8 +1174,8 @@ class PowerStateManager:
                     disk_usage = disk_usage.split("\n")[1]
                     disk_pct = int(disk_usage.split()[4].replace("%", ""))
                     metrics["disk_usage"] = float(disk_pct)
-            except (subprocess.SubprocessError, ValueError, IndexError):
-                pass
+            except (subprocess.SubprocessError, ValueError, IndexError) as e:
+                self.logger.warning(f"Could not get disk usage: {e}")
 
             # Battery drain rate
             drain_rate = calculate_drain_rate(list(self._battery_history))

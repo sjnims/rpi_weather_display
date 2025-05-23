@@ -23,6 +23,11 @@ The project uses Python 3.10+ structural pattern matching and modern Python feat
 - **Reason**: Ellipsis (`...`) in Protocol method definitions is valid Python syntax for abstract methods
 - **Fixed**: Changed to use `pass` with docstrings for clarity
 
+### 4. Empty Except (py/empty-except)
+- **Location**: `power_manager.py` get_system_metrics() (lines 1126, 1147, 1160, 1177)
+- **Reason**: Method collects optional system metrics; failures are non-critical
+- **Fixed**: Changed to log warnings instead of silently passing
+
 ## Pattern Matching Examples
 
 These patterns are exhaustive and safe:
