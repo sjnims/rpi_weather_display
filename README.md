@@ -466,7 +466,7 @@ rpi-weather-display/
 
 ### Testing and Code Quality
 
-- **Test Coverage**: 96.74% code coverage with comprehensive tests
+- **Test Coverage**: 96.33% code coverage with comprehensive tests
 - **Type Checking**: Strict typing with Pyright
 - **Linting**: Uses Ruff for code style enforcement
 - **CI/CD**: Automated tests and linting via GitHub Actions
@@ -699,7 +699,7 @@ This project makes use of several excellent open-source libraries and tools:
 Special thanks to the Raspberry Pi community and e-paper display enthusiasts for inspiration and technical guidance, especially:
 
 - Kimmo Brunfeldt's [blog post](https://kimmo.blog/posts/7-building-eink-weather-display-for-our-home/) and [GitHub repository](https://github.com/kimmobrunfeldt/eink-weather-display)
-- Faith Ak's InkyPi [YouTube video](https://www.youtube.com/watch?v=65sda565l9Y) and [GitHub repository](https://github.com/FaithAk/InkyPi)
+- Faith Ak's InkyPi [YouTube video](https://www.youtube.com/watch?v=65sda565l9Y) and [GitHub repository](https://github.com/fatihak/InkyPi)
 
 ## License
 
