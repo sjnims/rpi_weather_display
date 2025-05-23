@@ -384,20 +384,20 @@ class EPaperDisplay:
 
         # Use appropriate threshold based on battery status
         battery = self._current_battery_status
-        is_discharging = battery.state == BatteryState.DISCHARGING
-
-        if battery.state == BatteryState.CHARGING:
-            # When charging, use the standard threshold
-            return self.config.pixel_diff_threshold
-        elif battery.level <= 10 and is_discharging:
-            # Critical battery (10% or less and discharging)
-            return self.config.pixel_diff_threshold_critical_battery
-        elif battery.level <= 20 and is_discharging:
-            # Low battery (20% or less and discharging)
-            return self.config.pixel_diff_threshold_low_battery
-        else:
-            # Normal battery or other states
-            return self.config.pixel_diff_threshold
+        
+        match (battery.state, battery.level):
+            case (BatteryState.CHARGING, _):
+                # When charging, use the standard threshold
+                return self.config.pixel_diff_threshold
+            case (BatteryState.DISCHARGING, level) if level <= 10:
+                # Critical battery (10% or less and discharging)
+                return self.config.pixel_diff_threshold_critical_battery
+            case (BatteryState.DISCHARGING, level) if level <= 20:
+                # Low battery (20% or less and discharging)
+                return self.config.pixel_diff_threshold_low_battery
+            case _:
+                # Normal battery or other states
+                return self.config.pixel_diff_threshold
 
     def _get_min_changed_pixels(self) -> int:
         """Get the minimum number of changed pixels required based on battery status.
@@ -430,20 +430,20 @@ class EPaperDisplay:
 
         # Use appropriate threshold based on battery status
         battery = self._current_battery_status
-        is_discharging = battery.state == BatteryState.DISCHARGING
-
-        if battery.state == BatteryState.CHARGING:
-            # When charging, use the standard threshold
-            return self.config.min_changed_pixels
-        elif battery.level <= 10 and is_discharging:
-            # Critical battery (10% or less and discharging)
-            return self.config.min_changed_pixels_critical_battery
-        elif battery.level <= 20 and is_discharging:
-            # Low battery (20% or less and discharging)
-            return self.config.min_changed_pixels_low_battery
-        else:
-            # Normal battery or other states
-            return self.config.min_changed_pixels
+        
+        match (battery.state, battery.level):
+            case (BatteryState.CHARGING, _):
+                # When charging, use the standard threshold
+                return self.config.min_changed_pixels
+            case (BatteryState.DISCHARGING, level) if level <= 10:
+                # Critical battery (10% or less and discharging)
+                return self.config.min_changed_pixels_critical_battery
+            case (BatteryState.DISCHARGING, level) if level <= 20:
+                # Low battery (20% or less and discharging)
+                return self.config.min_changed_pixels_low_battery
+            case _:
+                # Normal battery or other states
+                return self.config.min_changed_pixels
 
     def sleep(self) -> None:
         """Put the display to sleep (deep sleep mode) to conserve power.

@@ -425,17 +425,22 @@ class PowerStateManager:
             return {}
 
         try:
-            if event_type == PiJuiceEvent.LOW_CHARGE:
-                response = self._pijuice.config.GetSystemTaskParameters("LOW_CHARGE")
-                if response["error"] == "NO_ERROR":
-                    return cast(PiJuiceEventData, response["data"])
-
-            elif event_type == PiJuiceEvent.BUTTON_SW1_PRESS:
-                response = self._pijuice.config.GetButtonConfiguration("SW1", "SINGLE_PRESS")
-                if response["error"] == "NO_ERROR":
-                    return cast(PiJuiceEventData, response["data"])
-
-            return {}
+            # Use pattern matching for event type handling
+            match event_type:
+                case PiJuiceEvent.LOW_CHARGE:
+                    response = self._pijuice.config.GetSystemTaskParameters("LOW_CHARGE")
+                    if response["error"] == "NO_ERROR":
+                        return cast(PiJuiceEventData, response["data"])
+                    return {}
+                
+                case PiJuiceEvent.BUTTON_SW1_PRESS:
+                    response = self._pijuice.config.GetButtonConfiguration("SW1", "SINGLE_PRESS")
+                    if response["error"] == "NO_ERROR":
+                        return cast(PiJuiceEventData, response["data"])
+                    return {}
+                
+                case _:
+                    return {}
         except Exception as e:
             self.logger.error(f"Error getting event configuration: {e}")
             return {}
@@ -511,20 +516,26 @@ class PowerStateManager:
                     drain_rate * DRAIN_WEIGHT_NEW
                 )
 
-        # Determine the new state based on various factors
-        if is_charging(battery_status):
-            new_state = PowerState.CHARGING
-        elif is_quiet_hours(
-            quiet_hours_start=self.config.power.quiet_hours_start,
-            quiet_hours_end=self.config.power.quiet_hours_end,
+        # Determine the new state based on various factors using pattern matching
+        match (
+            is_charging(battery_status),
+            is_quiet_hours(
+                quiet_hours_start=self.config.power.quiet_hours_start,
+                quiet_hours_end=self.config.power.quiet_hours_end,
+            ),
+            is_battery_critical(battery_status, self.config.power.critical_battery_threshold),
+            should_conserve_power(battery_status, self.config.power),
         ):
-            new_state = PowerState.QUIET_HOURS
-        elif is_battery_critical(battery_status, self.config.power.critical_battery_threshold):
-            new_state = PowerState.CRITICAL
-        elif should_conserve_power(battery_status, self.config.power):
-            new_state = PowerState.CONSERVING
-        else:
-            new_state = PowerState.NORMAL
+            case (True, _, _, _):  # Charging takes priority
+                new_state = PowerState.CHARGING
+            case (False, True, _, _):  # Then quiet hours
+                new_state = PowerState.QUIET_HOURS
+            case (False, False, True, _):  # Then critical battery
+                new_state = PowerState.CRITICAL
+            case (False, False, False, True):  # Then conserving
+                new_state = PowerState.CONSERVING
+            case _:  # Default to normal
+                new_state = PowerState.NORMAL
 
         # If state changed, notify subscribers
         if new_state != old_state:
@@ -619,12 +630,16 @@ class PowerStateManager:
                 battery_data = status["data"].get("battery")
                 if battery_data:
                     battery_str = str(battery_data)
-                    if "CHARGING" in battery_str:
-                        state = BatteryState.CHARGING
-                    elif "NORMAL" in battery_str:
-                        state = BatteryState.DISCHARGING
-                    elif "CHARGED" in battery_str:
-                        state = BatteryState.FULL
+                    # Use pattern matching for battery state detection
+                    match battery_str:
+                        case s if "CHARGING" in s:
+                            state = BatteryState.CHARGING
+                        case s if "NORMAL" in s:
+                            state = BatteryState.DISCHARGING
+                        case s if "CHARGED" in s:
+                            state = BatteryState.FULL
+                        case _:
+                            state = BatteryState.UNKNOWN
 
             # Calculate time remaining (rough estimate)
             time_remaining = None
@@ -726,28 +741,36 @@ class PowerStateManager:
         if not self.config.display.battery_aware_refresh:
             return timedelta(minutes=refresh_interval_minutes)
 
-        # Adjust interval based on power state and battery status
-        if current_state == PowerState.CHARGING or is_charging(battery_status):
-            # Use charging interval if charging
-            refresh_interval_minutes = self.config.display.refresh_interval_charging_minutes
-            self.logger.info(f"Battery charging, interval: {refresh_interval_minutes} minutes")
-
-        elif current_state == PowerState.CRITICAL:
-            # Use critical battery interval if battery is critical
-            refresh_interval_minutes = self.config.display.refresh_interval_critical_battery_minutes
-            self.logger.info(f"Battery critical, interval: {refresh_interval_minutes} minutes")
-
-        elif current_state == PowerState.CONSERVING:
-            # Use low battery interval if in conserving mode
-            refresh_interval_minutes = self.config.display.refresh_interval_low_battery_minutes
-            self.logger.info(f"Battery low, interval: {refresh_interval_minutes} minutes")
-
-        # Handle quiet hours
-        if current_state == PowerState.QUIET_HOURS:
-            # In quiet hours, only refresh if charging, otherwise use wake_up_interval
-            if not is_charging(battery_status):
+        # Adjust interval based on power state and battery status using pattern matching
+        match (current_state, is_charging(battery_status)):
+            case (PowerState.CHARGING, _) | (_, True):
+                # Use charging interval if charging
+                refresh_interval_minutes = self.config.display.refresh_interval_charging_minutes
+                self.logger.info(f"Battery charging, interval: {refresh_interval_minutes} minutes")
+            
+            case (PowerState.CRITICAL, False):
+                # Use critical battery interval if battery is critical
+                refresh_interval_minutes = (
+                    self.config.display.refresh_interval_critical_battery_minutes
+                )
+                self.logger.info(f"Battery critical, interval: {refresh_interval_minutes} minutes")
+            
+            case (PowerState.CONSERVING, False):
+                # Use low battery interval if in conserving mode
+                refresh_interval_minutes = self.config.display.refresh_interval_low_battery_minutes
+                self.logger.info(f"Battery low, interval: {refresh_interval_minutes} minutes")
+            
+            case (PowerState.QUIET_HOURS, False):
+                # In quiet hours and not charging, use wake_up_interval
                 refresh_interval_minutes = self.config.power.wake_up_interval_minutes
-                self.logger.info(f"Quiet hours, interval: {refresh_interval_minutes} minutes")
+            
+            case (PowerState.NORMAL, False):
+                # Normal state - use default interval
+                pass  # Keep default refresh_interval_minutes
+            
+            case _:
+                # Any other case (should not happen, but for exhaustiveness)
+                pass  # Keep default refresh_interval_minutes
 
         return timedelta(minutes=refresh_interval_minutes)
 
@@ -767,18 +790,22 @@ class PowerStateManager:
         time_since_update = datetime.now() - self._last_update
         min_update_interval = timedelta(minutes=self.config.weather.update_interval_minutes)
 
-        # Check if we should adjust the interval based on power state
+        # Check if we should adjust the interval based on power state using pattern matching
         in_quiet_hours = current_state == PowerState.QUIET_HOURS
-
-        if current_state == PowerState.CRITICAL and not in_quiet_hours:
-            min_update_interval *= 4  # Quadruple interval in critical state
-            self.logger.info("Critical battery state, quadrupling update interval")
-        elif current_state == PowerState.CONSERVING and not in_quiet_hours:
-            min_update_interval *= 2  # Double interval in conserving mode
-            self.logger.info("Power conserving mode, doubling update interval")
-        elif current_state == PowerState.CHARGING:
-            # No change to interval when charging
-            pass
+        
+        match (current_state, in_quiet_hours):
+            case (PowerState.CRITICAL, False):
+                min_update_interval *= 4  # Quadruple interval in critical state
+                self.logger.info("Critical battery state, quadrupling update interval")
+            case (PowerState.CONSERVING, False):
+                min_update_interval *= 2  # Double interval in conserving mode
+                self.logger.info("Power conserving mode, doubling update interval")
+            case (PowerState.CHARGING, _):
+                # No change to interval when charging
+                pass
+            case _:
+                # No change for other states
+                pass
 
         return time_since_update >= min_update_interval
 
@@ -802,8 +829,11 @@ class PowerStateManager:
         current_state = self.get_current_state()
 
         # In quiet hours, use the configured wake up interval
-        if current_state == PowerState.QUIET_HOURS:
-            return self.config.power.wake_up_interval_minutes * 60
+        match current_state:
+            case PowerState.QUIET_HOURS:
+                return self.config.power.wake_up_interval_minutes * 60
+            case _:
+                pass  # Continue with calculations
 
         # Calculate time until next refresh if we have a last refresh time
         if self._last_refresh is not None:
@@ -818,14 +848,17 @@ class PowerStateManager:
 
         # Calculate time until next weather update if we have a last update time
         if self._last_update is not None:
-            update_interval = self.config.weather.update_interval_minutes
-
-            # Double interval if in conserving mode
-            if current_state == PowerState.CONSERVING:
-                update_interval *= 2
-            # Quadruple interval if in critical mode
-            elif current_state == PowerState.CRITICAL:
-                update_interval *= 4
+            # Determine update interval multiplier based on power state
+            match current_state:
+                case PowerState.CONSERVING:
+                    # Double interval if in conserving mode
+                    update_interval = self.config.weather.update_interval_minutes * 2
+                case PowerState.CRITICAL:
+                    # Quadruple interval if in critical mode
+                    update_interval = self.config.weather.update_interval_minutes * 4
+                case _:
+                    # Normal interval for other states
+                    update_interval = self.config.weather.update_interval_minutes
 
             next_update = self._last_update + timedelta(minutes=update_interval)
             time_until_update = (next_update - datetime.now()).total_seconds()

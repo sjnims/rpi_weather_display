@@ -49,7 +49,11 @@ def is_charging(status: BatteryStatus) -> bool:
     Returns:
         True if the battery is charging
     """
-    return status.state == BatteryState.CHARGING
+    match status.state:
+        case BatteryState.CHARGING:
+            return True
+        case _:
+            return False
 
 
 def should_conserve_power(status: BatteryStatus, config: PowerConfig) -> bool:
@@ -119,16 +123,17 @@ def get_battery_text_description(status: BatteryStatus) -> str:
     Returns:
         Text description of battery status
     """
-    if status.state == BatteryState.CHARGING:
-        return f"Charging ({status.level}%)"
-    elif status.state == BatteryState.FULL:
-        return "Fully Charged"
-    elif status.level < 10:
-        return f"Critical ({status.level}%)"
-    elif status.level < 20:
-        return f"Low ({status.level}%)"
-    else:
-        return f"Battery: {status.level}%"
+    match (status.state, status.level):
+        case (BatteryState.CHARGING, level):
+            return f"Charging ({level}%)"
+        case (BatteryState.FULL, _):
+            return "Fully Charged"
+        case (_, level) if level < 10:
+            return f"Critical ({level}%)"
+        case (_, level) if level < 20:
+            return f"Low ({level}%)"
+        case (_, level):
+            return f"Battery: {level}%"
 
 
 def estimate_remaining_time(status: BatteryStatus) -> int | None:
@@ -145,7 +150,13 @@ def estimate_remaining_time(status: BatteryStatus) -> int | None:
         int: Estimated battery time in minutes
         None: If battery is charging or if time cannot be estimated
     """
-    return status.time_remaining
+    match (status.state, status.time_remaining):
+        case (BatteryState.CHARGING | BatteryState.FULL, _):
+            return None  # No time estimate when charging or full
+        case (_, None):
+            return None  # No estimate available
+        case (_, time):
+            return time
 
 
 def calculate_drain_rate(status_history: list[BatteryStatus]) -> float | None:

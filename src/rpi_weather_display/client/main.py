@@ -267,15 +267,21 @@ class WeatherDisplayClient:
                 battery_status = self.power_manager.get_battery_status()
                 is_in_quiet_hours = current_state == PowerState.QUIET_HOURS
 
-                # Handle display sleep during quiet hours
-                if is_in_quiet_hours and not is_charging(battery_status) and not display_sleeping:
-                    self.logger.info("Quiet hours active and not charging - display sleeping")
-                    self.display.sleep()
-                    display_sleeping = True
-                elif display_sleeping and (not is_in_quiet_hours or is_charging(battery_status)):
-                    self.logger.info("Quiet hours ended or charging - waking display")
-                    self.refresh_display()
-                    display_sleeping = False
+                # Handle display sleep during quiet hours using pattern matching
+                match (is_in_quiet_hours, is_charging(battery_status), display_sleeping):
+                    case (True, False, False):
+                        # Quiet hours active, not charging, display awake -> sleep display
+                        self.logger.info("Quiet hours active and not charging - display sleeping")
+                        self.display.sleep()
+                        display_sleeping = True
+                    case (False, _, True) | (_, True, True):
+                        # Quiet hours ended OR charging while display sleeping -> wake display
+                        self.logger.info("Quiet hours ended or charging - waking display")
+                        self.refresh_display()
+                        display_sleeping = False
+                    case _:
+                        # No change needed
+                        pass
 
                 # Check if we should update weather
                 if self.power_manager.should_update_weather():

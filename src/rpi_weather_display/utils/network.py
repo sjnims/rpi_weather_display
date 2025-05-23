@@ -70,21 +70,22 @@ class NetworkManager:
             # Check if we have network connectivity
             connected = self._check_connectivity()
 
-            if connected:
-                # Get network details
-                ssid = self._get_ssid()
-                ip_address = self._get_ip_address()
-                signal_strength = self._get_signal_strength()
+            match connected:
+                case True:
+                    # Get network details
+                    ssid = self._get_ssid()
+                    ip_address = self._get_ip_address()
+                    signal_strength = self._get_signal_strength()
 
-                return NetworkStatus(
-                    state=NetworkState.CONNECTED,
-                    ssid=ssid,
-                    ip_address=ip_address,
-                    signal_strength=signal_strength,
-                    last_connection=datetime.fromtimestamp(time.time()),
-                )
-            else:
-                return NetworkStatus(state=NetworkState.DISCONNECTED)
+                    return NetworkStatus(
+                        state=NetworkState.CONNECTED,
+                        ssid=ssid,
+                        ip_address=ip_address,
+                        signal_strength=signal_strength,
+                        last_connection=datetime.fromtimestamp(time.time()),
+                    )
+                case False:
+                    return NetworkStatus(state=NetworkState.DISCONNECTED)
         except Exception as e:
             self.logger.error(f"Error getting network status: {e}")
             return NetworkStatus(state=NetworkState.ERROR)
@@ -101,8 +102,13 @@ class NetworkManager:
                 (GOOGLE_DNS, GOOGLE_DNS_PORT), timeout=self.config.wifi_timeout_seconds
             )
             return True
-        except (TimeoutError, OSError):
-            return False
+        except Exception as e:
+            match type(e).__name__:
+                case "TimeoutError" | "OSError":
+                    return False
+                case _:
+                    # Re-raise unexpected exceptions
+                    raise
 
     def _calculate_backoff_delay(self, attempt: int) -> float:
         """Calculate delay for exponential backoff.
@@ -162,16 +168,17 @@ class NetworkManager:
                 return operation(*args, **kwargs)
             except Exception as e:
                 attempt += 1
-                if attempt >= self.config.retry_max_attempts:
-                    self.logger.error(f"Operation failed after {attempt} attempts: {e!s}")
-                    return None
-
-                delay = self._calculate_backoff_delay(attempt)
-                self.logger.info(
-                    f"Retry attempt {attempt}/{self.config.retry_max_attempts} "
-                    f"after {delay:.2f}s: {e!s}"
-                )
-                time.sleep(delay)
+                match attempt >= self.config.retry_max_attempts:
+                    case True:
+                        self.logger.error(f"Operation failed after {attempt} attempts: {e!s}")
+                        return None
+                    case False:
+                        delay = self._calculate_backoff_delay(attempt)
+                        self.logger.info(
+                            f"Retry attempt {attempt}/{self.config.retry_max_attempts} "
+                            f"after {delay:.2f}s: {e!s}"
+                        )
+                        time.sleep(delay)
 
         return None
 
@@ -195,9 +202,11 @@ class NetworkManager:
                 timeout=self.config.wifi_timeout_seconds,
                 shell=False,  # Explicitly disable shell
             )
-            if result.returncode == 0 and result.stdout.strip():
-                return result.stdout.strip()
-            return None
+            match (result.returncode, result.stdout.strip()):
+                case (0, ssid) if ssid:
+                    return ssid
+                case _:
+                    return None
         except (subprocess.SubprocessError, subprocess.TimeoutExpired):
             return None
 
@@ -237,17 +246,25 @@ class NetworkManager:
                 timeout=self.config.wifi_timeout_seconds,
                 shell=False,  # Explicitly disable shell
             )
-            if result.returncode == 0:
-                for line in result.stdout.split("\n"):
-                    if "Signal level" in line:
-                        # Extract signal level (dBm)
-                        parts = line.split("Signal level=")
-                        if len(parts) > 1:
-                            signal = parts[1].split(" ")[0]
-                            return int(signal.replace("dBm", ""))
-            return None
-        except (subprocess.SubprocessError, subprocess.TimeoutExpired, ValueError, IndexError):
-            return None
+            match result.returncode:
+                case 0:
+                    for line in result.stdout.split("\n"):
+                        if "Signal level" in line:
+                            # Extract signal level (dBm)
+                            parts = line.split("Signal level=")
+                            if len(parts) > 1:
+                                signal = parts[1].split(" ")[0]
+                                return int(signal.replace("dBm", ""))
+                    return None
+                case _:
+                    return None
+        except Exception as e:
+            match type(e).__name__:
+                case "SubprocessError" | "TimeoutExpired" | "ValueError" | "IndexError":
+                    return None
+                case _:
+                    # Re-raise unexpected exceptions
+                    raise
 
     @contextmanager
     def ensure_connectivity(self) -> Generator[bool, None, None]:
@@ -442,18 +459,19 @@ class NetworkManager:
 
         # If mode is "auto", select appropriate mode based on battery status
         if mode == "auto" and self.config.enable_battery_aware_wifi:
-            # Default to "on" if battery status is not available
-            if self.current_battery_status is None:
-                mode = "on"
-            # Use aggressive power saving when battery is critically low
-            elif self.current_battery_status.level <= self.config.critical_battery_threshold:
-                mode = "aggressive"
-            # Use regular power saving when battery is low
-            elif self.current_battery_status.level <= self.config.low_battery_threshold:
-                mode = "on"
-            # Disable power saving when battery is good
-            else:
-                mode = "off"
+            match self.current_battery_status:
+                case None:
+                    # Default to "on" if battery status is not available
+                    mode = "on"
+                case status if status.level <= self.config.critical_battery_threshold:
+                    # Use aggressive power saving when battery is critically low
+                    mode = "aggressive"
+                case status if status.level <= self.config.low_battery_threshold:
+                    # Use regular power saving when battery is low
+                    mode = "on"
+                case _:
+                    # Disable power saving when battery is good
+                    mode = "off"
 
         # Ensure mode is valid
         if mode not in ["off", "on", "aggressive"]:
