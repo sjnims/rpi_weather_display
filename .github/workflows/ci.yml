@@ -56,7 +56,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          poetry install --no-interaction --all-extras --sync
+          poetry install --no-interaction --all-extras
           poetry run pip install safety radon
 
       - name: Lint with ruff
@@ -96,7 +96,7 @@ jobs:
             venv-${{ runner.os }}-3.11-
 
       - name: Install dependencies
-        run: poetry install --no-interaction --all-extras --sync
+        run: poetry install --no-interaction --all-extras
 
       - name: Type check with pyright
         run: poetry run pyright .
@@ -137,13 +137,14 @@ jobs:
 
       - name: Install dependencies
         run: |
-          poetry install --no-interaction --all-extras --sync
+          poetry install --no-interaction --all-extras
           poetry run pip install safety
 
       - name: Security scan with safety
         run: |
-          # Use the new safety scan command with non-interactive mode
-          poetry run safety scan --policy-file /dev/null --output screen || true
+          # Use safety scan with API key for authentication
+          # Get your free API key at: https://platform.safetycli.com/signup
+          poetry run safety scan --key ${{ secrets.SAFETY_API_KEY }} --output screen || true
 
   code-quality:
     runs-on: ubuntu-latest
@@ -249,7 +250,7 @@ jobs:
           key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
 
       - name: Install dependencies
-        run: poetry install --no-interaction --all-extras --sync
+        run: poetry install --no-interaction --all-extras
           
       - name: Install Playwright browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
@@ -317,7 +318,7 @@ jobs:
             venv-${{ runner.os }}-3.11-
             
       - name: Install dependencies
-        run: poetry install --no-interaction --all-extras --sync
+        run: poetry install --no-interaction --all-extras
 
       # Cache Playwright browsers
       - name: Get Playwright version
