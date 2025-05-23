@@ -19,14 +19,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Combined static analysis job to reduce duplicate setup
-  static-analysis:
+  # Separate jobs for parallel execution
+  lint:
     runs-on: ubuntu-latest
-    outputs:
-      lint-status: ${{ steps.lint.outcome }}
-      typecheck-status: ${{ steps.typecheck.outcome }}
-      security-status: ${{ steps.security.outcome }}
-      complexity-status: ${{ steps.complexity.outcome }}
     steps:
       - uses: actions/checkout@v4
 
@@ -65,31 +60,115 @@ jobs:
           poetry run pip install safety radon
 
       - name: Lint with ruff
-        id: lint
         run: poetry run ruff check . --exit-non-zero-on-fix
 
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache Poetry installation
+        uses: actions/cache@v4
+        id: poetry-cache
+        with:
+          path: ~/.local
+          key: poetry-2.1.3-${{ runner.os }}
+
+      - name: Install Poetry
+        if: steps.poetry-cache.outputs.cache-hit != 'true'
+        uses: snok/install-poetry@v1
+        with:
+          version: 2.1.3
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-3.11-${{ hashFiles('**/poetry.lock') }}
+          restore-keys: |
+            venv-${{ runner.os }}-3.11-
+
+      - name: Install dependencies
+        run: poetry install --no-interaction --all-extras --sync
+
       - name: Type check with pyright
-        id: typecheck
         run: poetry run pyright .
 
+  security:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache Poetry installation
+        uses: actions/cache@v4
+        id: poetry-cache
+        with:
+          path: ~/.local
+          key: poetry-2.1.3-${{ runner.os }}
+
+      - name: Install Poetry
+        if: steps.poetry-cache.outputs.cache-hit != 'true'
+        uses: snok/install-poetry@v1
+        with:
+          version: 2.1.3
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-3.11-${{ hashFiles('**/poetry.lock') }}
+          restore-keys: |
+            venv-${{ runner.os }}-3.11-
+
+      - name: Install dependencies
+        run: |
+          poetry install --no-interaction --all-extras --sync
+          poetry run pip install safety
+
       - name: Security scan with safety
-        id: security
         run: |
           # Use the new safety scan command with non-interactive mode
           poetry run safety scan --policy-file /dev/null --output screen || true
 
+  code-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install code metrics tools
+        run: pip install radon
+
       - name: Code complexity analysis
-        id: complexity
         run: |
           echo "::group::Code Complexity Analysis"
-          poetry run radon cc src/ -a -nc
+          radon cc src/ -a -nc
           
-          COMPLEX_COUNT=$(poetry run radon cc src/ -a -nc --json | grep -E '"rank": "[EF]"' | wc -l || echo "0")
+          COMPLEX_COUNT=$(radon cc src/ -a -nc --json | grep -E '"rank": "[EF]"' | wc -l || echo "0")
           echo "Complex functions (rank E-F): $COMPLEX_COUNT"
           echo "::endgroup::"
           
           echo "::group::Maintainability Index"
-          poetry run radon mi src/ -s
+          radon mi src/ -s
           echo "::endgroup::"
           
           if [ "$COMPLEX_COUNT" -gt 5 ]; then
@@ -117,7 +196,7 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
-    needs: static-analysis
+    needs: [lint, typecheck]  # Don't wait for security or code-quality
     strategy:
       matrix:
         test-group: [models, client, server, utils]
@@ -197,6 +276,7 @@ jobs:
   coverage:
     runs-on: ubuntu-latest
     needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
       
@@ -288,7 +368,7 @@ jobs:
 
   build-and-push:
     runs-on: ubuntu-latest
-    needs: [static-analysis, test, codeql, coverage]
+    needs: [lint, typecheck, test]  # Don't wait for coverage, security, or code-quality
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
@@ -317,11 +397,11 @@ jobs:
             type=semver,pattern={{version}}
             type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Build and push multi-arch Docker image
+      - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
-          platforms: linux/amd64,linux/arm64,linux/arm/v7
+          platforms: linux/amd64  # Build only amd64 for speed, add ARM in separate job if needed
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
