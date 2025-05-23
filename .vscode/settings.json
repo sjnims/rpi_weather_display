@@ -12,5 +12,14 @@
         "**/.ruff_cache/**": true,
         "**/.benchmarks/**": true,
         "**/htmlcov/**": true
+    },
+    "yaml.customTags": [
+        "!reference sequence"
+    ],
+    "github-actions.workflows.pinned.workflows": [
+        ".github/workflows/ci.yml"
+    ],
+    "yaml.schemas": {
+        "https://json.schemastore.org/github-workflow.json": ".github/workflows/*.yml"
     }
 }
