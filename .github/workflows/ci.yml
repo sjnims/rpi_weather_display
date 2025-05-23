@@ -145,7 +145,8 @@ jobs:
           # Use safety scan with API key via environment variable
           # Get your free API key at: https://platform.safetycli.com/signup
           # Use --stage cicd to run in non-interactive CI/CD mode
-          safety --key $SAFETY_API_KEY --stage cicd scan || true
+          # Use custom policy file to control what vulnerabilities to report
+          safety --key $SAFETY_API_KEY --stage cicd --policy-file .safety-policy.json scan || true
 
   code-quality:
     runs-on: ubuntu-latest
