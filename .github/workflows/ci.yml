@@ -134,17 +134,17 @@ jobs:
             venv-${{ runner.os }}-3.11-
 
       - name: Install dependencies
-        run: |
-          poetry install --no-interaction --all-extras
-          poetry run pip install safety
+        run: poetry install --no-interaction --all-extras
 
       - name: Security scan with safety
         env:
           SAFETY_API_KEY: ${{ secrets.SAFETY_API_KEY }}
         run: |
+          # Install safety in isolated environment to avoid dependency conflicts
+          pip install --user safety
           # Use safety scan with API key via environment variable
           # Get your free API key at: https://platform.safetycli.com/signup
-          poetry run safety scan --output screen || true
+          safety scan --output screen || true
 
   code-quality:
     runs-on: ubuntu-latest
