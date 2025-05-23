@@ -5,7 +5,6 @@
 [![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/release/python-3112/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
-[![security: safety](https://img.shields.io/badge/security-safety-green.svg)](https://github.com/pyupio/safety)
 [![CodeQL](https://img.shields.io/badge/CodeQL-enabled-green.svg)](https://github.com/sjnims/rpi_weather_display/security/code-scanning)
 [![Docker](https://img.shields.io/badge/docker-ghcr.io-blue.svg)](https://github.com/sjnims/rpi_weather_display/pkgs/container/rpi-weather-display)
 

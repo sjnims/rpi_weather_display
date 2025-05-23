@@ -99,54 +99,6 @@ jobs:
       - name: Type check with pyright
         run: poetry run pyright .
 
-  security:
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Cache Poetry installation
-        uses: actions/cache@v4
-        id: poetry-cache
-        with:
-          path: ~/.local
-          key: poetry-2.1.3-${{ runner.os }}
-
-      - name: Install Poetry
-        if: steps.poetry-cache.outputs.cache-hit != 'true'
-        uses: snok/install-poetry@v1
-        with:
-          version: 2.1.3
-          virtualenvs-create: true
-          virtualenvs-in-project: true
-
-      - name: Cache dependencies
-        uses: actions/cache@v4
-        with:
-          path: .venv
-          key: venv-${{ runner.os }}-3.11-${{ hashFiles('**/poetry.lock') }}
-          restore-keys: |
-            venv-${{ runner.os }}-3.11-
-
-      - name: Install dependencies
-        run: poetry install --no-interaction --all-extras
-
-      - name: Security scan with safety
-        env:
-          SAFETY_API_KEY: ${{ secrets.SAFETY_API_KEY }}
-        run: |
-          # Install safety in isolated environment to avoid dependency conflicts
-          pip install --user safety
-          # Use safety scan with API key via environment variable
-          # Get your free API key at: https://platform.safetycli.com/signup
-          # Use --stage cicd to run in non-interactive CI/CD mode
-          # Use custom policy file to control what vulnerabilities to report
-          safety --key $SAFETY_API_KEY --stage cicd --policy-file .safety-policy.json scan || true
 
   code-quality:
     runs-on: ubuntu-latest

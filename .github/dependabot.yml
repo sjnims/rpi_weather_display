@@ -1,0 +1,48 @@
+version: 2
+updates:
+  # Enable version updates for Python dependencies
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "04:00"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "sjnims"
+    labels:
+      - "dependencies"
+      - "python"
+    groups:
+      development-dependencies:
+        patterns:
+          - "pytest*"
+          - "ruff"
+          - "pyright"
+          - "hypothesis"
+          - "freezegun"
+        update-types:
+          - "minor"
+          - "patch"
+    allow:
+      # Only allow updates for direct dependencies
+      - dependency-type: "direct"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+
+  # Enable security updates for GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday" 
+      time: "04:00"
+    reviewers:
+      - "sjnims"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
