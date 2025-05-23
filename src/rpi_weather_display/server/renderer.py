@@ -556,7 +556,7 @@ class WeatherRenderer:
         except Exception as e:
             error_location = get_error_location()
             self.logger.error(f"Error generating HTML [{error_location}]: {e}")
-            raise
+            raise RuntimeError("Failed to generate HTML for weather display") from e
 
     def _get_battery_icon(self, battery_status: BatteryStatus) -> str:
         """Get the appropriate battery icon ID from sprite.
@@ -674,7 +674,7 @@ class WeatherRenderer:
         except Exception as e:
             error_location = get_error_location()
             self.logger.error(f"Error rendering image [{error_location}]: {e}")
-            raise
+            raise RuntimeError("Failed to render image with Playwright") from e
 
     async def render_weather_image(
         self,

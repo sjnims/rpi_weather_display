@@ -150,9 +150,13 @@ async def test_get_coordinates_geocoding_empty_response(
     # Create API client
     api_client = WeatherAPIClient(app_config.weather)
 
-    # Should raise ValueError
-    with pytest.raises(ValueError, match="Could not find location for city name"):
+    # Should wrap ValueError in RuntimeError
+    with pytest.raises(RuntimeError, match="Failed to geocode location: NonexistentCity") as exc_info:
         await api_client.get_coordinates()
+    
+    # Check that the original exception is preserved
+    assert isinstance(exc_info.value.__cause__, ValueError)
+    assert "Could not find location for city name" in str(exc_info.value.__cause__)
 
 
 @pytest.mark.asyncio()
@@ -443,9 +447,13 @@ async def test_get_coordinates_general_exception(
     # Create API client
     api_client = WeatherAPIClient(app_config.weather)
 
-    # Should propagate the general exception
-    with pytest.raises(ValueError, match="Invalid query"):
+    # Should wrap the general exception in RuntimeError
+    with pytest.raises(RuntimeError, match="Failed to geocode location: New York") as exc_info:
         await api_client.get_coordinates()
+    
+    # Check that the original exception is preserved
+    assert isinstance(exc_info.value.__cause__, ValueError)
+    assert str(exc_info.value.__cause__) == "Invalid query"
 
 
 @pytest.mark.asyncio()
@@ -485,9 +493,13 @@ async def test_get_weather_data_general_exception(
     app_config.weather.location = {"lat": 40.7128, "lon": -74.0060}
     api_client = WeatherAPIClient(app_config.weather)
 
-    # Call should raise without cached data
-    with pytest.raises(ValueError, match="Invalid data"):
+    # Call should wrap exception in RuntimeError without cached data
+    with pytest.raises(RuntimeError, match="Failed to fetch weather data from API") as exc_info:
         await api_client.get_weather_data(force_refresh=True)
+    
+    # Check that the original exception is preserved
+    assert isinstance(exc_info.value.__cause__, ValueError)
+    assert str(exc_info.value.__cause__) == "Invalid data"
 
 
 @pytest.mark.asyncio()

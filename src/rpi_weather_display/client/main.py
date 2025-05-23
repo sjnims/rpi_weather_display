@@ -131,6 +131,7 @@ class WeatherDisplayClient:
                     self.power_manager.shutdown_system()
                 except Exception as shutdown_error:
                     self.logger.error(f"Final shutdown attempt failed: {shutdown_error}")
+                    raise RuntimeError("Failed to perform critical shutdown") from shutdown_error
 
     def update_weather(self) -> bool:
         """Update weather data from server.

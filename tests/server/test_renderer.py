@@ -321,8 +321,12 @@ class TestWeatherRenderer:
         mock_template.render.side_effect = RuntimeError(error_message)
 
         with patch.object(renderer.jinja_env, "get_template", return_value=mock_template):
-            with pytest.raises(RuntimeError, match=error_message):
+            with pytest.raises(RuntimeError, match="Failed to generate HTML for weather display") as exc_info:
                 await renderer.generate_html(weather_data, battery_status)
+            
+            # Check that the original exception is preserved
+            assert isinstance(exc_info.value.__cause__, RuntimeError)
+            assert str(exc_info.value.__cause__) == error_message
 
     @pytest.mark.asyncio()
     async def test_render_image(self, renderer: WeatherRenderer) -> None:
@@ -371,8 +375,12 @@ class TestWeatherRenderer:
         mock_playwright_context.__aenter__ = AsyncMock(side_effect=RuntimeError(error_message))
 
         with patch("playwright.async_api.async_playwright", return_value=mock_playwright_context):
-            with pytest.raises(RuntimeError, match=error_message):
+            with pytest.raises(RuntimeError, match="Failed to render image with Playwright") as exc_info:
                 await renderer.render_image(html, 800, 600)
+            
+            # Check that the original exception is preserved
+            assert isinstance(exc_info.value.__cause__, RuntimeError)
+            assert str(exc_info.value.__cause__) == error_message
 
     @pytest.mark.asyncio()
     async def test_render_weather_image(
@@ -754,8 +762,12 @@ class TestWeatherRenderer:
         """Test error handling when importing playwright fails."""
         # Mock the import to fail
         with patch("builtins.__import__", side_effect=ImportError("Failed to import playwright")):
-            with pytest.raises(ImportError):
+            with pytest.raises(RuntimeError, match="Failed to render image with Playwright") as exc_info:
                 await renderer.render_image("<html></html>", 800, 600)
+            
+            # Check that the original exception is preserved
+            assert isinstance(exc_info.value.__cause__, ImportError)
+            assert str(exc_info.value.__cause__) == "Failed to import playwright"
 
     def test_get_weather_icon_with_exceptions(self, renderer: WeatherRenderer) -> None:
         """Test getting weather icons with exceptions in the process."""

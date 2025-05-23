@@ -126,7 +126,7 @@ class WeatherAPIClient:
         except Exception as e:
             error_location = get_error_location()
             self.logger.error(f"Error during geocoding [{error_location}]: {e}")
-            raise
+            raise RuntimeError(f"Failed to geocode location: {self.config.city_name}") from e
 
     async def get_weather_data(self, force_refresh: bool = False) -> WeatherData:
         """Get weather data from the OpenWeatherMap API.
@@ -230,7 +230,7 @@ class WeatherAPIClient:
             if self._last_forecast is not None:
                 self.logger.warning("Using cached weather data due to error")
                 return self._last_forecast
-            raise
+            raise RuntimeError("Failed to fetch weather data from API") from e
 
     async def get_icon_mapping(self, icon_code: str) -> str:
         """Get the corresponding sprite icon ID for an OpenWeatherMap icon code.

@@ -497,6 +497,9 @@ class PowerStateManager:
                 self.shutdown_system()
             except Exception as shutdown_error:
                 self.logger.critical(f"Final shutdown attempt failed: {shutdown_error}")
+                raise RuntimeError(
+                    "Failed to handle LOW_CHARGE event and shutdown"
+                ) from shutdown_error
 
     def _update_power_state(self) -> None:
         """Update the current power state based on battery status and time."""
@@ -556,6 +559,7 @@ class PowerStateManager:
                 callback.callback(old_state, new_state)
             except Exception as e:
                 self.logger.error(f"Error in power state callback: {e}")
+                # Don't raise here as we want to continue notifying other callbacks
 
     def register_state_change_callback(
         self, callback: Callable[[PowerState, PowerState], None]
