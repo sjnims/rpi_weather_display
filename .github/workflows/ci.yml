@@ -55,9 +55,7 @@ jobs:
             venv-${{ runner.os }}-3.11-
 
       - name: Install dependencies
-        run: |
-          poetry install --no-interaction --all-extras
-          poetry run pip install safety radon
+        run: poetry install --no-interaction --all-extras
 
       - name: Lint with ruff
         run: poetry run ruff check . --exit-non-zero-on-fix
