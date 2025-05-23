@@ -117,32 +117,32 @@ jobs:
         run: |
           echo "::group::Code Complexity Analysis"
           radon cc src/ -a -nc
-          
+
           COMPLEX_COUNT=$(radon cc src/ -a -nc --json | grep -E '"rank": "[EF]"' | wc -l || echo "0")
           echo "Complex functions (rank E-F): $COMPLEX_COUNT"
           echo "::endgroup::"
-          
+
           echo "::group::Maintainability Index"
           radon mi src/ -s
           echo "::endgroup::"
-          
+
           if [ "$COMPLEX_COUNT" -gt 5 ]; then
             echo "::error::Too many complex functions ($COMPLEX_COUNT > 5)"
             exit 1
           fi
-  
+
   codeql:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
           languages: python
           config-file: ./.github/codeql/codeql-config.yml
-          
+
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
         with:
@@ -156,7 +156,7 @@ jobs:
       matrix:
         test-group: [models, client, server, utils]
       fail-fast: false
-    
+
     steps:
       - uses: actions/checkout@v4
 
@@ -188,7 +188,7 @@ jobs:
           key: venv-${{ runner.os }}-3.11-${{ hashFiles('**/poetry.lock') }}
           restore-keys: |
             venv-${{ runner.os }}-3.11-
-            
+
       # Playwright browsers cache with version-specific key
       - name: Get Playwright version
         id: playwright-version
@@ -205,7 +205,7 @@ jobs:
 
       - name: Install dependencies
         run: poetry install --no-interaction --all-extras
-          
+
       - name: Install Playwright browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: poetry run playwright install chromium --with-deps
@@ -234,7 +234,7 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
@@ -270,7 +270,7 @@ jobs:
           key: venv-${{ runner.os }}-3.11-${{ hashFiles('**/poetry.lock') }}
           restore-keys: |
             venv-${{ runner.os }}-3.11-
-            
+
       - name: Install dependencies
         run: poetry install --no-interaction --all-extras
 
@@ -291,7 +291,7 @@ jobs:
       - name: Install Playwright browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: poetry run playwright install chromium --with-deps
-            
+
       - name: Run all tests with coverage
         run: |
           poetry run pytest \
@@ -300,7 +300,7 @@ jobs:
             --cov-report=xml \
             --cov-report=term \
             --junitxml=junit.xml
-        
+
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
@@ -311,7 +311,7 @@ jobs:
           name: combined-coverage
           fail_ci_if_error: false
         continue-on-error: true
-            
+
       - name: Upload test results to Codecov
         if: ${{ !cancelled() }}
         uses: codecov/test-results-action@v1
@@ -353,7 +353,7 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           platforms: linux/amd64  # Build only amd64 for speed, add ARM in separate job if needed
