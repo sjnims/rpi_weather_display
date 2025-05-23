@@ -31,3 +31,7 @@ query-filters:
       id: py/mixed-returns  
       # Affects: battery_utils.py (multiple), display.py (multiple), 
       # network.py (multiple), power_manager.py:415
+  - exclude:
+      # Protocol methods with ellipsis are valid Python syntax
+      id: py/ineffectual-statement
+      # Affects: display.py Protocol definitions

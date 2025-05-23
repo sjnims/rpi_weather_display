@@ -4,7 +4,7 @@ This directory contains the CodeQL configuration for the rpi_weather_display pro
 
 ## False Positives
 
-The project uses Python 3.10+ structural pattern matching, which CodeQL's current rules don't fully understand. This leads to false positives for:
+The project uses Python 3.10+ structural pattern matching and modern Python features, which CodeQL's current rules don't fully understand. This leads to false positives for:
 
 ### 1. Uninitialized Local Variable (py/uninitialized-local-variable)
 - **Location**: `power_manager.py:541`
@@ -17,6 +17,11 @@ The project uses Python 3.10+ structural pattern matching, which CodeQL's curren
   - `network.py`: Lines 63, 93, 185, 229
   - `power_manager.py`: Line 415
 - **Reason**: Pattern matching with catch-all `case _:` ensures all paths return a value
+
+### 3. Ineffectual Statement (py/ineffectual-statement)
+- **Location**: `display.py` Protocol definitions (lines 46, 47, 57, 60, 61, 62)
+- **Reason**: Ellipsis (`...`) in Protocol method definitions is valid Python syntax for abstract methods
+- **Fixed**: Changed to use `pass` with docstrings for clarity
 
 ## Pattern Matching Examples
 

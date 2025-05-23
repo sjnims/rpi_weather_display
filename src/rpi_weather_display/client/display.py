@@ -43,8 +43,13 @@ if TYPE_CHECKING:
 class EPDProtocol(Protocol):
     """Protocol for low-level e-paper display driver."""
 
-    def set_rotation(self, rotation: int) -> None: ...  # noqa: D102
-    def sleep(self) -> None: ...  # noqa: D102
+    def set_rotation(self, rotation: int) -> None:
+        """Set display rotation."""
+        pass
+
+    def sleep(self) -> None:
+        """Put display to sleep."""
+        pass
 
 
 class EPDDisplayProtocol(Protocol):
@@ -54,12 +59,23 @@ class EPDDisplayProtocol(Protocol):
     height: int
     epd: EPDProtocol
 
-    def display(self, img: Image.Image) -> None: ...  # noqa: D102
-    def display_partial(  # noqa: D102
+    def display(self, img: Image.Image) -> None:
+        """Display an image."""
+        pass
+
+    def display_partial(
         self, img: Image.Image, bbox: tuple[int, int, int, int] | None = None
-    ) -> None: ...
-    def clear(self) -> None: ...  # noqa: D102
-    def sleep(self) -> None: ...  # noqa: D102
+    ) -> None:
+        """Display partial image update."""
+        pass
+
+    def clear(self) -> None:
+        """Clear the display."""
+        pass
+
+    def sleep(self) -> None:
+        """Put display to sleep."""
+        pass
 
 
 # Define type variables for conditional imports
