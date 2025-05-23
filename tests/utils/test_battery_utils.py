@@ -8,6 +8,7 @@ from rpi_weather_display.models.config import PowerConfig
 from rpi_weather_display.models.system import BatteryState, BatteryStatus
 from rpi_weather_display.utils import (
     calculate_drain_rate,
+    estimate_remaining_time,
     get_battery_icon,
     get_battery_text_description,
     is_battery_critical,
@@ -136,7 +137,8 @@ def battery_history() -> list[BatteryStatus]:
 
 
 def test_is_battery_critical(
-    normal_battery: BatteryStatus, low_battery: BatteryStatus, critical_battery: BatteryStatus
+    normal_battery: BatteryStatus, low_battery: BatteryStatus, critical_battery: BatteryStatus,
+    charging_battery: BatteryStatus
 ) -> None:
     """Test is_battery_critical function."""
     # Normal battery should not be critical
@@ -150,10 +152,15 @@ def test_is_battery_critical(
 
     # Critical battery should be critical with threshold of 10
     assert is_battery_critical(critical_battery, 10) is True
+    
+    # Charging battery with low level should not be critical
+    low_charging = charging_battery.model_copy(update={"level": 5})
+    assert is_battery_critical(low_charging, 10) is False
 
 
 def test_is_battery_low(
-    normal_battery: BatteryStatus, low_battery: BatteryStatus, critical_battery: BatteryStatus
+    normal_battery: BatteryStatus, low_battery: BatteryStatus, critical_battery: BatteryStatus,
+    charging_battery: BatteryStatus
 ) -> None:
     """Test is_battery_low function."""
     # Normal battery should not be low
@@ -164,6 +171,10 @@ def test_is_battery_low(
 
     # Critical battery should be low
     assert is_battery_low(critical_battery, 20) is True
+    
+    # Charging battery with low level should not be considered low
+    low_charging = charging_battery.model_copy(update={"level": 15})
+    assert is_battery_low(low_charging, 20) is False
 
 
 def test_is_charging(normal_battery: BatteryStatus, charging_battery: BatteryStatus) -> None:
@@ -319,3 +330,69 @@ def test_is_discharge_rate_abnormal() -> None:
     assert is_discharge_rate_abnormal(0, 5.0) is False
     assert is_discharge_rate_abnormal(5.0, 0) is False
     assert is_discharge_rate_abnormal(-1.0, 5.0) is False
+
+
+def test_get_battery_icon_high_battery(normal_battery: BatteryStatus) -> None:
+    """Test get_battery_icon for high battery levels (75-90%)."""
+    # Test battery at 85% (high but not full)
+    high_battery = normal_battery.model_copy(update={"level": 85})
+    assert get_battery_icon(high_battery) == "battery-high-bold"
+    
+    # Test battery at 75% (just above high threshold)
+    high_battery = normal_battery.model_copy(update={"level": 76})
+    assert get_battery_icon(high_battery) == "battery-high-bold"
+
+
+def test_estimate_remaining_time(
+    normal_battery: BatteryStatus,
+    charging_battery: BatteryStatus,
+    full_battery: BatteryStatus,
+) -> None:
+    """Test estimate_remaining_time function."""
+    # Normal discharging battery should return time remaining
+    assert estimate_remaining_time(normal_battery) == 300
+    
+    # Charging battery should return None
+    assert estimate_remaining_time(charging_battery) is None
+    
+    # Full battery should return None
+    assert estimate_remaining_time(full_battery) is None
+    
+    # Discharging battery with no time estimate should return None
+    no_time_battery = normal_battery.model_copy(update={"time_remaining": None})
+    assert estimate_remaining_time(no_time_battery) is None
+    
+    # Unknown state with time should return the time
+    unknown_battery = normal_battery.model_copy(update={"state": BatteryState.UNKNOWN})
+    assert estimate_remaining_time(unknown_battery) == 300
+
+
+def test_calculate_drain_rate_edge_cases(battery_history: list[BatteryStatus]) -> None:
+    """Test calculate_drain_rate with additional edge cases."""
+    # Test with history where first reading has no timestamp
+    no_timestamp_history = battery_history.copy()
+    no_timestamp_history[-1].timestamp = None  # Oldest reading has no timestamp
+    assert calculate_drain_rate(no_timestamp_history) is None
+    
+    # Test with zero time difference (same timestamp)
+    same_time_history = battery_history.copy()
+    same_time_history[0].timestamp = same_time_history[-1].timestamp
+    assert calculate_drain_rate(same_time_history) is None
+    
+    # Test with only one discharging reading followed by charging
+    mixed_history = [
+        battery_history[0],  # Discharging
+        battery_history[1].model_copy(update={"state": BatteryState.CHARGING}),  # Charging
+        battery_history[2],  # Discharging
+    ]
+    # Should only use the first discharging reading, which is insufficient
+    assert calculate_drain_rate(mixed_history) is None
+    
+    # Test with negative time difference (timestamps in wrong order)
+    wrong_order_history = battery_history.copy()
+    # Make sure all have timestamps first
+    base_time = datetime.now()
+    wrong_order_history[0].timestamp = base_time - timedelta(hours=3)  # Older than oldest
+    wrong_order_history[1].timestamp = base_time - timedelta(hours=1)
+    wrong_order_history[2].timestamp = base_time - timedelta(hours=2)
+    assert calculate_drain_rate(wrong_order_history) is None

@@ -572,3 +572,131 @@ class TestFileUtils:
                         file_utils.atomic_write(file_path, content)
                     # Verify temp file cleanup was attempted
                     assert mock_unlink.called
+
+    def test_write_text_without_make_dirs(self, tmpdir: Any):
+        """Test writing text to a file without creating parent directories."""
+        # Set up a file path with nonexistent parent directory
+        temp_file = Path(tmpdir) / "nonexistent" / "output.txt"
+        content = "Hello, world!"
+
+        # Try to write without make_dirs=False (should fail)
+        with pytest.raises(FileNotFoundError):
+            file_utils.write_text(temp_file, content, make_dirs=False)
+
+    def test_write_bytes_without_make_dirs(self, tmpdir: Any):
+        """Test writing bytes to a file without creating parent directories."""
+        # Set up a file path with nonexistent parent directory
+        temp_file = Path(tmpdir) / "nonexistent" / "output.bin"
+        content = b"Hello, world!"
+
+        # Try to write without make_dirs=False (should fail)
+        with pytest.raises(FileNotFoundError):
+            file_utils.write_bytes(temp_file, content, make_dirs=False)
+
+    def test_write_json_without_make_dirs(self, tmpdir: Any):
+        """Test writing JSON to a file without creating parent directories."""
+        # Set up a file path with nonexistent parent directory
+        temp_file = Path(tmpdir) / "nonexistent" / "output.json"
+        data: file_utils.JsonDict = {"test": "data"}
+
+        # Try to write without make_dirs=False (should fail)
+        with pytest.raises(FileNotFoundError):
+            file_utils.write_json(temp_file, data, make_dirs=False)
+
+    def test_append_text_without_make_dirs(self, tmpdir: Any):
+        """Test appending text to a file without creating parent directories."""
+        # Set up a file path with nonexistent parent directory
+        temp_file = Path(tmpdir) / "nonexistent" / "output.txt"
+        content = "Hello, world!"
+
+        # Try to append without make_dirs=False (should fail)
+        with pytest.raises(FileNotFoundError):
+            file_utils.append_text(temp_file, content, make_dirs=False)
+
+    def test_copy_file_without_make_dirs(self, tmpdir: Any):
+        """Test copying a file without creating parent directories."""
+        # Create a source file
+        src_file = Path(tmpdir) / "source.txt"
+        src_file.write_text("test content")
+
+        # Set up destination with nonexistent parent directory
+        dst_file = Path(tmpdir) / "nonexistent" / "destination.txt"
+
+        # Try to copy without make_dirs=False (should fail)
+        with pytest.raises(FileNotFoundError):
+            file_utils.copy_file(src_file, dst_file, make_dirs=False)
+
+    def test_move_file_without_make_dirs(self, tmpdir: Any):
+        """Test moving a file without creating parent directories."""
+        # Create a source file
+        src_file = Path(tmpdir) / "source.txt"
+        src_file.write_text("test content")
+
+        # Set up destination with nonexistent parent directory
+        dst_file = Path(tmpdir) / "nonexistent" / "destination.txt"
+
+        # Try to move without make_dirs=False (should fail)
+        with pytest.raises(FileNotFoundError):
+            file_utils.move_file(src_file, dst_file, make_dirs=False)
+
+
+    def test_safe_open_for_read_binary_mode(self, tmpdir: Any):
+        """Test safe_open_for_read in binary mode."""
+        # Create a binary file
+        bin_file = Path(tmpdir) / "binary.bin"
+        bin_file.write_bytes(b"\x00\x01\x02\x03")
+
+        # Test opening in binary mode
+        result = file_utils.safe_open_for_read(bin_file, binary=True)
+        assert result == bin_file
+
+        # Test with nonexistent file
+        result = file_utils.safe_open_for_read(Path(tmpdir) / "nonexistent.bin", binary=True)
+        assert result is None
+
+    def test_create_temp_file_with_custom_directory(self, tmpdir: Any):
+        """Test creating a temporary file in a custom directory."""
+        # Create a custom directory
+        custom_dir = Path(tmpdir) / "custom_temp"
+        custom_dir.mkdir()
+
+        # Create temp file in custom directory
+        temp_file = file_utils.create_temp_file(directory=custom_dir)
+
+        # Verify file is in the custom directory
+        assert temp_file.parent == custom_dir
+        assert temp_file.exists()
+
+        # Clean up
+        temp_file.unlink()
+
+    def test_create_temp_dir_with_custom_directory(self, tmpdir: Any):
+        """Test creating a temporary directory in a custom directory."""
+        # Create a custom parent directory
+        custom_parent = Path(tmpdir) / "custom_parent"
+        custom_parent.mkdir()
+
+        # Create temp dir in custom parent
+        temp_dir = file_utils.create_temp_dir(directory=custom_parent)
+
+        # Verify dir is in the custom parent
+        assert temp_dir.parent == custom_parent
+        assert temp_dir.exists()
+
+        # Clean up
+        temp_dir.rmdir()
+
+    def test_atomic_write_temp_file_cleanup_on_error(self, tmpdir: Any):
+        """Test that atomic_write cleans up temp file when temp file doesn't exist during error."""
+        file_path = Path(tmpdir) / "atomic_error.txt"
+        content = "Test content"
+
+        # Mock write_text to raise an error
+        with patch("rpi_weather_display.utils.file_utils.write_text", side_effect=PermissionError):
+            # Mock temp file existence check to return False
+            with patch("pathlib.Path.exists", return_value=False):
+                with patch("pathlib.Path.unlink") as mock_unlink:
+                    with pytest.raises(PermissionError):
+                        file_utils.atomic_write(file_path, content)
+                    # Verify unlink was NOT called since temp file doesn't exist
+                    mock_unlink.assert_not_called()

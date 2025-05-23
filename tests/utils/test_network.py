@@ -1369,3 +1369,182 @@ class TestNetworkManager:
 
             # Verify with_retry was called
             mock_with_retry.assert_called_once_with(network_manager._try_connect)
+
+    @patch("socket.create_connection")
+    def test_check_connectivity_unexpected_exception(
+        self, mock_create_connection: MagicMock, network_manager: NetworkManager
+    ) -> None:
+        """Test _check_connectivity when an unexpected exception is raised."""
+        # Mock unexpected exception
+        mock_create_connection.side_effect = ValueError("Unexpected error")
+
+        # Test method - should re-raise the unexpected exception
+        with pytest.raises(ValueError, match="Unexpected error"):
+            network_manager._check_connectivity()
+
+    @patch("subprocess.run")
+    @patch("rpi_weather_display.utils.network.file_exists")
+    def test_get_signal_strength_no_signal_level_line(
+        self, mock_exists: MagicMock, mock_run: MagicMock, network_manager: NetworkManager
+    ) -> None:
+        """Test _get_signal_strength when output has no Signal level line."""
+        # Mock path.exists to return True
+        mock_exists.return_value = True
+
+        # Mock subprocess result without Signal level line
+        mock_process = MagicMock()
+        mock_process.returncode = 0
+        mock_process.stdout = (
+            'wlan0   IEEE 802.11  ESSID:"TestWifi"\n'
+            "          Mode:Managed  Frequency:2.412 GHz  Access Point: 12:34:56:78:9A:BC\n"
+            "          Rx invalid nwid:0  Rx invalid crypt:0  Rx invalid frag:0\n"
+        )
+        mock_run.return_value = mock_process
+
+        # Call the method
+        signal = network_manager._get_signal_strength()
+
+        # Verify result
+        assert signal is None
+
+    @patch("subprocess.run")
+    @patch("rpi_weather_display.utils.network.file_exists")
+    def test_get_signal_strength_unexpected_exception(
+        self, mock_exists: MagicMock, mock_run: MagicMock, network_manager: NetworkManager
+    ) -> None:
+        """Test _get_signal_strength when an unexpected exception is raised."""
+        # Mock path.exists to return True
+        mock_exists.return_value = True
+
+        # Mock subprocess to raise an unexpected exception
+        mock_run.side_effect = RuntimeError("Unexpected error")
+
+        # Test method - should re-raise the unexpected exception
+        with pytest.raises(RuntimeError, match="Unexpected error"):
+            network_manager._get_signal_strength()
+
+    @patch("time.sleep")
+    @patch("time.time")
+    def test_try_connect_with_sleep(
+        self, mock_time: MagicMock, mock_sleep: MagicMock, network_manager: NetworkManager
+    ) -> None:
+        """Test _try_connect method that sleeps between connection checks."""
+        # Mock time progression
+        time_values = [
+            1000,  # Start time
+            1001,  # First check
+            1002,  # Second check (will succeed)
+        ]
+        mock_time.side_effect = time_values
+
+        # Mock _check_connectivity to return False first, then True
+        check_values = [False, True]
+        
+        def check_connectivity_side_effect() -> bool:
+            if check_values:
+                return check_values.pop(0)
+            return True
+
+        with patch.object(
+            network_manager, "_check_connectivity", side_effect=check_connectivity_side_effect
+        ):
+            # Call _try_connect
+            result = network_manager._try_connect()
+
+            # Verify result
+            assert result is True
+            
+            # Verify sleep was called once
+            mock_sleep.assert_called_once_with(1)
+
+    @patch("subprocess.run")
+    @patch("rpi_weather_display.utils.network.file_exists")
+    def test_disable_wifi_legacy_command_not_found(
+        self, mock_exists: MagicMock, mock_run: MagicMock, network_manager: NetworkManager
+    ) -> None:
+        """Test _disable_wifi_legacy when commands are not found."""
+        # Mock commands not found
+        mock_exists.return_value = False
+
+        # Call the method
+        network_manager._disable_wifi_legacy()
+
+        # Verify subprocess was not called
+        mock_run.assert_not_called()
+
+    def test_set_wifi_power_save_mode_default(
+        self, network_manager: NetworkManager
+    ) -> None:
+        """Test set_wifi_power_save_mode with default mode from config."""
+        # Set config wifi_power_save_mode
+        network_manager.config.wifi_power_save_mode = "on"
+        
+        with patch.object(network_manager, "_apply_power_save_mode"):
+            with patch("subprocess.run") as mock_run:
+                with patch("rpi_weather_display.utils.network.file_exists", return_value=True):
+                    # Configure subprocess to return successfully
+                    mock_process = MagicMock()
+                    mock_process.returncode = 0
+                    mock_run.return_value = mock_process
+                    
+                    # Call method without mode argument (should use config default)
+                    result = network_manager.set_wifi_power_save_mode()
+                    
+                    # Verify subprocess was called with 'on' mode
+                    mock_run.assert_called_with(
+                        ["/usr/bin/sudo", "iw", "dev", "wlan0", "set", "power_save", "on"],
+                        check=True,
+                        timeout=network_manager.config.wifi_timeout_seconds,
+                        shell=False,
+                    )
+                    
+                    # Verify result
+                    assert result is True
+
+    def test_set_wifi_power_save_mode_auto_no_battery_status(
+        self, network_manager: NetworkManager
+    ) -> None:
+        """Test set_wifi_power_save_mode with auto mode when battery status is None."""
+        # Ensure battery status is None
+        network_manager.current_battery_status = None
+        
+        with patch("subprocess.run") as mock_run:
+            with patch("rpi_weather_display.utils.network.file_exists", return_value=True):
+                # Configure subprocess to return successfully
+                mock_process = MagicMock()
+                mock_process.returncode = 0
+                mock_run.return_value = mock_process
+                
+                # Call method with auto mode
+                result = network_manager.set_wifi_power_save_mode("auto")
+                
+                # Should default to 'on' when battery status is None
+                mock_run.assert_called_with(
+                    ["/usr/bin/sudo", "iw", "dev", "wlan0", "set", "power_save", "on"],
+                    check=True,
+                    timeout=network_manager.config.wifi_timeout_seconds,
+                    shell=False,
+                )
+                
+                # Verify result
+                assert result is True
+
+    def test_with_retry_returns_none_after_max_attempts(
+        self, network_manager: NetworkManager
+    ) -> None:
+        """Test with_retry returns None when reaching the end without returning."""
+        # This tests the edge case where the loop completes without returning
+        # This can happen if retry_max_attempts is 0
+        network_manager.config.retry_max_attempts = 0
+        
+        # Mock operation
+        mock_operation = MagicMock()
+        
+        # Call with_retry
+        result = network_manager.with_retry(mock_operation)
+        
+        # Verify operation was never called
+        mock_operation.assert_not_called()
+        
+        # Verify result is None
+        assert result is None
