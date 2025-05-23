@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from rpi_weather_display.constants import CLIENT_CACHE_DIR_NAME
 from rpi_weather_display.models.config import LoggingConfig
 from rpi_weather_display.models.system import BatteryState
+from rpi_weather_display.models.weather import WeatherData
 from rpi_weather_display.server.main import WeatherDisplayServer
 from rpi_weather_display.utils.file_utils import create_temp_file
 from rpi_weather_display.utils.path_utils import path_resolver
@@ -254,9 +255,20 @@ async def test_render_endpoint_error(test_server: WeatherDisplayServer) -> None:
 @pytest.mark.asyncio()
 async def test_weather_endpoint(test_server: WeatherDisplayServer) -> None:
     """Test the weather endpoint."""
-    # Create mock weather data
-    mock_weather_data = MagicMock()
-    mock_weather_data.model_dump.return_value = {"test": "data"}
+    # Load mock weather data from JSON file
+    import json
+    from datetime import datetime
+    
+    mock_data_path = Path(__file__).parent.parent / "data" / "mock_weather_response.json"
+    with mock_data_path.open() as f:
+        weather_json = json.load(f)
+    
+    # Add required fields for WeatherData
+    weather_json["air_pollution"] = None
+    weather_json["last_updated"] = datetime.now().isoformat()
+    
+    # Create WeatherData instance from JSON
+    mock_weather_data = WeatherData(**weather_json)
 
     # Mock the API client
     test_server.api_client.get_weather_data = AsyncMock(return_value=mock_weather_data)
@@ -270,7 +282,15 @@ async def test_weather_endpoint(test_server: WeatherDisplayServer) -> None:
     # Check response
     assert response.status_code == 200
     data = response.json()
-    assert data == {"test": "data"}
+    
+    # Verify basic structure
+    assert "lat" in data
+    assert "lon" in data
+    assert "current" in data
+    assert "hourly" in data
+    assert "daily" in data
+    assert data["lat"] == 33.749
+    assert data["lon"] == -84.388
 
     # Verify API client was called
     test_server.api_client.get_weather_data.assert_called_once()

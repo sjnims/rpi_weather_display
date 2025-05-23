@@ -4,14 +4,16 @@ Provides abstraction for interacting with the Waveshare e-paper display,
 handling image rendering, partial refreshes, and power management.
 """
 
-# ruff: noqa: S101, ANN401
-# ^ Ignores "Use of assert detected" and "Any type" warnings
+# ruff: noqa: S101
+# ^ Ignores "Use of assert detected" warnings
 
 # pyright: reportUnknownVariableType=false
 # pyright: reportUnknownMemberType=false
 
+from collections.abc import Callable
 from io import BytesIO
-from typing import Any, TypeVar
+from types import ModuleType
+from typing import TYPE_CHECKING, Protocol, TypeVar
 
 from PIL import Image
 
@@ -32,11 +34,39 @@ from rpi_weather_display.models.config import DisplayConfig
 from rpi_weather_display.models.system import BatteryState, BatteryStatus
 from rpi_weather_display.utils.file_utils import PathLike, read_bytes
 
+# Type checking imports
+if TYPE_CHECKING:
+    pass
+
+
+# Define protocol for EPD display interface
+class EPDProtocol(Protocol):
+    """Protocol for low-level e-paper display driver."""
+
+    def set_rotation(self, rotation: int) -> None: ...  # noqa: D102
+    def sleep(self) -> None: ...  # noqa: D102
+
+
+class EPDDisplayProtocol(Protocol):
+    """Protocol for e-paper display interface."""
+
+    width: int
+    height: int
+    epd: EPDProtocol
+
+    def display(self, img: Image.Image) -> None: ...  # noqa: D102
+    def display_partial(  # noqa: D102
+        self, img: Image.Image, bbox: tuple[int, int, int, int] | None = None
+    ) -> None: ...
+    def clear(self) -> None: ...  # noqa: D102
+    def sleep(self) -> None: ...  # noqa: D102
+
+
 # Define type variables for conditional imports
-AutoEPDDisplayType = TypeVar("AutoEPDDisplayType")
+AutoEPDDisplayType = TypeVar("AutoEPDDisplayType", bound=EPDDisplayProtocol)
 
 
-def _import_it8951() -> Any | None:
+def _import_it8951() -> Callable[..., EPDDisplayProtocol] | None:
     """Import IT8951 library or return None if not available.
 
     The IT8951 library provides the driver interface for the Waveshare e-paper display.
@@ -55,7 +85,7 @@ def _import_it8951() -> Any | None:
         return None
 
 
-def _import_numpy() -> Any | None:
+def _import_numpy() -> ModuleType | None:
     """Import numpy or return None if not available.
 
     NumPy is used for efficient image processing operations, particularly when
@@ -96,7 +126,7 @@ class EPaperDisplay:
             config: Display configuration including dimensions, rotation, and refresh settings.
         """
         self.config = config
-        self._display: Any | None = None
+        self._display: EPDDisplayProtocol | None = None
         self._last_image: Image.Image | None = None
         self._initialized = False
         self._current_battery_status: BatteryStatus | None = None

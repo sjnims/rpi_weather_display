@@ -41,11 +41,11 @@ class MockIT8951:
                 """Mock clear method."""
                 pass
 
-            def display(self, image: Any) -> None:
+            def display(self, image: Image.Image) -> None:
                 """Mock display method."""
                 pass
 
-            def display_partial(self, image: Any, bbox: Any) -> None:
+            def display_partial(self, image: Image.Image, bbox: tuple[int, int, int, int]) -> None:
                 """Mock partial display method."""
                 pass
 
@@ -54,36 +54,36 @@ class MockNumpy:
     """Mock numpy module."""
 
     @staticmethod
-    def array(img: Any) -> Any:
+    def array(img: Image.Image) -> MagicMock:
         """Mock array method."""
         return MagicMock()
 
     @staticmethod
-    def abs(arr: Any) -> Any:
+    def abs(arr: MagicMock) -> MagicMock:
         """Mock abs method."""
         return MagicMock()
 
     @staticmethod
-    def max(arr: Any) -> int:
+    def max(arr: MagicMock) -> int:
         """Mock max method."""
         return 20
 
     @staticmethod
-    def where(condition: Any) -> tuple[MagicMock, MagicMock]:
+    def where(condition: MagicMock) -> tuple[MagicMock, MagicMock]:
         """Mock where method."""
         mock_result = (MagicMock(), MagicMock())
         mock_result[0].__len__ = lambda: 10
         return mock_result
 
     @staticmethod
-    def min(arr: Any) -> int:
+    def min(arr: MagicMock | list[int]) -> int:
         """Mock min method."""
         return 10
 
     @staticmethod
-    def int16(value: Any) -> Any:
+    def int16(value: int | float) -> int:
         """Mock int16 method."""
-        return value
+        return int(value)
 
 
 # Mock sys.modules with our mock modules
@@ -404,7 +404,7 @@ class TestEPaperDisplay:
         new_image = MagicMock()
 
         # Using a type-compatible mock function
-        def mock_calculate_diff(old_image: Any, new_image: Any) -> tuple[int, int, int, int]:
+        def mock_calculate_diff(old_image: Image.Image, new_image: Image.Image) -> tuple[int, int, int, int]:
             """Mock implementation that returns a predefined bbox."""
             return (35, 5, 65, 35)
 
@@ -767,7 +767,7 @@ class TestEPaperDisplay:
 
         # Create a direct test implementation of the method
         def direct_test_implementation(
-            old_image: Any, new_image: Any
+            old_image: Image.Image, new_image: Image.Image
         ) -> tuple[int, int, int, int] | None:
             """A direct implementation that returns a valid bbox."""
             # This simulates the complete execution of the function
@@ -1056,7 +1056,7 @@ class TestEPaperDisplay:
         assert display._get_min_changed_pixels() == min_pixels
 
 
-def assert_(condition: Any) -> None:
+def assert_(condition: bool) -> None:
     """Custom assert function for exec environment."""
     assert condition
 

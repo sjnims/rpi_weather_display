@@ -12,7 +12,7 @@ import time
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from datetime import datetime
-from typing import Any
+from typing import TypeVar
 
 from rpi_weather_display.constants import (
     BROADCAST_IP,
@@ -25,6 +25,9 @@ from rpi_weather_display.models.config import AppConfig, PowerConfig
 from rpi_weather_display.models.system import BatteryStatus, NetworkState, NetworkStatus
 from rpi_weather_display.utils.file_utils import file_exists
 from rpi_weather_display.utils.path_utils import path_resolver
+
+# Type variable for generic retry operations
+T = TypeVar('T')
 
 
 class NetworkManager:
@@ -135,7 +138,9 @@ class NetworkManager:
 
         return max(0.1, delay)  # Ensure delay is positive
 
-    def with_retry(self, operation: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:  # noqa: ANN401
+    def with_retry(
+        self, operation: Callable[..., T], *args: object, **kwargs: object
+    ) -> T | None:
         """Execute an operation with exponential backoff retries.
 
         Attempts to execute the provided function repeatedly until it succeeds
@@ -259,7 +264,8 @@ class NetworkManager:
             self._enable_wifi()
 
             # Try to establish connection with exponential backoff
-            connected = self.with_retry(self._try_connect)
+            connected_result = self.with_retry(self._try_connect)
+            connected = connected_result if connected_result is not None else False
             if connected:
                 self.logger.info("Successfully connected to WiFi")
             else:

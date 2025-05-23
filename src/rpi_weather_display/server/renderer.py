@@ -797,8 +797,15 @@ class WeatherRenderer:
                 data = file_utils.read_json(cache_file)
                 # Ensure we're working with a dict
                 if isinstance(data, dict):
-                    persisted_max_uvi = data.get("max_uvi", 0.0)
-                    persisted_timestamp = data.get("timestamp", 0)
+                    # Type narrow the values from JsonValue to specific types
+                    max_uvi_value = data.get("max_uvi", 0.0)
+                    if isinstance(max_uvi_value, int | float):
+                        persisted_max_uvi = float(max_uvi_value)
+                    
+                    timestamp_value = data.get("timestamp", 0)
+                    if isinstance(timestamp_value, int | float):
+                        persisted_timestamp = int(timestamp_value)
+                    
                     persisted_date_str = data.get("date", "")
                     if isinstance(persisted_date_str, str) and persisted_date_str:
                         persisted_date = datetime.strptime(persisted_date_str, "%Y-%m-%d").date()

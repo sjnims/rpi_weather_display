@@ -5,7 +5,7 @@ battery status, network conditions, and overall system metrics.
 """
 
 from datetime import datetime, timedelta
-from typing import Any
+from typing import TypedDict
 
 import pytest
 
@@ -17,11 +17,46 @@ from rpi_weather_display.models.system import (
     SystemStatus,
 )
 
+
+# Type definitions for test data
+class BatteryStatusData(TypedDict, total=False):
+    """Type definition for battery status test data."""
+    level: int
+    voltage: float
+    current: float
+    temperature: float
+    state: BatteryState
+    time_remaining: int
+
+
+class NetworkStatusData(TypedDict, total=False):
+    """Type definition for network status test data."""
+    state: NetworkState
+    ssid: str | None
+    ip_address: str | None
+    signal_strength: int | None
+    last_connection: datetime | None
+
+
+class SystemStatusData(TypedDict):
+    """Type definition for system status test data."""
+    hostname: str
+    uptime: int
+    cpu_temp: float
+    cpu_usage: float
+    memory_usage: float
+    disk_usage: float
+    battery: BatteryStatusData
+    network: NetworkStatusData
+    last_refresh: datetime | None
+    metrics: dict[str, float]
+
+
 # Test fixtures for sample data
 
 
 @pytest.fixture()
-def battery_status_charging() -> dict[str, Any]:
+def battery_status_charging() -> BatteryStatusData:
     """Sample battery status data for a charging battery."""
     return {
         "level": 75,
@@ -33,7 +68,7 @@ def battery_status_charging() -> dict[str, Any]:
 
 
 @pytest.fixture()
-def battery_status_discharging() -> dict[str, Any]:
+def battery_status_discharging() -> BatteryStatusData:
     """Sample battery status data for a discharging battery."""
     return {
         "level": 65,
@@ -45,7 +80,7 @@ def battery_status_discharging() -> dict[str, Any]:
 
 
 @pytest.fixture()
-def battery_status_low() -> dict[str, Any]:
+def battery_status_low() -> BatteryStatusData:
     """Sample battery status data for a low battery."""
     return {
         "level": 15,
@@ -57,7 +92,7 @@ def battery_status_low() -> dict[str, Any]:
 
 
 @pytest.fixture()
-def battery_status_critical() -> dict[str, Any]:
+def battery_status_critical() -> BatteryStatusData:
     """Sample battery status data for a critically low battery."""
     return {
         "level": 5,
@@ -70,7 +105,7 @@ def battery_status_critical() -> dict[str, Any]:
 
 
 @pytest.fixture()
-def battery_status_full() -> dict[str, Any]:
+def battery_status_full() -> BatteryStatusData:
     """Sample battery status data for a full battery."""
     return {
         "level": 100,
@@ -82,7 +117,7 @@ def battery_status_full() -> dict[str, Any]:
 
 
 @pytest.fixture()
-def network_status_connected() -> dict[str, Any]:
+def network_status_connected() -> NetworkStatusData:
     """Sample network status data for connected state."""
     return {
         "state": NetworkState.CONNECTED,
@@ -94,7 +129,7 @@ def network_status_connected() -> dict[str, Any]:
 
 
 @pytest.fixture()
-def network_status_disconnected() -> dict[str, Any]:
+def network_status_disconnected() -> NetworkStatusData:
     """Sample network status data for disconnected state."""
     return {
         "state": NetworkState.DISCONNECTED,
@@ -102,7 +137,7 @@ def network_status_disconnected() -> dict[str, Any]:
 
 
 @pytest.fixture()
-def network_status_error() -> dict[str, Any]:
+def network_status_error() -> NetworkStatusData:
     """Sample network status data for error state."""
     return {
         "state": NetworkState.ERROR,
@@ -113,8 +148,8 @@ def network_status_error() -> dict[str, Any]:
 
 @pytest.fixture()
 def system_status_data(
-    battery_status_charging: dict[str, Any], network_status_connected: dict[str, Any]
-) -> dict[str, Any]:
+    battery_status_charging: BatteryStatusData, network_status_connected: NetworkStatusData
+) -> SystemStatusData:
     """Sample system status data."""
     return {
         "hostname": "rpi-weather",
@@ -156,9 +191,9 @@ def test_network_state_enum() -> None:
 # Tests for BatteryStatus model
 
 
-def test_battery_status_charging(battery_status_charging: dict[str, Any]) -> None:
+def test_battery_status_charging(battery_status_charging: BatteryStatusData) -> None:
     """Test BatteryStatus model with charging state."""
-    status = BatteryStatus(**battery_status_charging)
+    status = BatteryStatus.model_validate(battery_status_charging)
 
     # Check basic attributes
     assert status.level == 75
@@ -173,9 +208,9 @@ def test_battery_status_charging(battery_status_charging: dict[str, Any]) -> Non
     assert not status.is_critical
 
 
-def test_battery_status_discharging(battery_status_discharging: dict[str, Any]) -> None:
+def test_battery_status_discharging(battery_status_discharging: BatteryStatusData) -> None:
     """Test BatteryStatus model with discharging state."""
-    status = BatteryStatus(**battery_status_discharging)
+    status = BatteryStatus.model_validate(battery_status_discharging)
 
     # Check basic attributes
     assert status.level == 65
@@ -189,9 +224,9 @@ def test_battery_status_discharging(battery_status_discharging: dict[str, Any]) 
     assert not status.is_critical
 
 
-def test_battery_status_low(battery_status_low: dict[str, Any]) -> None:
+def test_battery_status_low(battery_status_low: BatteryStatusData) -> None:
     """Test BatteryStatus model with low battery."""
-    status = BatteryStatus(**battery_status_low)
+    status = BatteryStatus.model_validate(battery_status_low)
 
     # Check basic attributes
     assert status.level == 15
@@ -205,9 +240,9 @@ def test_battery_status_low(battery_status_low: dict[str, Any]) -> None:
     assert not status.is_critical
 
 
-def test_battery_status_critical(battery_status_critical: dict[str, Any]) -> None:
+def test_battery_status_critical(battery_status_critical: BatteryStatusData) -> None:
     """Test BatteryStatus model with critically low battery."""
-    status = BatteryStatus(**battery_status_critical)
+    status = BatteryStatus.model_validate(battery_status_critical)
 
     # Check basic attributes
     assert status.level == 5
@@ -222,9 +257,9 @@ def test_battery_status_critical(battery_status_critical: dict[str, Any]) -> Non
     assert status.is_critical
 
 
-def test_battery_status_full(battery_status_full: dict[str, Any]) -> None:
+def test_battery_status_full(battery_status_full: BatteryStatusData) -> None:
     """Test BatteryStatus model with full battery."""
-    status = BatteryStatus(**battery_status_full)
+    status = BatteryStatus.model_validate(battery_status_full)
 
     # Check basic attributes
     assert status.level == 100
@@ -259,9 +294,9 @@ def test_battery_status_with_unknown_state() -> None:
 # Tests for NetworkStatus model
 
 
-def test_network_status_connected(network_status_connected: dict[str, Any]) -> None:
+def test_network_status_connected(network_status_connected: NetworkStatusData) -> None:
     """Test NetworkStatus model with connected state."""
-    status = NetworkStatus(**network_status_connected)
+    status = NetworkStatus.model_validate(network_status_connected)
 
     # Check attributes
     assert status.state == NetworkState.CONNECTED
@@ -271,9 +306,9 @@ def test_network_status_connected(network_status_connected: dict[str, Any]) -> N
     assert isinstance(status.last_connection, datetime)
 
 
-def test_network_status_disconnected(network_status_disconnected: dict[str, Any]) -> None:
+def test_network_status_disconnected(network_status_disconnected: NetworkStatusData) -> None:
     """Test NetworkStatus model with disconnected state."""
-    status = NetworkStatus(**network_status_disconnected)
+    status = NetworkStatus.model_validate(network_status_disconnected)
 
     # Check attributes
     assert status.state == NetworkState.DISCONNECTED
@@ -283,9 +318,9 @@ def test_network_status_disconnected(network_status_disconnected: dict[str, Any]
     assert status.last_connection is None
 
 
-def test_network_status_error(network_status_error: dict[str, Any]) -> None:
+def test_network_status_error(network_status_error: NetworkStatusData) -> None:
     """Test NetworkStatus model with error state."""
-    status = NetworkStatus(**network_status_error)
+    status = NetworkStatus.model_validate(network_status_error)
 
     # Check attributes
     assert status.state == NetworkState.ERROR
@@ -309,9 +344,9 @@ def test_network_status_default_values() -> None:
 # Tests for SystemStatus model
 
 
-def test_system_status(system_status_data: dict[str, Any]) -> None:
+def test_system_status(system_status_data: SystemStatusData) -> None:
     """Test SystemStatus model."""
-    status = SystemStatus(**system_status_data)
+    status = SystemStatus.model_validate(system_status_data)
 
     # Check basic attributes
     assert status.hostname == "rpi-weather"

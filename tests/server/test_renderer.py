@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 # TemporaryDirectory replaced with file_utils.create_temp_dir
-from typing import Any, cast
+from typing import cast
 from unittest.mock import AsyncMock, MagicMock, mock_open, patch
 
 import jinja2
@@ -536,7 +536,7 @@ class TestWeatherRenderer:
             weather_condition.icon = "01d"
 
             # Create a mock method that mimics the filter function's behavior
-            def weather_icon_filter(weather_item: Any) -> str:
+            def weather_icon_filter(weather_item: WeatherCondition) -> str:
                 """Convert weather item to icon."""
                 if hasattr(weather_item, "id") and hasattr(weather_item, "icon"):
                     # Extract weather ID and icon code
@@ -557,8 +557,8 @@ class TestWeatherRenderer:
             del weather_condition.icon
             assert weather_icon_filter(weather_condition) == "wi-cloud"
 
-            # Test with non-WeatherCondition object
-            assert weather_icon_filter("not a weather condition") == "wi-cloud"
+            # Test with non-WeatherCondition object - should return default
+            assert weather_icon_filter("not a weather condition") == "wi-cloud"  # type: ignore[arg-type]
 
     @patch("csv.DictReader")
     @patch("rpi_weather_display.utils.file_utils.read_text", return_value="mock CSV content")
@@ -1207,7 +1207,7 @@ class TestWeatherRenderer:
 
             # Get the filter directly from the environment and cast it to the right type
             weather_icon_filter = cast(
-                Callable[[Any], str], renderer.jinja_env.filters["weather_icon"]
+                Callable[[WeatherCondition], str], renderer.jinja_env.filters["weather_icon"]
             )
 
             # Test with different conditions
@@ -1247,8 +1247,8 @@ class TestWeatherRenderer:
             result5 = weather_icon_filter(condition5)
             assert result5 == "wi-cloud"
 
-            # Test case 6: Non-weather condition input
-            result6 = weather_icon_filter("not a weather condition")
+            # Test case 6: Non-weather condition input - should return default
+            result6 = weather_icon_filter("not a weather condition")  # type: ignore[arg-type]
             assert result6 == "wi-cloud"
 
     @pytest.mark.asyncio()

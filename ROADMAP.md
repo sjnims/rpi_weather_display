@@ -44,7 +44,7 @@ Priority is indicated as:
 - [x] 🟢 2.1.3 Implement consistent file system abstraction project-wide [COMPLETED 2025-05-21]
 
 ### 2.2 Modern Python Features
-- [ ] 🔴 2.2.1 Replace generic `Any` types with more specific Union types (HIGH PRIORITY) [PLANNED]
+- [x] 🔴 2.2.1 Replace generic `Any` types with more specific Union types (HIGH PRIORITY) [COMPLETED 2025-05-23]
 - [ ] 🟢 2.2.2 Implement structural pattern matching for state handling [PLANNED]
 - [ ] 🟠 2.2.3 Add exception chaining throughout error handling [PLANNED]
 
@@ -262,10 +262,6 @@ Based on the code review findings, the following tasks should be prioritized:
    - 1270 lines is too large for maintainability
    - Clear separation needed for different responsibilities
 
-3. **Phase 2.2.1** - Replace generic `Any` types
-   - Improves type safety and code quality
-   - Relatively quick win
-
 ### Short-term Priority (Q1 2025)
 1. **Phase 2.5.4** - Remove test-only methods from production
 2. **Phase 5.5.4-5.5.6** - Security improvements in deployment
@@ -281,10 +277,10 @@ Based on the code review findings, the following tasks should be prioritized:
 | Phase | Not Started | In Progress | Completed | Total |
 |-------|------------|-------------|-----------|-------|
 | 1     | 0          | 0           | 14        | 14    |
-| 2     | 29         | 0           | 3         | 32    |
+| 2     | 28         | 0           | 4         | 32    |
 | 3     | 12         | 0           | 0         | 12    |
 | 4     | 12         | 0           | 0         | 12    |
 | 5     | 17         | 0           | 2         | 19    |
 | 6     | 9          | 0           | 0         | 9     |
 | 7     | 18         | 0           | 0         | 18    |
-| Total | 97         | 0           | 19        | 116   |
+| Total | 96         | 0           | 20        | 116   |

@@ -45,7 +45,7 @@ class TestFileUtils:
         """Test reading and parsing JSON from a file."""
         # Create a temporary JSON file
         temp_file = path_resolver.normalize_path(Path(tmpdir) / "test.json")
-        data = {"name": "test", "value": 42, "items": [1, 2, 3]}
+        data: file_utils.JsonDict = {"name": "test", "value": 42, "items": [1, 2, 3]}
         file_utils.write_json(temp_file, data)
 
         # Read the JSON data using file_utils
@@ -119,7 +119,7 @@ class TestFileUtils:
         """Test writing data as JSON to a file."""
         # Set up a temporary file path
         temp_file = Path(tmpdir) / "output.json"
-        data = {"name": "test", "value": 42, "items": [1, 2, 3]}
+        data: file_utils.JsonDict = {"name": "test", "value": 42, "items": [1, 2, 3]}
 
         # Write JSON data using file_utils
         file_utils.write_json(temp_file, data)
@@ -133,7 +133,7 @@ class TestFileUtils:
         """Test writing JSON with custom indentation."""
         # Set up a temporary file path
         temp_file = Path(tmpdir) / "pretty.json"
-        data = {"name": "test", "items": [1, 2, 3]}
+        data: file_utils.JsonDict = {"name": "test", "items": [1, 2, 3]}
 
         # Write JSON with custom indentation
         file_utils.write_json(temp_file, data, indent=4)

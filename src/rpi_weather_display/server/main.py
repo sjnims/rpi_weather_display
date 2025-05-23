@@ -11,7 +11,6 @@ application, registers routes, and handles incoming requests.
 import argparse
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, Response
@@ -28,6 +27,7 @@ from rpi_weather_display.constants import (
 )
 from rpi_weather_display.models.config import AppConfig
 from rpi_weather_display.models.system import BatteryState, BatteryStatus
+from rpi_weather_display.models.weather import WeatherData
 from rpi_weather_display.server.api import WeatherAPIClient
 from rpi_weather_display.server.renderer import WeatherRenderer
 from rpi_weather_display.utils import path_resolver
@@ -187,13 +187,14 @@ class WeatherDisplayServer:
             return await self._handle_render(request)
 
         @self.app.get("/weather")
-        async def get_weather() -> dict[str, Any]:
+        async def get_weather() -> WeatherData:
             """Get raw weather data.
 
-            Returns the current weather and forecast data as a JSON object.
+            Returns the current weather and forecast data. FastAPI automatically
+            serializes the Pydantic model to JSON.
 
             Returns:
-                Dictionary of weather data.
+                WeatherData model with current conditions and forecasts.
 
             Raises:
                 HTTPException: If weather data cannot be fetched.
@@ -277,14 +278,14 @@ class WeatherDisplayServer:
             self.logger.error(f"Error rendering weather image [{error_location}]: {e}")
             raise HTTPException(status_code=500, detail=str(e)) from e
 
-    async def _handle_weather(self) -> dict[str, Any]:
+    async def _handle_weather(self) -> WeatherData:
         """Handle weather data request.
 
-        Fetches the latest weather data and returns it as a dictionary
-        for JSON serialization.
+        Fetches the latest weather data and returns it as a Pydantic model.
+        FastAPI will automatically serialize this to JSON.
 
         Returns:
-            Weather data as dictionary.
+            WeatherData model containing current weather and forecasts.
 
         Raises:
             HTTPException: If weather data cannot be fetched.
@@ -293,8 +294,9 @@ class WeatherDisplayServer:
             # Get weather data
             weather_data = await self.api_client.get_weather_data()
 
-            # Return as dict
-            return weather_data.model_dump()
+            # Return the Pydantic model directly
+            # FastAPI will automatically serialize it to JSON with proper datetime handling
+            return weather_data
         except Exception as e:
             error_location = get_error_location()
             self.logger.error(f"Error getting weather data [{error_location}]: {e}")

@@ -667,8 +667,8 @@ async def test_handle_weather() -> None:
             # Call the method
             result = await server._handle_weather()
 
-            # Verify the result
-            assert result == {"test": "data"}
+            # Verify the result (now returns the model directly)
+            assert result == mock_weather_data
 
             # Test error handling
             server.api_client.get_weather_data = AsyncMock(side_effect=Exception("Test error"))

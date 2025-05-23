@@ -33,7 +33,7 @@ import sys
 # Using ElementTree to parse our own trusted SVG files
 import xml.etree.ElementTree as ElementTree
 from pathlib import Path
-from typing import Any
+from xml.etree.ElementTree import Element
 
 
 def _strip_ns(tag: str) -> str:
@@ -52,7 +52,7 @@ def build_sprite(src_dir: Path, out_path: Path, *, prefix: str = "") -> None:
     if not src_dir.is_dir():
         sys.exit(f"[sprite] ✖ Source directory not found: {src_dir}")
 
-    symbols: list[Any] = []
+    symbols: list[Element] = []
 
     for svg_file in sorted(src_dir.glob("*.svg")):
         tree = ElementTree.parse(svg_file)  # noqa: S314

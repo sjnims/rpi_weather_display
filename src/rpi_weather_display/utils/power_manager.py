@@ -10,7 +10,7 @@ from collections import deque
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from enum import Enum, auto
-from typing import Any, TypedDict, cast
+from typing import TypedDict, cast
 
 from rpi_weather_display.constants import (
     ABNORMAL_SLEEP_FACTOR,
@@ -53,18 +53,45 @@ class PowerState(Enum):
 
 
 # Type definitions for PiJuice API
+class PiJuiceEventData(TypedDict, total=False):
+    """Type definition for PiJuice event configuration data."""
+
+    enabled: bool
+    function: str | int
+    trigger_level: int
+    trigger_delay: int
+    trigger_value: int
+    wakeup_delay: int
+    power_delay: int
+    delay: int  # For system task parameters
+    parameter: int | dict[str, str | int]  # For button configuration
+
+
+class PiJuiceStatusData(TypedDict, total=False):
+    """Type definition for PiJuice status data."""
+
+    battery: str
+    chargeLevel: int
+    batteryVoltage: int
+    batteryCurrent: int
+    batteryTemperature: int
+    powerInput: str
+    powerInput5vIo: str
+    isFault: bool
+
+
 class PiJuiceStatus(TypedDict):
     """Type definition for PiJuice status response."""
 
     error: str
-    data: dict[str, Any]
+    data: PiJuiceStatusData
 
 
 class PiJuiceResponse(TypedDict):
     """Type definition for PiJuice API response."""
 
     error: str
-    data: Any  # Using Any to allow for different data types
+    data: PiJuiceEventData | PiJuiceStatusData | int | str | bool
 
 
 # Define event types for PiJuice
@@ -198,7 +225,8 @@ class PiJuiceInterface:
             Args:
                 task: Task name to query
             """
-            return {"error": "NO_ERROR", "data": {"function": "SYSTEM_HALT", "delay": 5}}
+            data: PiJuiceEventData = {"function": "SYSTEM_HALT", "delay": 5}
+            return {"error": "NO_ERROR", "data": data}
 
         @staticmethod
         def SetButtonConfiguration(  # noqa: N802
@@ -211,7 +239,8 @@ class PiJuiceInterface:
                 function: Event type (e.g., 'SINGLE_PRESS')
                 parameter: Action delay in seconds or configuration dict
             """
-            return {"error": "NO_ERROR", "data": {}}
+            data: PiJuiceEventData = {}
+            return {"error": "NO_ERROR", "data": data}
 
         @staticmethod
         def GetButtonConfiguration(  # noqa: N802
@@ -223,7 +252,8 @@ class PiJuiceInterface:
                 button: Button name
                 function: Event type
             """
-            return {"error": "NO_ERROR", "data": {"function": "SYSDOWN", "parameter": 180}}
+            data: PiJuiceEventData = {"function": "SYSDOWN", "parameter": 180}
+            return {"error": "NO_ERROR", "data": data}
 
     class wakeupalarm:  # noqa: N801  # Name matches PiJuice API
         """PiJuice wakeup alarm interface."""
@@ -382,7 +412,7 @@ class PowerStateManager:
         except Exception as e:
             self.logger.error(f"Error configuring PiJuice events: {e}")
 
-    def get_event_configuration(self, event_type: PiJuiceEvent) -> dict[str, Any]:
+    def get_event_configuration(self, event_type: PiJuiceEvent) -> PiJuiceEventData:
         """Get the current configuration for a PiJuice event.
 
         Args:
@@ -398,12 +428,12 @@ class PowerStateManager:
             if event_type == PiJuiceEvent.LOW_CHARGE:
                 response = self._pijuice.config.GetSystemTaskParameters("LOW_CHARGE")
                 if response["error"] == "NO_ERROR":
-                    return response["data"]
+                    return cast(PiJuiceEventData, response["data"])
 
             elif event_type == PiJuiceEvent.BUTTON_SW1_PRESS:
                 response = self._pijuice.config.GetButtonConfiguration("SW1", "SINGLE_PRESS")
                 if response["error"] == "NO_ERROR":
-                    return response["data"]
+                    return cast(PiJuiceEventData, response["data"])
 
             return {}
         except Exception as e:

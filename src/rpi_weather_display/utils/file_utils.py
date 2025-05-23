@@ -10,13 +10,20 @@ import json
 import os
 import shutil
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import TypeVar
 
 from rpi_weather_display.utils.path_utils import path_resolver
 
 # Type aliases for clarity and documentation
 PathLike = str | Path
-JsonData = dict[str, Any] | list[Any]
+
+# Define recursive JSON type
+# Using explicit type alias declarations to avoid circular reference issues
+JsonValue = str | int | float | bool | None | dict[str, 'JsonValue'] | list['JsonValue']
+JsonDict = dict[str, JsonValue]
+JsonList = list[JsonValue]
+JsonData = JsonDict | JsonList
+
 FileContent = str | bytes
 T = TypeVar("T")  # Generic type for type-preserving operations
 
