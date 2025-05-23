@@ -14,7 +14,7 @@ Priority is indicated as:
 - 🟠 Medium - Important but not blocking
 - 🟢 Low - Nice to have
 
-## Phase 1: Power Optimization Integration (Target: v0.2.0)
+## Phase 1: Power Optimization Integration (Target: v0.2.0) ✅ COMPLETED
 
 ### 1.1 Extract Duplicate Code
 - [x] 🔴 1.1.1 Move `is_quiet_hours()` to a common utility function [COMPLETED 2025-05-15]
@@ -44,7 +44,7 @@ Priority is indicated as:
 - [x] 🟢 2.1.3 Implement consistent file system abstraction project-wide [COMPLETED 2025-05-21]
 
 ### 2.2 Modern Python Features
-- [ ] 🔴 2.2.1 Replace generic `Any` types with more specific Union types [PLANNED]
+- [ ] 🔴 2.2.1 Replace generic `Any` types with more specific Union types (HIGH PRIORITY) [PLANNED]
 - [ ] 🟢 2.2.2 Implement structural pattern matching for state handling [PLANNED]
 - [ ] 🟠 2.2.3 Add exception chaining throughout error handling [PLANNED]
 
@@ -59,9 +59,13 @@ Priority is indicated as:
 - [ ] 🟢 2.4.3 Add memory profiling and reporting [PLANNED]
 
 ### 2.5 Code Refactoring
-- [ ] 🔴 2.5.1 Modularize large files (power_manager.py, renderer.py) [PLANNED]
+- [ ] 🔴 2.5.1 Modularize large files (power_manager.py at 1270 lines, renderer.py) [PLANNED]
+  - Split PowerStateManager into: BatteryMonitor, PowerStateController, SystemMetricsCollector, PiJuiceAdapter
+  - Move test-specific methods to separate test utilities module
 - [ ] 🔴 2.5.2 Create custom exception hierarchy for better error handling [PLANNED]
 - [ ] 🟠 2.5.3 Standardize callback patterns across the codebase [PLANNED]
+- [ ] 🟠 2.5.4 Remove test-only methods from production interfaces [PLANNED]
+- [ ] 🟢 2.5.5 Resolve circular import risks in utils module [PLANNED]
 
 ### 2.6 Hardware Abstractions (New)
 - [ ] 🔴 2.6.1 Create hardware abstraction interfaces for display and power management [PLANNED]
@@ -80,6 +84,17 @@ Priority is indicated as:
 - [ ] 🟠 2.7.9 Optimize SPI transmission speed for power efficiency vs refresh performance [PLANNED]
 - [ ] 🟠 2.7.10 Add environmental monitoring (temperature 0-50°C operating range) [PLANNED]
 - [ ] 🟢 2.7.11 Track refresh count to monitor display lifetime (1M refresh limit) [PLANNED]
+
+### 2.8 Deployment Script Security & Quality
+- [ ] 🔴 2.8.1 Add checksum verification for Poetry and other downloaded content [PLANNED]
+- [ ] 🔴 2.8.2 Implement dependency checks in all shell scripts (xmlstarlet, inkscape, etc.) [PLANNED]
+- [ ] 🔴 2.8.3 Add input validation and proper error handling to deployment scripts [PLANNED]
+- [ ] 🔴 2.8.4 Create backup mechanism for system modifications in optimize-power.sh [PLANNED]
+- [ ] 🟠 2.8.5 Replace `|| true` patterns with proper error handling [PLANNED]
+- [ ] 🟠 2.8.6 Implement atomic operations in trim_svgs.sh to prevent data loss [PLANNED]
+- [ ] 🟠 2.8.7 Add rollback capability for failed installations [PLANNED]
+- [ ] 🟢 2.8.8 Add --dry-run options to destructive scripts [PLANNED]
+- [ ] 🟢 2.8.9 Improve shell script quoting and safety (shellcheck compliance) [PLANNED]
 
 ## Phase 3: Telemetry and Monitoring (Target: v0.4.0)
 
@@ -165,6 +180,9 @@ Priority is indicated as:
 - [ ] 🔴 5.5.1 Implement automatic update mechanism for client [PLANNED]
 - [ ] 🟠 5.5.2 Create comprehensive CI/CD pipeline for deployment [PLANNED]
 - [ ] 🟠 5.5.3 Add rollback capability for failed updates [PLANNED]
+- [ ] 🔴 5.5.4 Add security scanning to CI/CD pipeline [PLANNED]
+- [ ] 🟠 5.5.5 Implement deployment verification suite [PLANNED]
+- [ ] 🟠 5.5.6 Add network security improvements (certificate validation) [PLANNED]
 
 ### 5.6 Docker & Unraid Optimization
 - [ ] 🔴 5.6.1 Optimize Docker container for Unraid server deployment [PLANNED]
@@ -230,14 +248,43 @@ Priority is indicated as:
 - [ ] 🟠 7.4.3 Add client-side image caching for offline resilience [PLANNED]
 - [ ] 🟢 7.4.4 Create fallback display modes when server is unreachable [PLANNED]
 
+## Recommended Task Prioritization
+
+Based on the code review findings, the following tasks should be prioritized:
+
+### Immediate Priority (Next Sprint)
+1. **Phase 2.8** - Deployment Script Security & Quality (NEW)
+   - Critical security issues with curl|python3 pattern
+   - Missing dependency checks causing installation failures
+   - Data loss risks in current scripts
+
+2. **Phase 2.5.1** - Modularize power_manager.py
+   - 1270 lines is too large for maintainability
+   - Clear separation needed for different responsibilities
+
+3. **Phase 2.2.1** - Replace generic `Any` types
+   - Improves type safety and code quality
+   - Relatively quick win
+
+### Short-term Priority (Q1 2025)
+1. **Phase 2.5.4** - Remove test-only methods from production
+2. **Phase 5.5.4-5.5.6** - Security improvements in deployment
+3. **Phase 2.3** - Async optimization (leverage FastAPI fully)
+
+### Medium-term Priority (Q2 2025)
+1. **Phase 2.7** - E-Paper display optimization
+2. **Phase 3** - Telemetry and monitoring
+3. **Phase 4** - Adaptive behavior
+
 ## Progress Summary
 
 | Phase | Not Started | In Progress | Completed | Total |
 |-------|------------|-------------|-----------|-------|
 | 1     | 0          | 0           | 14        | 14    |
-| 2     | 15         | 0           | 3         | 18    |
+| 2     | 29         | 0           | 3         | 32    |
 | 3     | 12         | 0           | 0         | 12    |
 | 4     | 12         | 0           | 0         | 12    |
-| 5     | 14         | 0           | 2         | 16    |
+| 5     | 17         | 0           | 2         | 19    |
 | 6     | 9          | 0           | 0         | 9     |
-| Total | 62         | 0           | 19        | 81    |
+| 7     | 18         | 0           | 0         | 18    |
+| Total | 97         | 0           | 19        | 116   |
