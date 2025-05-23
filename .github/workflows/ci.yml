@@ -144,7 +144,8 @@ jobs:
           pip install --user safety
           # Use safety scan with API key via environment variable
           # Get your free API key at: https://platform.safetycli.com/signup
-          safety scan --output screen || true
+          # Use --no-prompt to disable interactive prompts in CI
+          safety scan --output screen --no-prompt || true
 
   code-quality:
     runs-on: ubuntu-latest
