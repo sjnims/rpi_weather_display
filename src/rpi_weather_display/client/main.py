@@ -33,6 +33,7 @@ from rpi_weather_display.utils import PowerStateManager, path_resolver
 from rpi_weather_display.utils.battery_utils import is_charging
 from rpi_weather_display.utils.file_utils import file_exists, write_bytes
 from rpi_weather_display.utils.logging import setup_logging
+from rpi_weather_display.utils.memory_profiler import memory_profiler
 from rpi_weather_display.utils.network import AsyncNetworkManager
 from rpi_weather_display.utils.path_utils import validate_config_path
 from rpi_weather_display.utils.power_manager import PowerState
@@ -78,7 +79,7 @@ class AsyncWeatherDisplayClient:
         # Initialize components
         self.power_manager = PowerStateManager(self.config)
         self.display = EPaperDisplay(self.config.display)
-        
+
         # Initialize network manager for WiFi power management
         self.network_manager = AsyncNetworkManager(self.config.power)
         self.network_manager.set_app_config(self.config)
@@ -149,6 +150,9 @@ class AsyncWeatherDisplayClient:
         # Initialize display
         self.display.initialize()
 
+        # Set memory baseline after hardware initialization
+        memory_profiler.set_baseline()
+
         self.logger.info("Hardware initialization complete")
 
     def _handle_power_state_change(self, _old_state: PowerState, new_state: PowerState) -> None:
@@ -186,7 +190,7 @@ class AsyncWeatherDisplayClient:
                     loop.run_until_complete(self.shutdown())
                 finally:
                     loop.close()
-                    
+
                 self.power_manager.shutdown_system()
 
             except Exception as e:
@@ -217,6 +221,9 @@ class AsyncWeatherDisplayClient:
         # Use semaphore to limit concurrent operations
         async with self._semaphore:
             self.logger.info("Updating weather data from server (async)")
+
+            # Record memory before update
+            memory_profiler.record_snapshot()
 
             # Get battery status and update network manager
             battery = self.power_manager.get_battery_status()
@@ -266,6 +273,16 @@ class AsyncWeatherDisplayClient:
 
                     # Record that we updated the weather data
                     self.power_manager.record_weather_update()
+
+                    # Record memory after update
+                    memory_profiler.record_snapshot()
+
+                    # Check for memory growth
+                    if memory_profiler.check_memory_growth(threshold_mb=20.0):
+                        self.logger.warning("Memory growth detected during weather update")
+                        # Log memory report
+                        report = memory_profiler.get_report()
+                        self.logger.info(f"Memory report: {report}")
 
                     self.logger.info("Weather data updated successfully (async)")
                     return True
@@ -322,7 +339,7 @@ class AsyncWeatherDisplayClient:
                     update_success = loop.run_until_complete(self.update_weather())
                 finally:
                     loop.close()
-                
+
                 if update_success:
                     self.display.display_image(self.current_image_path)
                     # Record that we refreshed the display
@@ -391,6 +408,15 @@ class AsyncWeatherDisplayClient:
                 # Check if we should refresh display (but skip if display is sleeping)
                 if self.power_manager.should_refresh_display() and not display_sleeping:
                     self.refresh_display()
+
+                # Periodic memory status logging (every 10 updates)
+                if hasattr(self, "_update_count"):
+                    self._update_count += 1
+                else:
+                    self._update_count = 1
+
+                if self._update_count % 10 == 0:
+                    memory_profiler.log_memory_status()
 
                 # Calculate sleep time
                 sleep_time = self.power_manager.calculate_sleep_time()

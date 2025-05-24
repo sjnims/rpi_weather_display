@@ -103,3 +103,19 @@ def template_dir() -> Path:
 
     # Use path resolver to find templates directory
     return path_resolver.get_templates_dir()
+
+
+@pytest.fixture()
+def mock_logger() -> MagicMock:
+    """Create a properly mocked logger that prevents output."""
+    logger = MagicMock()
+    # Mock all logging methods to prevent output
+    logger.debug = MagicMock()
+    logger.info = MagicMock()
+    logger.warning = MagicMock()
+    logger.error = MagicMock()
+    logger.critical = MagicMock()
+    logger.log = MagicMock()
+    # Mock the logger name
+    logger.name = "test_logger"
+    return logger

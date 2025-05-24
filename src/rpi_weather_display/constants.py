@@ -113,6 +113,7 @@ SECONDS_PER_MINUTE = 60  # Seconds in a minute
 MILLIAMPS_PER_AMP = 1000  # Milliamps in an amp
 AMPS_PER_MILLIAMP = 0.001  # Conversion from milliamps to amps
 BYTES_PER_KILOBYTE = 1024  # Bytes in a kilobyte
+BYTES_PER_MEGABYTE = 1024 * 1024  # Bytes in a megabyte
 PERCENT_MAX = 100.0  # Maximum percentage value
 
 # Cache file constants
@@ -131,13 +132,7 @@ PREVIEW_BATTERY_TEMP = 25.0  # Default battery temperature (°C) for preview mod
 
 # Weather/API constants
 # AQI (Air Quality Index) levels and descriptions
-AQI_LEVELS = {
-    1: "Good",
-    2: "Fair",
-    3: "Moderate",
-    4: "Poor",
-    5: "Very Poor"
-}
+AQI_LEVELS = {1: "Good", 2: "Fair", 3: "Moderate", 4: "Poor", 5: "Very Poor"}
 
 # Moon phase thresholds for phase detection
 MOON_PHASE_NEW_THRESHOLD = 0.03  # Below this or above 0.97 = new moon

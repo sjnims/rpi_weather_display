@@ -9,10 +9,11 @@ application, registers routes, and handles incoming requests.
 """
 
 import argparse
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -32,11 +33,45 @@ from rpi_weather_display.models.config import AppConfig
 from rpi_weather_display.models.system import BatteryState, BatteryStatus
 from rpi_weather_display.models.weather import WeatherData
 from rpi_weather_display.server.api import WeatherAPIClient
+from rpi_weather_display.server.browser_manager import browser_manager
 from rpi_weather_display.server.renderer import WeatherRenderer
 from rpi_weather_display.utils import path_resolver
+from rpi_weather_display.utils.cache_manager import FileCache
 from rpi_weather_display.utils.error_utils import get_error_location
 from rpi_weather_display.utils.logging import setup_logging
+from rpi_weather_display.utils.memory_profiler import MemoryReportDict, memory_profiler
 from rpi_weather_display.utils.path_utils import validate_config_path
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Manage application lifespan - startup and shutdown.
+
+    Args:
+        app: FastAPI application instance
+
+    Yields:
+        None
+    """
+    # Startup
+    import logging
+
+    logger = logging.getLogger(__name__)
+    logger.info("Starting Weather Display Server")
+
+    # Set memory baseline
+    memory_profiler.set_baseline()
+
+    yield
+
+    # Shutdown
+    logger.info("Shutting down Weather Display Server")
+
+    # Log final memory report
+    report = memory_profiler.get_report()
+    logger.info(f"Final memory report: {report}")
+
+    await browser_manager.cleanup()
 
 
 class BatteryInfo(BaseModel):
@@ -99,7 +134,9 @@ class WeatherDisplayServer:
     def __init__(
         self,
         config_path: Path,
-        app_factory: Callable[[], FastAPI] = lambda: FastAPI(title="Weather Display Server"),
+        app_factory: Callable[[], FastAPI] = lambda: FastAPI(
+            title="Weather Display Server", lifespan=lifespan
+        ),
     ) -> None:
         """Initialize the server.
 
@@ -144,6 +181,13 @@ class WeatherDisplayServer:
 
         self.logger.info(f"Using cache directory: {self.cache_dir}")
 
+        # Initialize file cache for images
+        self.file_cache = FileCache(
+            cache_dir=self.cache_dir,
+            max_size_mb=50.0,  # 50MB for image cache
+            ttl_seconds=3600,  # 1 hour TTL for images
+        )
+
         # Set up routes
         self._setup_routes()
 
@@ -172,7 +216,9 @@ class WeatherDisplayServer:
             return {"status": "ok", "service": "Weather Display Server"}
 
         @self.app.post("/render")
-        async def render_weather(request: RenderRequest) -> Response:
+        async def render_weather(
+            request: RenderRequest, background_tasks: BackgroundTasks
+        ) -> Response:
             """Render a weather image for e-paper display.
 
             Takes battery and system information from the client and generates
@@ -180,6 +226,7 @@ class WeatherDisplayServer:
 
             Args:
                 request: Client render request with battery status.
+                background_tasks: FastAPI background task queue for cleanup.
 
             Returns:
                 PNG image response.
@@ -187,7 +234,7 @@ class WeatherDisplayServer:
             Raises:
                 HTTPException: If image generation fails.
             """
-            return await self._handle_render(request)
+            return await self._handle_render(request, background_tasks)
 
         @self.app.get("/weather")
         async def get_weather() -> WeatherData:
@@ -203,6 +250,18 @@ class WeatherDisplayServer:
                 HTTPException: If weather data cannot be fetched.
             """
             return await self._handle_weather()
+
+        @self.app.get("/memory")
+        async def get_memory_status() -> MemoryReportDict:
+            """Get memory usage statistics.
+
+            Returns memory profiling information including current usage,
+            history, and potential leak detection.
+
+            Returns:
+                Dictionary with memory statistics.
+            """
+            return memory_profiler.get_report()
 
         @self.app.get("/preview")
         async def preview_weather() -> Response:
@@ -240,7 +299,9 @@ class WeatherDisplayServer:
                 self.logger.error(f"Error generating preview [{error_location}]: {e}")
                 raise HTTPException(status_code=500, detail=str(e)) from e
 
-    async def _handle_render(self, request: RenderRequest) -> Response:
+    async def _handle_render(
+        self, request: RenderRequest, background_tasks: BackgroundTasks
+    ) -> Response:
         """Handle render request.
 
         Processes a client render request, fetches the latest weather data,
@@ -248,6 +309,7 @@ class WeatherDisplayServer:
 
         Args:
             request: Render request data containing battery status and system metrics.
+            background_tasks: FastAPI background task queue for cleanup.
 
         Returns:
             FastAPI response with rendered PNG image.
@@ -268,13 +330,32 @@ class WeatherDisplayServer:
             # Get weather data
             weather_data = await self.api_client.get_weather_data()
 
+            # Record memory before rendering
+            memory_profiler.record_snapshot()
+
             # Create a temporary file for the image using path resolver
             tmp_path = path_resolver.get_temp_file(suffix=IMAGE_FILE_EXTENSION)
 
             # Render the image
             await self.renderer.render_weather_image(weather_data, battery_status, tmp_path)
 
-            # Return the image
+            # Record memory after rendering
+            memory_profiler.record_snapshot()
+
+            # Check for excessive memory growth
+            if memory_profiler.check_memory_growth(threshold_mb=100.0):
+                self.logger.warning("Excessive memory growth detected during rendering")
+
+            # Return the image with background task to clean up
+            def cleanup_temp_file() -> None:
+                """Clean up temporary file after response is sent."""
+                try:
+                    tmp_path.unlink(missing_ok=True)
+                except Exception as clean_e:
+                    self.logger.warning(f"Failed to clean up temp file {tmp_path}: {clean_e}")
+
+            background_tasks.add_task(cleanup_temp_file)
+
             return FileResponse(tmp_path, media_type=IMAGE_MEDIA_TYPE, filename=DOWNLOAD_FILENAME)
         except Exception as e:
             error_location = get_error_location()

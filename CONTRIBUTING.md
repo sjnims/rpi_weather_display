@@ -48,16 +48,69 @@ poetry run pytest tests/client/
 
 # Run tests with coverage
 poetry run pytest --cov=src
+
+# Run specific test with more verbosity
+poetry run pytest tests/models/test_config.py -v
+
+# Run tests with specific markers
+poetry run pytest -m "not slow"
 ```
+
+We maintain a high test coverage standard (94%+). Please ensure your changes include appropriate tests.
 
 ## Code Style
 
 - Follow PEP 8 guidelines
 - Use type hints for all functions and methods
 - Write docstrings in Google style format
-- Keep line length to 100 characters
+- Keep line length to 100 characters (configured in pyproject.toml)
 - Use Ruff for formatting and linting
-- Use Pyright for type checking
+- Use Pyright for type checking in strict mode
+- Keep functions small and focused
+- Follow the DRY (Don't Repeat Yourself) principle
+
+## Development Best Practices
+
+### Type Safety
+- Comprehensive type hints with Pyright strict mode
+- Avoid using `Any` type - use specific types or Union types instead
+- Use TypedDict for structured dictionaries
+- Leverage Pydantic models for data validation
+
+### Error Handling
+- Use exception chaining (`raise ... from e`) for better debugging
+- Create specific exception types for different error conditions
+- Implement robust error handling for hardware interactions
+- Log errors with contextual information
+
+### Modern Python Features
+- Use Python 3.11+ features where appropriate
+- Use f-strings for string formatting instead of `.format()` or `%`
+- Leverage dataclasses or Pydantic V2 models for data containers
+- Use pathlib instead of os.path for file operations
+- Consider async/await for I/O-bound operations
+- Use walrus operator (:=) where it improves readability
+- Implement structural pattern matching for state handling (Python 3.10+)
+
+### Testing Approach
+- Write tests for all new functionality
+- Use pytest fixtures for common test setup
+- Mock hardware interactions to avoid dependencies
+- Test edge cases and error conditions
+- Use `pytest.raises` for exception testing
+- Consider property-based testing with Hypothesis for complex logic
+
+### Code Quality Tools
+```bash
+# Run linter
+poetry run ruff check .
+
+# Run type checking
+poetry run pyright .
+
+# Check all before committing
+poetry run ruff check . && poetry run pyright && poetry run pytest
+```
 
 ## Pull Request Process
 

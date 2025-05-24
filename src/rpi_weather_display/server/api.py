@@ -6,7 +6,7 @@ all external API communication for the weather display system.
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import httpx
 
@@ -24,17 +24,18 @@ from rpi_weather_display.models.weather import (
     HourlyWeather,
     WeatherData,
 )
+from rpi_weather_display.utils.cache_manager import MemoryAwareCache
 from rpi_weather_display.utils.error_utils import get_error_location
 
 
 class WeatherAPIClient:
     """Client for the OpenWeatherMap API.
-    
+
     Handles communication with OpenWeatherMap services, including
     weather data fetching, geocoding, and air quality information.
     Provides caching mechanisms to reduce API calls and manages
     error handling for network operations.
-    
+
     Attributes:
         config: Weather API configuration including API key and preferences
         logger: Logger instance for tracking API operations
@@ -58,18 +59,21 @@ class WeatherAPIClient:
         """
         self.config = config
         self.logger = logging.getLogger(__name__)
-        self._last_forecast: WeatherData | None = None
-        self._last_update: datetime | None = None
+        # Initialize memory-aware cache with 20MB limit
+        self._cache = MemoryAwareCache[WeatherData](
+            max_size_mb=20.0,
+            ttl_seconds=int(config.update_interval_minutes * 60),  # Convert minutes to seconds
+        )
 
     async def get_coordinates(self) -> tuple[float, float]:
         """Get latitude and longitude from city name if needed.
-        
+
         Attempts to use configured coordinates first. If not available,
         uses the geocoding API to resolve a city name to coordinates.
-        
+
         Returns:
             Tuple of (latitude, longitude).
-            
+
         Raises:
             ValueError: If neither coordinates nor city name are provided.
             httpx.HTTPError: If the geocoding API request fails.
@@ -132,33 +136,30 @@ class WeatherAPIClient:
         """Get weather data from the OpenWeatherMap API.
 
         Fetches current weather conditions, hourly forecast, daily forecast,
-        and air quality data. Implements caching to reduce API calls,
-        with a 15-minute refresh interval by default.
+        and air quality data. Implements memory-aware caching to reduce API calls.
 
         Args:
             force_refresh: Force a refresh regardless of cache state.
 
         Returns:
             WeatherData object with current weather and forecast.
-            
+
         Raises:
             httpx.HTTPError: If API requests fail and no cached data is available.
             ValueError: If required location information is missing.
         """
-        # Check if we have recently updated data
-        if (
-            not force_refresh
-            and self._last_forecast is not None
-            and self._last_update is not None
-            and datetime.now() - self._last_update < timedelta(minutes=15)
-        ):
-            self.logger.info("Using cached weather data")
-            return self._last_forecast
+        # Generate cache key based on location
+        lat, lon = await self.get_coordinates()
+        cache_key = f"weather_{lat}_{lon}_{self.config.units}_{self.config.language}"
+
+        # Check cache unless force refresh
+        if not force_refresh:
+            cached_data = self._cache.get(cache_key)
+            if cached_data is not None:
+                self.logger.info("Using cached weather data")
+                return cached_data
 
         try:
-            # Get coordinates
-            lat, lon = await self.get_coordinates()
-
             # Get weather data from the API
             async with httpx.AsyncClient() as client:
                 # Fetch weather forecast
@@ -209,9 +210,11 @@ class WeatherAPIClient:
                     last_updated=datetime.now(),
                 )
 
-                # Cache the data
-                self._last_forecast = weather
-                self._last_update = datetime.now()
+                # Cache the data with size estimate (approx 5KB for weather data)
+                import json
+
+                data_size = len(json.dumps(weather_data).encode("utf-8"))
+                self._cache.put(cache_key, weather, data_size)
 
                 self.logger.info("Weather data updated successfully")
                 return weather
@@ -219,31 +222,33 @@ class WeatherAPIClient:
             error_location = get_error_location()
             self.logger.error(f"HTTP error during weather data fetch [{error_location}]: {e}")
             # If we have cached data, return it as a fallback
-            if self._last_forecast is not None:
+            cached_data = self._cache.get(cache_key)
+            if cached_data is not None:
                 self.logger.warning("Using cached weather data due to API error")
-                return self._last_forecast
+                return cached_data
             raise
         except Exception as e:
             error_location = get_error_location()
             self.logger.error(f"Error fetching weather data [{error_location}]: {e}")
             # If we have cached data, return it as a fallback
-            if self._last_forecast is not None:
+            cached_data = self._cache.get(cache_key)
+            if cached_data is not None:
                 self.logger.warning("Using cached weather data due to error")
-                return self._last_forecast
+                return cached_data
             raise RuntimeError("Failed to fetch weather data from API") from e
 
     async def get_icon_mapping(self, icon_code: str) -> str:
         """Get the corresponding sprite icon ID for an OpenWeatherMap icon code.
-        
-        Maps OpenWeatherMap icon codes (like "01d" for clear sky day) to 
+
+        Maps OpenWeatherMap icon codes (like "01d" for clear sky day) to
         icon IDs in the sprite file used by the weather display. This provides
         a consistent interface for icon lookups regardless of the source.
-        
+
         Args:
             icon_code: OpenWeatherMap icon code (e.g., "01d").
 
         Returns:
-            Icon ID from the sprite file (e.g., "sun-bold" for "01d"), 
+            Icon ID from the sprite file (e.g., "sun-bold" for "01d"),
             or "cloud-bold" if the icon code is not recognized.
         """
         # Map of OpenWeatherMap icon codes to sprite icon IDs
@@ -275,7 +280,7 @@ class WeatherAPIClient:
         self, forecast: WeatherData, update_time: datetime | None = None
     ) -> None:
         """Set forecast data for testing purposes.
-        
+
         Allows test code to inject mock forecast data into the client
         without making actual API calls. This method should only be used
         in testing environments and not in production code.
@@ -287,8 +292,8 @@ class WeatherAPIClient:
                          for testing cache expiration behavior.
 
         Warning:
-            This method is intended only for testing purposes. Using it in 
-            production code may lead to stale or incorrect weather data 
+            This method is intended only for testing purposes. Using it in
+            production code may lead to stale or incorrect weather data
             being displayed to users.
         """
         self._last_forecast = forecast

@@ -53,10 +53,10 @@ Priority is indicated as:
 - [x] 🟢 2.3.2 Implement async context managers for hardware resources [COMPLETED 2025-05-24]
 - [x] 🟢 2.3.3 Add concurrency limits to prevent resource exhaustion [COMPLETED 2025-05-24]
 
-### 2.4 Memory Management
-- [ ] 🔴 2.4.1 Optimize image processing for memory efficiency [PLANNED]
-- [ ] 🔴 2.4.2 Implement memory-aware caching with size limits [PLANNED]
-- [ ] 🟢 2.4.3 Add memory profiling and reporting [PLANNED]
+### 2.4 Memory Management (COMPLETED)
+- [x] 🔴 2.4.1 Optimize image processing for memory efficiency [COMPLETED 2025-05-24]
+- [x] 🔴 2.4.2 Implement memory-aware caching with size limits [COMPLETED 2025-05-24]
+- [x] 🟢 2.4.3 Add memory profiling and reporting [COMPLETED 2025-05-24]
 
 ### 2.5 Code Refactoring
 - [ ] 🔴 2.5.1 Modularize large files (power_manager.py at 1270 lines, renderer.py) [PLANNED]
@@ -225,6 +225,14 @@ Priority is indicated as:
 - [ ] 🟢 6.5.5 Implement WebSocket support for real-time preview updates [PLANNED]
 - [ ] 🟢 6.5.6 Add request context and tracing for better debugging [PLANNED]
 
+### 6.6 Server-Side Caching Enhancements (Low Priority)
+- [ ] 🟢 6.6.1 Implement image caching in render endpoint based on weather data hash + battery status [PLANNED]
+- [ ] 🟢 6.6.2 Cache geocoding results indefinitely (city coordinates don't change) [PLANNED]
+- [ ] 🟢 6.6.3 Add HTML template render caching for identical weather data [PLANNED]
+- [ ] 🟢 6.6.4 Implement cache warming during quiet hours [PLANNED]
+- [ ] 🟢 6.6.5 Add cache hit/miss metrics for monitoring effectiveness [PLANNED]
+- [ ] 🟢 6.6.6 Create cache invalidation API endpoints for manual refresh [PLANNED]
+
 ## Phase 7: Server-Side Data Analytics & Local Sensors (Target: v1.5.0)
 
 ### 7.1 Weather Data Storage & Analytics (Docker Container)
@@ -288,6 +296,6 @@ Based on the code review findings, the following tasks should be prioritized:
 | 3     | 12         | 0           | 0         | 12    |
 | 4     | 12         | 0           | 0         | 12    |
 | 5     | 17         | 0           | 2         | 19    |
-| 6     | 15         | 0           | 0         | 15    |
+| 6     | 21         | 0           | 0         | 21    |
 | 7     | 18         | 0           | 0         | 18    |
-| Total | 88         | 0           | 34        | 122   |
+| Total | 94         | 0           | 34        | 128   |

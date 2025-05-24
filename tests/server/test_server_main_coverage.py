@@ -5,10 +5,10 @@
 # pyright: reportGeneralTypeIssues=false
 
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
-from fastapi import FastAPI, Response
+from fastapi import BackgroundTasks, FastAPI, Response
 
 from rpi_weather_display.constants import DEFAULT_SERVER_HOST
 from rpi_weather_display.models.config import LoggingConfig
@@ -42,7 +42,6 @@ def test_cache_dir_fallback() -> None:
 
     with (
         patch("rpi_weather_display.models.config.AppConfig.from_yaml", return_value=mock_config),
-        patch("rpi_weather_display.utils.logging.setup_logging", return_value=MagicMock()),
         patch(
             "rpi_weather_display.utils.path_resolver.get_templates_dir",
             return_value=Path("/test/templates"),
@@ -53,6 +52,7 @@ def test_cache_dir_fallback() -> None:
         ),
         patch("rpi_weather_display.server.main.path_resolver.cache_dir", mock_cache_dir),
         patch("rpi_weather_display.server.main.path_resolver.ensure_dir_exists"),
+        patch("rpi_weather_display.server.main.FileCache", return_value=MagicMock()),
         patch("pathlib.Path.exists", return_value=True),
         patch("rpi_weather_display.utils.file_utils.dir_exists", return_value=True),
         patch("os.path.isdir", return_value=True),  # Add patch for os.path.isdir
@@ -200,7 +200,7 @@ def test_main_function_no_config() -> None:
 
 
 @pytest.mark.asyncio()
-async def test_route_handlers(monkeypatch) -> None:
+async def test_route_handlers() -> None:
     """Test the route handlers directly."""
     # Create a proper mock config
     mock_config = MagicMock()
@@ -233,9 +233,13 @@ async def test_route_handlers(monkeypatch) -> None:
     def app_factory() -> FastAPI:
         return mock_app
 
+    # Mock browser_manager to prevent async warnings
+    mock_browser_manager = MagicMock()
+    mock_browser_manager.cleanup = Mock()  # Not AsyncMock since we're not awaiting it
+
     with (
+        patch("rpi_weather_display.server.main.browser_manager", mock_browser_manager),
         patch("rpi_weather_display.models.config.AppConfig.from_yaml", return_value=mock_config),
-        patch("rpi_weather_display.utils.logging.setup_logging", return_value=MagicMock()),
         patch(
             "rpi_weather_display.utils.path_resolver.get_templates_dir",
             return_value=Path("/test/templates"),
@@ -266,8 +270,9 @@ async def test_route_handlers(monkeypatch) -> None:
         # Patch server._handle_render to avoid implementation details
         server._handle_render = AsyncMock()
         mock_request = MagicMock()
-        await render_handler(mock_request)
-        server._handle_render.assert_called_once_with(mock_request)
+        mock_background_tasks = BackgroundTasks()
+        await render_handler(mock_request, mock_background_tasks)
+        server._handle_render.assert_called_once_with(mock_request, mock_background_tasks)
 
         # Test weather route
         weather_handler = registered_routes["/weather"]
@@ -330,7 +335,6 @@ async def test_handle_render() -> None:
 
     with (
         patch("rpi_weather_display.models.config.AppConfig.from_yaml", return_value=mock_config),
-        patch("rpi_weather_display.utils.logging.setup_logging", return_value=mock_logger),
         patch(
             "rpi_weather_display.utils.path_resolver.get_templates_dir",
             return_value=Path("/test/templates"),
@@ -377,8 +381,9 @@ async def test_handle_render() -> None:
             ),
             patch("rpi_weather_display.server.main.FileResponse", return_value=mock_response),
         ):
-            # Call the method
-            response = await server._handle_render(request)
+            # Call the method with mock background tasks
+            background_tasks = BackgroundTasks()
+            response = await server._handle_render(request, background_tasks)
 
             # Verify the response
             assert response == mock_response
@@ -393,8 +398,9 @@ async def test_handle_render() -> None:
             # Import needed for HTTPException
             from fastapi import HTTPException
 
+            background_tasks = BackgroundTasks()
             with pytest.raises(HTTPException) as excinfo:
-                await server._handle_render(request)
+                await server._handle_render(request, background_tasks)
 
             # Verify error was logged
             mock_logger.error.assert_called_once_with(
@@ -421,7 +427,6 @@ async def test_handle_weather() -> None:
 
     with (
         patch("rpi_weather_display.models.config.AppConfig.from_yaml", return_value=mock_config),
-        patch("rpi_weather_display.utils.logging.setup_logging", return_value=MagicMock()),
         patch(
             "rpi_weather_display.utils.path_resolver.get_templates_dir",
             return_value=Path("/test/templates"),
@@ -491,7 +496,6 @@ def test_static_files_not_found() -> None:
 
     with (
         patch("rpi_weather_display.models.config.AppConfig.from_yaml", return_value=mock_config),
-        patch("rpi_weather_display.utils.logging.setup_logging", return_value=mock_logger),
         patch(
             "rpi_weather_display.utils.path_resolver.get_templates_dir",
             return_value=Path("/test/templates"),
@@ -549,7 +553,6 @@ def test_server_run_method() -> None:
 
     with (
         patch("rpi_weather_display.models.config.AppConfig.from_yaml", return_value=mock_config),
-        patch("rpi_weather_display.utils.logging.setup_logging", return_value=mock_logger),
         patch(
             "rpi_weather_display.utils.path_resolver.get_templates_dir",
             return_value=Path("/test/templates"),

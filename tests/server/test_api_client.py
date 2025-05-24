@@ -151,9 +151,11 @@ async def test_get_coordinates_geocoding_empty_response(
     api_client = WeatherAPIClient(app_config.weather)
 
     # Should wrap ValueError in RuntimeError
-    with pytest.raises(RuntimeError, match="Failed to geocode location: NonexistentCity") as exc_info:
+    with pytest.raises(
+        RuntimeError, match="Failed to geocode location: NonexistentCity"
+    ) as exc_info:
         await api_client.get_coordinates()
-    
+
     # Check that the original exception is preserved
     assert isinstance(exc_info.value.__cause__, ValueError)
     assert "Could not find location for city name" in str(exc_info.value.__cause__)
@@ -188,14 +190,20 @@ async def test_get_weather_data_cached(app_config: AppConfig, mock_weather_data:
     # Create a weather data instance for the mock
     weather = WeatherData.model_validate(mock_weather_data)
 
-    # Set up the cached data using the test method
-    api_client.set_forecast_for_testing(weather)
+    # Mock the get_coordinates to return test coordinates
+    with patch.object(api_client, "get_coordinates", return_value=(51.5074, -0.1278)):
+        # Generate the cache key that would be used
+        lat, lon = 51.5074, -0.1278
+        cache_key = f"weather_{lat}_{lon}_{api_client.config.units}_{api_client.config.language}"
 
-    # Call without force refresh
-    result = await api_client.get_weather_data(force_refresh=False)
+        # Put the weather data in the cache (estimate size as 10KB for test)
+        api_client._cache.put(cache_key, weather, size_bytes=10240)
 
-    # Verify cached data is returned
-    assert result is weather
+        # Call without force refresh
+        result = await api_client.get_weather_data(force_refresh=False)
+
+        # Verify cached data is returned
+        assert result == weather
 
 
 @pytest.mark.asyncio()
@@ -286,11 +294,17 @@ async def test_get_weather_data_http_error_with_cache(
 
     # Set up cached data
     weather = WeatherData.model_validate(mock_weather_data)
-    api_client.set_forecast_for_testing(weather)
+
+    # Generate the cache key that would be used
+    lat, lon = 40.7128, -74.0060
+    cache_key = f"weather_{lat}_{lon}_{api_client.config.units}_{api_client.config.language}"
+
+    # Put the weather data in the cache
+    api_client._cache.put(cache_key, weather, size_bytes=10240)
 
     # Call should return cached data despite HTTP error
     result = await api_client.get_weather_data(force_refresh=True)
-    assert result is weather
+    assert result == weather
 
 
 @pytest.mark.asyncio()
@@ -450,7 +464,7 @@ async def test_get_coordinates_general_exception(
     # Should wrap the general exception in RuntimeError
     with pytest.raises(RuntimeError, match="Failed to geocode location: New York") as exc_info:
         await api_client.get_coordinates()
-    
+
     # Check that the original exception is preserved
     assert isinstance(exc_info.value.__cause__, ValueError)
     assert str(exc_info.value.__cause__) == "Invalid query"
@@ -496,7 +510,7 @@ async def test_get_weather_data_general_exception(
     # Call should wrap exception in RuntimeError without cached data
     with pytest.raises(RuntimeError, match="Failed to fetch weather data from API") as exc_info:
         await api_client.get_weather_data(force_refresh=True)
-    
+
     # Check that the original exception is preserved
     assert isinstance(exc_info.value.__cause__, ValueError)
     assert str(exc_info.value.__cause__) == "Invalid data"
@@ -516,11 +530,17 @@ async def test_get_weather_data_general_exception_with_cache(
 
     # Set up cached data
     weather = WeatherData.model_validate(mock_weather_data)
-    api_client.set_forecast_for_testing(weather)
+
+    # Generate the cache key that would be used
+    lat, lon = 40.7128, -74.0060
+    cache_key = f"weather_{lat}_{lon}_{api_client.config.units}_{api_client.config.language}"
+
+    # Put the weather data in the cache
+    api_client._cache.put(cache_key, weather, size_bytes=10240)
 
     # Call should return cached data despite general exception
     result = await api_client.get_weather_data(force_refresh=True)
-    assert result is weather
+    assert result == weather
 
 
 @pytest.mark.asyncio()

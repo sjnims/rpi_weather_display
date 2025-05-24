@@ -333,9 +333,11 @@ class TestWeatherRenderer:
         mock_template.render.side_effect = RuntimeError(error_message)
 
         with patch.object(renderer.jinja_env, "get_template", return_value=mock_template):
-            with pytest.raises(RuntimeError, match="Failed to generate HTML for weather display") as exc_info:
+            with pytest.raises(
+                RuntimeError, match="Failed to generate HTML for weather display"
+            ) as exc_info:
                 await renderer.generate_html(weather_data, battery_status)
-            
+
             # Check that the original exception is preserved
             assert isinstance(exc_info.value.__cause__, RuntimeError)
             assert str(exc_info.value.__cause__) == error_message
@@ -346,29 +348,28 @@ class TestWeatherRenderer:
         html = "<html><body>Test</body></html>"
         output_path = create_temp_file(suffix=".png")
 
-        # Mock Playwright to avoid actual browser usage
-        mock_browser = MagicMock()
+        # Mock the page object
         mock_page = MagicMock()
-        mock_browser.new_page = AsyncMock(return_value=mock_page)
         mock_page.set_content = AsyncMock()
         mock_page.wait_for_load_state = AsyncMock()
         mock_page.screenshot = AsyncMock(return_value=b"mock_screenshot_data")
-        mock_browser.close = AsyncMock()
+        mock_page.close = AsyncMock()
 
-        mock_playwright = MagicMock()
-        mock_chromium = MagicMock()
-        mock_chromium.launch = AsyncMock(return_value=mock_browser)
-        mock_playwright.chromium = mock_chromium
-        mock_playwright_context = AsyncMock()
-        mock_playwright_context.__aenter__ = AsyncMock(return_value=mock_playwright)
-        mock_playwright_context.__aexit__ = AsyncMock()
+        # Mock browser_manager
+        with patch("rpi_weather_display.server.renderer.browser_manager") as mock_browser_manager:
+            mock_browser_manager.get_page = AsyncMock(return_value=mock_page)
 
-        with patch("playwright.async_api.async_playwright", return_value=mock_playwright_context):
             # Test with output_path
             result = await renderer.render_image(html, 800, 600, output_path)
 
             # Verify the path is returned
             assert result == output_path
+
+            # Verify the screenshot was called with the path
+            mock_page.screenshot.assert_called_with(path=str(output_path), type="png")
+
+            # Reset the mock for the next test
+            mock_page.screenshot.reset_mock()
 
             # Test without output_path (should return bytes)
             result = await renderer.render_image(html, 800, 600)
@@ -376,20 +377,25 @@ class TestWeatherRenderer:
             # Verify bytes are returned
             assert result == b"mock_screenshot_data"
 
+            # Verify the screenshot was called without path
+            mock_page.screenshot.assert_called_with(type="png")
+
     @pytest.mark.asyncio()
     async def test_render_image_error(self, renderer: WeatherRenderer) -> None:
         """Test error handling during image rendering."""
         html = "<html><body>Test</body></html>"
 
-        # Mock Playwright to raise an exception
-        mock_playwright_context = AsyncMock()
+        # Mock browser_manager to raise an exception
         error_message = "Browser initialization failed"
-        mock_playwright_context.__aenter__ = AsyncMock(side_effect=RuntimeError(error_message))
 
-        with patch("playwright.async_api.async_playwright", return_value=mock_playwright_context):
-            with pytest.raises(RuntimeError, match="Failed to render image with Playwright") as exc_info:
+        with patch("rpi_weather_display.server.renderer.browser_manager") as mock_browser_manager:
+            mock_browser_manager.get_page = AsyncMock(side_effect=RuntimeError(error_message))
+
+            with pytest.raises(
+                RuntimeError, match="Failed to render image with Playwright"
+            ) as exc_info:
                 await renderer.render_image(html, 800, 600)
-            
+
             # Check that the original exception is preserved
             assert isinstance(exc_info.value.__cause__, RuntimeError)
             assert str(exc_info.value.__cause__) == error_message
@@ -771,15 +777,24 @@ class TestWeatherRenderer:
     async def test_render_image_with_error_importing_playwright(
         self, renderer: WeatherRenderer
     ) -> None:
-        """Test error handling when importing playwright fails."""
-        # Mock the import to fail
-        with patch("builtins.__import__", side_effect=ImportError("Failed to import playwright")):
-            with pytest.raises(RuntimeError, match="Failed to render image with Playwright") as exc_info:
+        """Test error handling when browser manager fails."""
+        # This test was originally testing playwright import errors, but
+        # the renderer doesn't import playwright directly - it uses browser_manager
+        # Let's test a general browser_manager failure instead
+        error_message = "Browser manager failed"
+
+        with patch("rpi_weather_display.server.renderer.browser_manager") as mock_browser_manager:
+            # Make get_page fail
+            mock_browser_manager.get_page = AsyncMock(side_effect=Exception(error_message))
+
+            with pytest.raises(
+                RuntimeError, match="Failed to render image with Playwright"
+            ) as exc_info:
                 await renderer.render_image("<html></html>", 800, 600)
-            
+
             # Check that the original exception is preserved
-            assert isinstance(exc_info.value.__cause__, ImportError)
-            assert str(exc_info.value.__cause__) == "Failed to import playwright"
+            assert isinstance(exc_info.value.__cause__, Exception)
+            assert str(exc_info.value.__cause__) == error_message
 
     def test_get_weather_icon_with_exceptions(self, renderer: WeatherRenderer) -> None:
         """Test getting weather icons with exceptions in the process."""
@@ -813,24 +828,17 @@ class TestWeatherRenderer:
     @pytest.mark.asyncio()
     async def test_render_image_with_empty_path(self, renderer: WeatherRenderer) -> None:
         """Test rendering an image without specifying an output path."""
-        # Mock playwright
-        mock_browser = MagicMock()
+        # Mock the page object
         mock_page = MagicMock()
-        mock_browser.new_page = AsyncMock(return_value=mock_page)
         mock_page.set_content = AsyncMock()
         mock_page.wait_for_load_state = AsyncMock()
         mock_page.screenshot = AsyncMock(return_value=b"test_screenshot_data")
-        mock_browser.close = AsyncMock()
+        mock_page.close = AsyncMock()
 
-        mock_playwright = MagicMock()
-        mock_chromium = MagicMock()
-        mock_chromium.launch = AsyncMock(return_value=mock_browser)
-        mock_playwright.chromium = mock_chromium
-        mock_playwright_context = AsyncMock()
-        mock_playwright_context.__aenter__ = AsyncMock(return_value=mock_playwright)
-        mock_playwright_context.__aexit__ = AsyncMock()
+        # Mock browser_manager
+        with patch("rpi_weather_display.server.renderer.browser_manager") as mock_browser_manager:
+            mock_browser_manager.get_page = AsyncMock(return_value=mock_page)
 
-        with patch("playwright.async_api.async_playwright", return_value=mock_playwright_context):
             # Test without output_path to get bytes
             result = await renderer.render_image("<html></html>", 800, 600)
 
@@ -1359,23 +1367,33 @@ class TestWeatherRenderer:
 
             # Test boundary cases for each branch
             assert moon_phase_label(0) == "New Moon"  # New Moon at 0
-            assert moon_phase_label(1 - MOON_PHASE_NEW_THRESHOLD) == "New Moon"  # New Moon at >= 0.97
+            assert (
+                moon_phase_label(1 - MOON_PHASE_NEW_THRESHOLD) == "New Moon"
+            )  # New Moon at >= 0.97
             assert moon_phase_label(0.99) == "New Moon"  # New Moon at >= 0.97
 
             assert moon_phase_label(0.1) == "Waxing Crescent"  # < MOON_PHASE_FIRST_QUARTER_MIN
-            assert moon_phase_label(MOON_PHASE_FIRST_QUARTER_MIN - 0.01) == "Waxing Crescent"  # < 0.24
+            assert (
+                moon_phase_label(MOON_PHASE_FIRST_QUARTER_MIN - 0.01) == "Waxing Crescent"
+            )  # < 0.24
 
             assert moon_phase_label(0.25) == "First Quarter"  # MOON_PHASE_FIRST_QUARTER_MIN-MAX
             assert moon_phase_label(0.26) == "First Quarter"  # MOON_PHASE_FIRST_QUARTER_MIN-MAX
 
-            assert moon_phase_label(0.3) == "Waxing Gibbous"  # MOON_PHASE_FIRST_QUARTER_MAX-MOON_PHASE_FULL_MIN
+            assert (
+                moon_phase_label(0.3) == "Waxing Gibbous"
+            )  # MOON_PHASE_FIRST_QUARTER_MAX-MOON_PHASE_FULL_MIN
             assert moon_phase_label(MOON_PHASE_FULL_MIN - 0.01) == "Waxing Gibbous"  # < 0.49
 
             assert moon_phase_label(0.5) == "Full Moon"  # MOON_PHASE_FULL_MIN-MAX
             assert moon_phase_label(0.51) == "Full Moon"  # MOON_PHASE_FULL_MIN-MAX
 
-            assert moon_phase_label(0.6) == "Waning Gibbous"  # MOON_PHASE_FULL_MAX-MOON_PHASE_LAST_QUARTER_MIN
-            assert moon_phase_label(MOON_PHASE_LAST_QUARTER_MIN - 0.01) == "Waning Gibbous"  # < 0.74
+            assert (
+                moon_phase_label(0.6) == "Waning Gibbous"
+            )  # MOON_PHASE_FULL_MAX-MOON_PHASE_LAST_QUARTER_MIN
+            assert (
+                moon_phase_label(MOON_PHASE_LAST_QUARTER_MIN - 0.01) == "Waning Gibbous"
+            )  # < 0.74
 
             assert moon_phase_label(0.75) == "Last Quarter"  # MOON_PHASE_LAST_QUARTER_MIN-MAX
             assert moon_phase_label(0.76) == "Last Quarter"  # MOON_PHASE_LAST_QUARTER_MIN-MAX

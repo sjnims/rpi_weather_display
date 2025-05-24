@@ -212,8 +212,9 @@ class EPaperDisplay:
             PIL.UnidentifiedImageError: If the file is not a valid image.
         """
         image_data = read_bytes(image_path)
-        image = Image.open(BytesIO(image_data))
-        self.display_pil_image(image)
+        # Use context manager to ensure image is properly closed
+        with Image.open(BytesIO(image_data)) as image:
+            self.display_pil_image(image)
 
     def update_battery_status(self, battery_status: BatteryStatus) -> None:
         """Update the current battery status for dynamic adjustments.
@@ -241,43 +242,58 @@ class EPaperDisplay:
         """
         if not self._initialized:
             print(f"Mock display: would display image of size {image.size}")
-            self._last_image = image
+            # Create a copy to avoid holding reference to external image
+            self._last_image = image.copy() if image else None
             return
 
+        processed_image = None
         try:
+            # Process image efficiently - work on a copy to avoid modifying the original
+            processed_image = image
+
             # Resize image if necessary
             if image.size != (self.config.width, self.config.height):
                 # Handle LANCZOS resampling which might have different names in different PIL
                 # versions
                 resampling = getattr(Image, "LANCZOS", getattr(Image, "ANTIALIAS", 1))
-                image = image.resize((self.config.width, self.config.height), resampling)
+                processed_image = image.resize((self.config.width, self.config.height), resampling)
 
             # Convert to grayscale if not already
-            if image.mode != "L":
-                image = image.convert("L")
+            if processed_image.mode != "L":
+                processed_image = processed_image.convert("L")
 
             # Check if we can use partial refresh
             if self.config.partial_refresh and self._last_image is not None:
                 # Calculate the bounding box of differences
-                bbox = self._calculate_diff_bbox(self._last_image, image)
+                bbox = self._calculate_diff_bbox(self._last_image, processed_image)
 
                 # If there's a significant difference, update the display
                 if bbox:
                     # Display the image with partial refresh
                     if self._display:
-                        self._display.display_partial(image, bbox)
+                        self._display.display_partial(processed_image, bbox)
                 else:
                     # No significant difference, no need to update
+                    # Clean up processed image if it's different from original
+                    if processed_image is not image:
+                        processed_image.close()
                     return
             else:
                 # Full refresh
                 if self._display:
-                    self._display.display(image)
+                    self._display.display(processed_image)
+
+            # Clean up old image before storing new one
+            if self._last_image is not None:
+                self._last_image.close()
 
             # Save the current image for future partial refreshes
-            self._last_image = image
+            self._last_image = processed_image
         except Exception as e:
             print(f"Error displaying image: {e}")
+            # Clean up on error
+            if processed_image is not None and processed_image is not image:
+                processed_image.close()
 
     def _get_bbox_dimensions(
         self, non_zero: tuple[list[int], list[int]], diff_shape: tuple[int, int]
@@ -356,7 +372,10 @@ class EPaperDisplay:
             min_changed_pixels = self._get_min_changed_pixels()
 
             # If max difference is below threshold, return None
-            if np.max(diff) < pixel_threshold:
+            max_diff = np.max(diff)
+            if max_diff < pixel_threshold:
+                # Clean up arrays
+                del old_array, new_array, diff
                 return None
 
             # Find non-zero positions
@@ -364,10 +383,17 @@ class EPaperDisplay:
 
             # If insufficient pixels have changed, return None
             if len(non_zero[0]) < min_changed_pixels:
+                # Clean up arrays
+                del old_array, new_array, diff
                 return None
 
-            # Calculate and return bounding box
-            return self._get_bbox_dimensions(non_zero, diff.shape)
+            # Calculate bounding box
+            bbox = self._get_bbox_dimensions(non_zero, diff.shape)
+
+            # Clean up arrays
+            del old_array, new_array, diff
+
+            return bbox
         except Exception as e:
             print(f"Error calculating diff bbox: {e}")
             return None
@@ -401,7 +427,7 @@ class EPaperDisplay:
 
         # Use appropriate threshold based on battery status
         battery = self._current_battery_status
-        
+
         match (battery.state, battery.level):
             case (BatteryState.CHARGING, _):
                 # When charging, use the standard threshold
@@ -447,7 +473,7 @@ class EPaperDisplay:
 
         # Use appropriate threshold based on battery status
         battery = self._current_battery_status
-        
+
         match (battery.state, battery.level):
             case (BatteryState.CHARGING, _):
                 # When charging, use the standard threshold
@@ -546,5 +572,9 @@ class EPaperDisplay:
         Should be called when the application is shutting down.
         """
         self.sleep()
+        # Clean up last image if it exists
+        if self._last_image is not None:
+            self._last_image.close()
+            self._last_image = None
         self._initialized = False
         self._display = None

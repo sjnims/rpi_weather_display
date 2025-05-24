@@ -153,7 +153,11 @@ class TestEPaperDisplay:
         # Mock the read_bytes and PIL Image.open methods
         mock_image = MagicMock()
         mock_image_data = b"mock image data"
-        mock_pil_image_open = MagicMock(return_value=mock_image)
+        # Create a mock that works as a context manager
+        mock_image_context = MagicMock()
+        mock_image_context.__enter__ = MagicMock(return_value=mock_image)
+        mock_image_context.__exit__ = MagicMock(return_value=False)
+        mock_pil_image_open = MagicMock(return_value=mock_image_context)
         mock_read_bytes = MagicMock(return_value=mock_image_data)
 
         with (
@@ -182,12 +186,15 @@ class TestEPaperDisplay:
         """Test display_pil_image when display is not initialized."""
         mock_image = MagicMock()
         mock_image.size = (1872, 1404)
+        mock_image_copy = MagicMock()
+        mock_image.copy = MagicMock(return_value=mock_image_copy)
 
         # Call display_pil_image without initializing
         self.display.display_pil_image(mock_image)
 
-        # Verify the image is saved as last_image
-        assert self.display._last_image == mock_image
+        # Verify the copy method was called and the copy is saved
+        mock_image.copy.assert_called_once()
+        assert self.display._last_image == mock_image_copy
 
     def test_initialize_success(self) -> None:
         """Test successful initialization of the display."""
@@ -404,7 +411,9 @@ class TestEPaperDisplay:
         new_image = MagicMock()
 
         # Using a type-compatible mock function
-        def mock_calculate_diff(old_image: Image.Image, new_image: Image.Image) -> tuple[int, int, int, int]:
+        def mock_calculate_diff(
+            old_image: Image.Image, new_image: Image.Image
+        ) -> tuple[int, int, int, int]:
             """Mock implementation that returns a predefined bbox."""
             return (35, 5, 65, 35)
 
@@ -1063,11 +1072,11 @@ class TestEPaperDisplay:
 
         # Mock numpy to simulate the case where we have differences but not enough pixels
         mock_numpy = MagicMock()
-        
+
         # Create proper mock arrays that support comparison operations
         old_array = MagicMock()
         new_array = MagicMock()
-        
+
         # Create a mock diff array with proper comparison support
         diff = MagicMock()
         diff.shape = (100, 100)
@@ -1076,18 +1085,18 @@ class TestEPaperDisplay:
         # Create a mask array that indicates which pixels are above threshold
         mask = MagicMock()
         diff.__gt__.return_value = mask
-        
+
         # Set up array operations
         mock_numpy.array.side_effect = [old_array, new_array]
-        
+
         # Mock subtraction and abs
         subtract_result = MagicMock()
         new_array.__sub__.return_value = subtract_result
         mock_numpy.abs.return_value = diff
-        
+
         # Mock max to return value above threshold
         mock_numpy.max.return_value = 20  # Above threshold
-        
+
         # Create mock non-zero arrays with fewer elements than min_changed_pixels
         # Use actual lists so len() works properly
         nonzero_0 = [1, 2, 3, 4, 5]  # Only 5 elements (less than min_changed_pixels)
@@ -1097,12 +1106,12 @@ class TestEPaperDisplay:
         with patch("rpi_weather_display.client.display._import_numpy", return_value=mock_numpy):
             # Call the method
             result = self.display._calculate_diff_bbox(old_image, new_image)
-            
+
             # Verify we called numpy methods in the expected order
             assert mock_numpy.array.call_count == 2
             assert mock_numpy.max.called
             assert mock_numpy.where.called
-            
+
             # Should return None since there are insufficient changed pixels
             assert result is None
 
@@ -1116,7 +1125,7 @@ class TestEPaperDisplay:
         with patch("rpi_weather_display.client.display._import_numpy", return_value=None):
             # Call the method directly
             result = self.display._calculate_diff_bbox(old_image, new_image)
-            
+
             # Should return None when numpy is not available
             assert result is None
 
@@ -1127,14 +1136,16 @@ class TestEPaperDisplay:
         mock_display_instance = MagicMock()
         mock_display_instance.epd = MagicMock()
         mock_display_instance.clear = MagicMock()
-        
+
         # Make the class return the instance when called
         mock_auto_epd_class.return_value = mock_display_instance
-        
-        with patch("rpi_weather_display.client.display._import_it8951", return_value=mock_auto_epd_class):
+
+        with patch(
+            "rpi_weather_display.client.display._import_it8951", return_value=mock_auto_epd_class
+        ):
             # Initialize the display
             self.display.initialize()
-            
+
             # Verify the display was created and clear was called
             assert self.display._initialized is True
             assert self.display._display == mock_display_instance
@@ -1145,22 +1156,22 @@ class TestEPaperDisplay:
         # Mock initialized display
         self.display._initialized = True
         self.display._display = MagicMock()
-        
+
         # Create test images
         last_image = MagicMock()
         new_image = MagicMock()
         new_image.mode = "L"
         new_image.size = (self.config.width, self.config.height)
-        
+
         # Set up for partial refresh
         self.display._last_image = last_image
-        
+
         # Mock _calculate_diff_bbox to return a bbox
         bbox = (10, 10, 100, 100)
         with patch.object(self.display, "_calculate_diff_bbox", return_value=bbox):
             # Call display_pil_image
             self.display.display_pil_image(new_image)
-            
+
             # Verify partial refresh was used with bbox
             self.display._display.display_partial.assert_called_once_with(new_image, bbox)
             # Verify last image was updated
@@ -1171,13 +1182,13 @@ class TestEPaperDisplay:
         # Mock initialized display without epd attribute
         self.display._initialized = True
         self.display._display = MagicMock()
-        
+
         # Remove the epd attribute
         del self.display._display.epd
-        
+
         # Call sleep - should not raise exception
         self.display.sleep()
-        
+
         # Verify no errors occurred
         assert self.display._initialized
         assert self.display._display is not None
@@ -1187,22 +1198,22 @@ class TestEPaperDisplay:
         # Mock initialized but with None display
         self.display._initialized = True
         self.display._display = None
-        
+
         # Create test images
         last_image = MagicMock()
         new_image = MagicMock()
         new_image.mode = "L"
         new_image.size = (self.config.width, self.config.height)
-        
+
         # Set up for partial refresh
         self.display._last_image = last_image
-        
+
         # Mock _calculate_diff_bbox to return a bbox
         bbox = (10, 10, 100, 100)
         with patch.object(self.display, "_calculate_diff_bbox", return_value=bbox):
             # Call display_pil_image - should not raise exception
             self.display.display_pil_image(new_image)
-            
+
             # Verify last image was still updated even though display was None
             assert self.display._last_image == new_image
 
@@ -1211,18 +1222,18 @@ class TestEPaperDisplay:
         # Mock initialized but with None display
         self.display._initialized = True
         self.display._display = None
-        
+
         # Create test image
         new_image = MagicMock()
         new_image.mode = "L"
         new_image.size = (self.config.width, self.config.height)
-        
+
         # No last image for full refresh
         self.display._last_image = None
-        
+
         # Call display_pil_image - should not raise exception
         self.display.display_pil_image(new_image)
-        
+
         # Verify last image was updated even though display was None
         assert self.display._last_image == new_image
 
@@ -1231,11 +1242,13 @@ class TestEPaperDisplay:
         # Mock _import_it8951 to return a mock class that returns None
         mock_auto_epd_class = MagicMock()
         mock_auto_epd_class.return_value = None
-        
-        with patch("rpi_weather_display.client.display._import_it8951", return_value=mock_auto_epd_class):
+
+        with patch(
+            "rpi_weather_display.client.display._import_it8951", return_value=mock_auto_epd_class
+        ):
             # Initialize the display
             self.display.initialize()
-            
+
             # When display is None, it still gets marked as initialized
             assert self.display._initialized is True
             assert self.display._display is None
@@ -1248,29 +1261,29 @@ class TestEPaperDisplay:
 
         # Mock numpy to simulate the case where we have sufficient pixels
         mock_numpy = MagicMock()
-        
+
         # Create proper mock arrays that support comparison operations
         old_array = MagicMock()
         new_array = MagicMock()
-        
+
         # Create a mock diff array with proper comparison support
         diff = MagicMock()
         diff.shape = (100, 100)
         diff.__gt__ = MagicMock()
         mask = MagicMock()
         diff.__gt__.return_value = mask
-        
+
         # Set up array operations
         mock_numpy.array.side_effect = [old_array, new_array]
-        
+
         # Mock subtraction and abs
         subtract_result = MagicMock()
         new_array.__sub__.return_value = subtract_result
         mock_numpy.abs.return_value = diff
-        
+
         # Mock max to return value above threshold
         mock_numpy.max.return_value = 20  # Above threshold
-        
+
         # Create mock non-zero arrays with sufficient elements
         # Use lists with enough elements (more than min_changed_pixels)
         nonzero_0 = list(range(200))  # 200 elements (more than min_changed_pixels)
@@ -1279,15 +1292,17 @@ class TestEPaperDisplay:
 
         # Mock the _get_bbox_dimensions method
         expected_bbox = (10, 20, 90, 80)
-        
+
         with patch("rpi_weather_display.client.display._import_numpy", return_value=mock_numpy):
-            with patch.object(self.display, "_get_bbox_dimensions", return_value=expected_bbox) as mock_get_bbox:
+            with patch.object(
+                self.display, "_get_bbox_dimensions", return_value=expected_bbox
+            ) as mock_get_bbox:
                 # Call the method
                 result = self.display._calculate_diff_bbox(old_image, new_image)
-                
+
                 # Verify we got the expected bbox
                 assert result == expected_bbox
-                
+
                 # Verify _get_bbox_dimensions was called with correct args
                 mock_get_bbox.assert_called_once_with((nonzero_0, nonzero_1), diff.shape)
 

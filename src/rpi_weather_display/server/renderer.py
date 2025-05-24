@@ -33,6 +33,7 @@ from rpi_weather_display.models.weather import (
     WeatherCondition,
     WeatherData,
 )
+from rpi_weather_display.server.browser_manager import browser_manager
 from rpi_weather_display.utils import file_utils, get_battery_icon, path_resolver
 from rpi_weather_display.utils.error_utils import get_error_location
 
@@ -650,34 +651,32 @@ class WeatherRenderer:
         Returns:
             Path to the rendered image file, or bytes if output_path is None.
         """
+        page = None
         try:
-            from playwright.async_api import async_playwright
+            # Get a page from the browser manager
+            page = await browser_manager.get_page(width, height)
 
-            # Use Playwright to render HTML to image
-            async with async_playwright() as p:
-                # Launch browser
-                browser = await p.chromium.launch(headless=True)
-                page = await browser.new_page(viewport={"width": width, "height": height})
+            # Set content
+            await page.set_content(html)
 
-                # Set content
-                await page.set_content(html)
+            # Wait for any rendering to complete
+            await page.wait_for_load_state("networkidle")
 
-                # Wait for any rendering to complete
-                await page.wait_for_load_state("networkidle")
-
-                # Take screenshot
-                if output_path:
-                    await page.screenshot(path=str(output_path), type="png")
-                    await browser.close()
-                    return output_path
-                else:
-                    screenshot: bytes = await page.screenshot(type="png")
-                    await browser.close()
-                    return screenshot
+            # Take screenshot
+            if output_path:
+                await page.screenshot(path=str(output_path), type="png")
+                return output_path
+            else:
+                screenshot: bytes = await page.screenshot(type="png")
+                return screenshot
         except Exception as e:
             error_location = get_error_location()
             self.logger.error(f"Error rendering image [{error_location}]: {e}")
             raise RuntimeError("Failed to render image with Playwright") from e
+        finally:
+            # Always close the page to free memory
+            if page:
+                await page.close()
 
     async def render_weather_image(
         self,
@@ -804,11 +803,11 @@ class WeatherRenderer:
                     max_uvi_value = data.get("max_uvi", 0.0)
                     if isinstance(max_uvi_value, int | float):
                         persisted_max_uvi = float(max_uvi_value)
-                    
+
                     timestamp_value = data.get("timestamp", 0)
                     if isinstance(timestamp_value, int | float):
                         persisted_timestamp = int(timestamp_value)
-                    
+
                     persisted_date_str = data.get("date", "")
                     if isinstance(persisted_date_str, str) and persisted_date_str:
                         persisted_date = datetime.strptime(persisted_date_str, "%Y-%m-%d").date()
