@@ -1,16 +1,17 @@
-"""Main entry point for the Raspberry Pi weather display client.
+"""Async-enabled main entry point for the Raspberry Pi weather display client.
 
-Manages the client lifecycle including hardware initialization, display updates,
-power management, and scheduled deep sleep operations for the e-paper weather display.
-This module contains the main client application class responsible for coordinating
-the various subsystems and implementing the core logic of the weather display.
+This module provides an async version of the weather display client that uses
+non-blocking I/O operations for improved power efficiency. The async implementation
+allows the CPU to enter low-power states while waiting for network operations,
+reducing overall power consumption.
 """
 
 import argparse
+import asyncio
 import time
 from pathlib import Path
 
-import requests
+import httpx
 
 from rpi_weather_display.client.display import EPaperDisplay
 from rpi_weather_display.constants import (
@@ -24,17 +25,23 @@ from rpi_weather_display.utils import PowerStateManager, path_resolver
 from rpi_weather_display.utils.battery_utils import is_charging
 from rpi_weather_display.utils.file_utils import file_exists, write_bytes
 from rpi_weather_display.utils.logging import setup_logging
+from rpi_weather_display.utils.network import AsyncNetworkManager
 from rpi_weather_display.utils.path_utils import validate_config_path
 from rpi_weather_display.utils.power_manager import PowerState
 
 
-class WeatherDisplayClient:
-    """Main client application for the weather display.
+class AsyncWeatherDisplayClient:
+    """Async-enabled weather display client.
 
-    Manages the lifecycle of the weather display client, including initialization,
-    update scheduling, power management, and hardware control. Implements an
-    event-driven architecture with callbacks for power state changes to enable
-    battery-aware behavior.
+    This class provides the same functionality as WeatherDisplayClient but uses
+    async/await patterns for network operations. This enables better power
+    efficiency by allowing the CPU to sleep during I/O wait times.
+
+    Key improvements over synchronous version:
+    - Non-blocking network operations
+    - Concurrent request capabilities
+    - Better timeout handling
+    - Reduced CPU wake time during network waits
 
     Attributes:
         config: Application configuration loaded from YAML
@@ -44,10 +51,12 @@ class WeatherDisplayClient:
         cache_dir: Directory for caching weather images
         current_image_path: Path to the most recently downloaded weather image
         _running: Flag indicating if the main loop is active
+        _http_client: Reusable async HTTP client instance
+        _semaphore: Concurrency limiter for resource protection
     """
 
     def __init__(self, config_path: Path) -> None:
-        """Initialize the client with configuration.
+        """Initialize the async client with configuration.
 
         Args:
             config_path: Path to the YAML configuration file.
@@ -56,18 +65,58 @@ class WeatherDisplayClient:
         self.config = AppConfig.from_yaml(config_path)
 
         # Set up logging
-        self.logger = setup_logging(self.config.logging, "client")
+        self.logger = setup_logging(self.config.logging, "async_client")
 
         # Initialize components
         self.power_manager = PowerStateManager(self.config)
         self.display = EPaperDisplay(self.config.display)
+        
+        # Initialize network manager for WiFi power management
+        self.network_manager = AsyncNetworkManager(self.config.power)
+        self.network_manager.set_app_config(self.config)
 
         # Image cache path using the path resolver
         self.cache_dir = path_resolver.cache_dir
         self.current_image_path = path_resolver.get_cache_file("current.png")
 
-        self.logger.info("Weather Display Client initialized")
+        # Async HTTP client with connection pooling
+        self._http_client: httpx.AsyncClient | None = None
+
+        # Semaphore for limiting concurrent operations (max 2 to prevent resource exhaustion)
+        self._semaphore = asyncio.Semaphore(2)
+
+        self.logger.info("Async Weather Display Client initialized")
         self._running = False
+
+    async def _get_http_client(self) -> httpx.AsyncClient:
+        """Get or create the async HTTP client.
+
+        Uses a single persistent client with connection pooling for efficiency.
+        The client is configured with appropriate timeouts and retry behavior.
+
+        Returns:
+            Configured async HTTP client instance.
+        """
+        if self._http_client is None:
+            # Configure the client with connection pooling and timeouts
+            timeout = httpx.Timeout(
+                connect=5.0,  # Connection timeout
+                read=self.config.server.timeout_seconds,  # Read timeout
+                write=5.0,  # Write timeout
+                pool=5.0,  # Connection pool timeout
+            )
+
+            # Create client with retry-friendly settings
+            self._http_client = httpx.AsyncClient(
+                timeout=timeout,
+                limits=httpx.Limits(
+                    max_keepalive_connections=2, max_connections=5, keepalive_expiry=30.0
+                ),
+                # HTTP/2 is optional - will use HTTP/1.1 if not available
+                http2=False,
+            )
+
+        return self._http_client
 
     def initialize(self) -> None:
         """Initialize hardware and subsystems.
@@ -92,7 +141,7 @@ class WeatherDisplayClient:
 
         self.logger.info("Hardware initialization complete")
 
-    def _handle_power_state_change(self, old_state: PowerState, new_state: PowerState) -> None:
+    def _handle_power_state_change(self, _old_state: PowerState, new_state: PowerState) -> None:
         """Handle power state changes, particularly for critical battery events.
 
         Manages transitions between power states, with special handling for the
@@ -120,8 +169,14 @@ class WeatherDisplayClient:
                 # Using 12 hours as base duration, but it will be adjusted dynamically
                 self.power_manager.schedule_wakeup(TWELVE_HOURS_IN_MINUTES, dynamic=True)
 
-                # Initiate shutdown
-                self.shutdown()
+                # Initiate shutdown - run async method in sync context
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    loop.run_until_complete(self.shutdown())
+                finally:
+                    loop.close()
+                    
                 self.power_manager.shutdown_system()
 
             except Exception as e:
@@ -133,69 +188,91 @@ class WeatherDisplayClient:
                     self.logger.error(f"Final shutdown attempt failed: {shutdown_error}")
                     raise RuntimeError("Failed to perform critical shutdown") from shutdown_error
 
-    def update_weather(self) -> bool:
-        """Update weather data from server.
+    async def update_weather(self) -> bool:
+        """Update weather data from server using async operations.
 
         Requests a new weather image from the server, sending battery status
         and system metrics as part of the request to inform server-side
-        optimizations. The received image is saved to the local cache for
-        display.
+        optimizations. Uses async HTTP operations to avoid blocking.
+
+        Key improvements:
+        - Non-blocking network I/O
+        - Better timeout handling
+        - Allows CPU to sleep during network wait
+        - Automatic WiFi power management
 
         Returns:
             True if update was successful, False otherwise.
-
-        Raises:
-            requests.RequestException: If there is an error communicating with the server.
         """
-        self.logger.info("Updating weather data from server")
+        # Use semaphore to limit concurrent operations
+        async with self._semaphore:
+            self.logger.info("Updating weather data from server (async)")
 
-        try:
-            # Get battery status for the request
+            # Get battery status and update network manager
             battery = self.power_manager.get_battery_status()
+            self.network_manager.update_battery_status(battery)
 
-            # Get system metrics
-            metrics = self.power_manager.get_system_metrics()
+            # Use network manager to ensure WiFi connectivity
+            # WiFi will be automatically disabled when we exit this context
+            async with self.network_manager.ensure_connectivity() as connected:
+                if not connected:
+                    self.logger.error("Failed to establish network connection")
+                    return False
 
-            # Create request payload
-            payload = {
-                "battery": {
-                    "level": battery.level,
-                    "state": battery.state,
-                    "voltage": battery.voltage,
-                    "current": battery.current,
-                    "temperature": battery.temperature,
-                },
-                "metrics": metrics,
-            }
+                try:
+                    # Get system metrics
+                    metrics = self.power_manager.get_system_metrics()
 
-            # Construct server URL
-            server_url = f"{self.config.server.url}:{self.config.server.port}/render"
+                    # Create request payload
+                    payload = {
+                        "battery": {
+                            "level": battery.level,
+                            "state": battery.state,
+                            "voltage": battery.voltage,
+                            "current": battery.current,
+                            "temperature": battery.temperature,
+                        },
+                        "metrics": metrics,
+                    }
 
-            # Send request to server
-            response = requests.post(
-                server_url, json=payload, timeout=self.config.server.timeout_seconds
-            )
+                    # Construct server URL
+                    server_url = f"{self.config.server.url}:{self.config.server.port}/render"
 
-            if response.status_code != 200:
-                self.logger.error(
-                    f"Server returned error: {response.status_code} - {response.text}"
-                )
-                return False
+                    # Get the HTTP client
+                    client = await self._get_http_client()
 
-            # Save the image to cache using file_utils
-            write_bytes(self.current_image_path, response.content)
+                    # Send async request to server
+                    response = await client.post(server_url, json=payload)
 
-            # Record that we updated the weather data
-            self.power_manager.record_weather_update()
+                    if response.status_code != 200:
+                        self.logger.error(
+                            f"Server returned error: {response.status_code} - {response.text}"
+                        )
+                        return False
 
-            self.logger.info("Weather data updated successfully")
-            return True
-        except requests.RequestException as e:
-            self.logger.error(f"Error communicating with server: {e}")
-            return False
-        except Exception as e:
-            self.logger.error(f"Error updating weather data: {e}")
-            return False
+                    # Save the image to cache using file_utils
+                    # Note: For a production system, we might want to make this async too
+                    write_bytes(self.current_image_path, response.content)
+
+                    # Record that we updated the weather data
+                    self.power_manager.record_weather_update()
+
+                    self.logger.info("Weather data updated successfully (async)")
+                    return True
+
+                except httpx.TimeoutException as e:
+                    self.logger.error(f"Request timeout: {e}")
+                    return False
+                except httpx.NetworkError as e:
+                    self.logger.error(f"Network error: {e}")
+                    return False
+                except httpx.HTTPError as e:
+                    self.logger.error(f"HTTP error: {e}")
+                    return False
+                except Exception as e:
+                    self.logger.error(f"Error updating weather data: {e}")
+                    return False
+            # WiFi is automatically disabled here when we exit the context manager
 
     def refresh_display(self) -> None:
         """Refresh the e-paper display with the latest weather data.
@@ -204,6 +281,9 @@ class WeatherDisplayClient:
         If no cached image is available, attempts to request a new one
         from the server first. The display refresh considers battery status
         for power-efficient partial updates.
+
+        Note: Display operations remain synchronous as they are hardware-bound
+        and don't benefit from async patterns.
 
         Raises:
             Exception: If there is an error refreshing the display.
@@ -224,7 +304,16 @@ class WeatherDisplayClient:
                 self.logger.info("Display refreshed successfully")
             else:
                 # No image available, try to update first
-                if self.update_weather():
+                # We need to run the async update in a sync context
+                # Create a new event loop for this sync method
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    update_success = loop.run_until_complete(self.update_weather())
+                finally:
+                    loop.close()
+                
+                if update_success:
                     self.display.display_image(self.current_image_path)
                     # Record that we refreshed the display
                     self.power_manager.record_display_refresh()
@@ -234,10 +323,11 @@ class WeatherDisplayClient:
         except Exception as e:
             self.logger.error(f"Error refreshing display: {e}")
 
-    def run(self) -> None:
-        """Run the client main loop.
+    async def run(self) -> None:
+        """Run the async client main loop.
 
-        Implements the main operational loop of the client application, including:
+        Implements the main operational loop of the client application using
+        async patterns for improved power efficiency:
         - Hardware initialization
         - Initial weather update and display
         - Regular checks for update conditions
@@ -247,7 +337,7 @@ class WeatherDisplayClient:
         The loop continues until interrupted or a critical battery condition
         triggers a shutdown.
         """
-        self.logger.info("Starting Weather Display Client")
+        self.logger.info("Starting Async Weather Display Client")
         self._running = True
         display_sleeping = False
 
@@ -255,8 +345,8 @@ class WeatherDisplayClient:
             # Initialize hardware
             self.initialize()
 
-            # Initial update
-            self.update_weather()
+            # Initial update (async)
+            await self.update_weather()
 
             # Initial display refresh
             self.refresh_display()
@@ -284,9 +374,9 @@ class WeatherDisplayClient:
                         # No change needed
                         pass
 
-                # Check if we should update weather
+                # Check if we should update weather (async)
                 if self.power_manager.should_update_weather():
-                    self.update_weather()
+                    await self.update_weather()
 
                 # Check if we should refresh display (but skip if display is sleeping)
                 if self.power_manager.should_refresh_display() and not display_sleeping:
@@ -301,48 +391,31 @@ class WeatherDisplayClient:
                     if self._handle_sleep(minutes):
                         break  # Exit loop if we're doing deep sleep
 
-                # Regular sleep
+                # Async sleep (allows other coroutines to run)
                 self.logger.info(f"Sleeping for {sleep_time} seconds")
-                time.sleep(sleep_time)
+                await asyncio.sleep(sleep_time)
 
         except KeyboardInterrupt:
             self.logger.info("Client interrupted by user")
             self._running = False
         except Exception as e:
-            self.logger.error(f"Error in client main loop: {e}")
+            self.logger.error(f"Error in async client main loop: {e}")
             self._running = False
         finally:
             # Clean up
-            self.shutdown()
+            await self.shutdown()
 
     def _handle_sleep(self, minutes: int) -> bool:
         """Handle deep sleep request for extended idle periods.
 
-        For longer sleep intervals, uses the PiJuice's hardware wake-up timer
-        to completely shut down the system and save power, rather than keeping
-        the CPU running. This approach dramatically reduces power consumption
-        during long idle periods by turning off the entire system except for
-        the PiJuice RTC (Real-Time Clock) that will wake the system at the
-        scheduled time.
-
-        Deep sleep is only triggered for intervals longer than 10 minutes
-        and when not in debug mode, as specified in the configuration.
-        When activated, it performs these steps:
-        1. Schedules a wakeup time with the PiJuice RTC
-        2. Puts the e-paper display into sleep mode
-        3. Initiates system shutdown
+        Identical to synchronous version as hardware operations don't benefit
+        from async patterns.
 
         Args:
             minutes: Number of minutes to schedule for deep sleep.
-                    This may be adjusted dynamically based on battery status.
 
         Returns:
             bool: True if the system will be shut down for deep sleep
-                 False if normal sleep is used instead (shorter duration or debug mode)
-
-        Raises:
-            RuntimeError: If there is a critical error during the sleep process
-                         that prevents proper shutdown.
         """
         # For battery conservation, only schedule wakeup and shutdown if:
         # 1. The sleep duration is significant (more than 10 minutes)
@@ -361,14 +434,19 @@ class WeatherDisplayClient:
 
         return False
 
-    def shutdown(self) -> None:
-        """Clean up resources and shut down the client.
+    async def shutdown(self) -> None:
+        """Clean up resources and shut down the async client.
 
         Performs an orderly shutdown of all hardware components and subsystems,
-        ensuring that resources are properly released and that the e-paper
-        display is put into sleep mode to conserve power.
+        ensuring that resources are properly released. Also closes the async
+        HTTP client to free network resources.
         """
-        self.logger.info("Shutting down Weather Display Client")
+        self.logger.info("Shutting down Async Weather Display Client")
+
+        # Close the HTTP client if it exists
+        if self._http_client:
+            await self._http_client.aclose()
+            self._http_client = None
 
         # Close the display
         if self.display:
@@ -376,17 +454,17 @@ class WeatherDisplayClient:
 
 
 def main() -> None:
-    """Main entry point for the weather display client application.
+    """Main entry point for the async weather display client application.
 
-    Parses command line arguments, loads configuration, and starts the client.
-    This is the function called when the client is invoked from the command line.
+    Parses command line arguments, loads configuration, and starts the async client.
+    This is the function called when the async client is invoked from the command line.
     """
     # Parse command line arguments
-    parser = argparse.ArgumentParser(description="Weather Display Client")
+    parser = argparse.ArgumentParser(description="Async Weather Display Client")
     parser.add_argument(
         "--config",
-        type=str,  # Changed from Path to str to allow path_resolver to handle normalization
-        default=None,  # Will use path_resolver to determine default
+        type=str,
+        default=None,
         help=f"Path to configuration file (default: {DEFAULT_CONFIG_PATH})",
     )
     args = parser.parse_args()
@@ -394,9 +472,11 @@ def main() -> None:
     # Validate and resolve the config path
     config_path = validate_config_path(args.config)
 
-    # Create and run client
-    client = WeatherDisplayClient(config_path)
-    client.run()
+    # Create and run async client
+    client = AsyncWeatherDisplayClient(config_path)
+
+    # Run the async main loop
+    asyncio.run(client.run())
 
 
 if __name__ == "__main__":

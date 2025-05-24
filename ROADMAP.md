@@ -48,10 +48,10 @@ Priority is indicated as:
 - [x] 🟢 2.2.2 Implement structural pattern matching for state handling [COMPLETED 2025-05-23]
 - [x] 🟠 2.2.3 Add exception chaining throughout error handling [COMPLETED 2025-05-23]
 
-### 2.3 Async Optimization
-- [ ] 🟠 2.3.1 Extend async/await pattern to client-side network operations [PLANNED]
-- [ ] 🟢 2.3.2 Implement async context managers for hardware resources [PLANNED]
-- [ ] 🟢 2.3.3 Add concurrency limits to prevent resource exhaustion [PLANNED]
+### 2.3 Async Optimization (COMPLETED)
+- [x] 🟠 2.3.1 Extend async/await pattern to client-side network operations [COMPLETED 2025-05-24]
+- [x] 🟢 2.3.2 Implement async context managers for hardware resources [COMPLETED 2025-05-24]
+- [x] 🟢 2.3.3 Add concurrency limits to prevent resource exhaustion [COMPLETED 2025-05-24]
 
 ### 2.4 Memory Management
 - [ ] 🔴 2.4.1 Optimize image processing for memory efficiency [PLANNED]
@@ -217,6 +217,14 @@ Priority is indicated as:
 - [ ] 🟠 6.4.5 Create guided setup wizard for first-time users [PLANNED]
 - [ ] 🟢 6.4.6 Add config templates for common use cases [PLANNED]
 
+### 6.5 Server-Side FastAPI Optimizations
+- [ ] 🟢 6.5.1 Implement background tasks for cache cleanup and maintenance [PLANNED]
+- [ ] 🟢 6.5.2 Add dependency injection for shared resources (API client, renderer) [PLANNED]
+- [ ] 🟢 6.5.3 Create middleware for request logging and performance monitoring [PLANNED]
+- [ ] 🟢 6.5.4 Add startup/shutdown events for initialization and cleanup [PLANNED]
+- [ ] 🟢 6.5.5 Implement WebSocket support for real-time preview updates [PLANNED]
+- [ ] 🟢 6.5.6 Add request context and tracing for better debugging [PLANNED]
+
 ## Phase 7: Server-Side Data Analytics & Local Sensors (Target: v1.5.0)
 
 ### 7.1 Weather Data Storage & Analytics (Docker Container)
@@ -265,7 +273,6 @@ Based on the code review findings, the following tasks should be prioritized:
 ### Short-term Priority (Q1 2025)
 1. **Phase 2.5.4** - Remove test-only methods from production
 2. **Phase 5.5.4-5.5.6** - Security improvements in deployment
-3. **Phase 2.3** - Async optimization (leverage FastAPI fully)
 
 ### Medium-term Priority (Q2 2025)
 1. **Phase 2.7** - E-Paper display optimization
@@ -277,10 +284,10 @@ Based on the code review findings, the following tasks should be prioritized:
 | Phase | Not Started | In Progress | Completed | Total |
 |-------|------------|-------------|-----------|-------|
 | 1     | 0          | 0           | 14        | 14    |
-| 2     | 26         | 0           | 6         | 32    |
+| 2     | 23         | 0           | 9         | 32    |
 | 3     | 12         | 0           | 0         | 12    |
 | 4     | 12         | 0           | 0         | 12    |
 | 5     | 17         | 0           | 2         | 19    |
-| 6     | 9          | 0           | 0         | 9     |
+| 6     | 15         | 0           | 0         | 15    |
 | 7     | 18         | 0           | 0         | 18    |
-| Total | 94         | 0           | 22        | 116   |
+| Total | 97         | 0           | 25        | 122   |

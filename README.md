@@ -92,6 +92,15 @@ A power-optimized weather display solution for Raspberry Pi Zero 2 W with e-pape
   - Implemented structural pattern matching (Python 3.10+) for cleaner state handling
   - Maintained 95%+ test coverage while improving type strictness and code readability
 
+- **Async Architecture (v0.3.0)**:
+  - Migrated client to async/await for non-blocking I/O operations
+  - Replaced `requests` with `httpx` for async HTTP operations
+  - Implemented async context managers for automatic WiFi power management
+  - Added semaphore-based concurrency limiting to prevent resource exhaustion
+  - Improved battery life through CPU sleep during network operations
+  - Integrated AsyncNetworkManager for automatic WiFi enable/disable around network operations
+  - Battery-aware WiFi power modes (aggressive power saving when battery is low)
+
 ## User Experience
 
 The weather display shows a comprehensive dashboard including:
@@ -239,9 +248,10 @@ The project uses a client-server architecture to maximize battery life:
   - FastAPI web server for client requests
 
 - **Client**: Focuses on power efficiency:
+  - Uses async/await for non-blocking I/O operations
   - Wakes up periodically to request updates
   - Displays pre-rendered images on e-paper display
-  - Manages power and sleep cycles
+  - Manages power and sleep cycles with async context managers
   - Implements aggressive power-saving measures
   - Uses PiJuice for battery monitoring and deep sleep
 

@@ -62,7 +62,7 @@ poetry run playwright install
 # Start the server with a config file
 poetry run server --config config.yaml
 
-# Start the client with a config file
+# Start the client with a config file (now async by default)
 poetry run client --config config.yaml
 
 # Preview dashboard in browser (while server is running)
@@ -117,16 +117,19 @@ Key server files:
 ### Client Component
 
 The client focuses on energy efficiency:
+- Uses async/await for non-blocking I/O operations
 - Wakes periodically from sleep mode
-- Requests pre-rendered images from server
+- Requests pre-rendered images from server using httpx (async HTTP)
 - Displays images on e-ink display
-- Manages power-saving features
+- Manages power-saving features with async context managers
 - Handles deep sleep and wake cycles
 - Monitors battery status
+- Implements semaphore-based concurrency limiting
 
 Key client files:
-- `src/rpi_weather_display/client/main.py`: Main client application
+- `src/rpi_weather_display/client/main.py`: Async client application with non-blocking I/O
 - `src/rpi_weather_display/client/display.py`: E-ink display interface
+- `src/rpi_weather_display/utils/network.py`: Async network management with WiFi power control
 
 ### Shared Components
 
@@ -206,6 +209,35 @@ The test fixtures in `tests/conftest.py` provide:
 - Mock battery status
 - FastAPI test client
 - Path handling utilities
+
+## Async Architecture
+
+The client uses async/await patterns throughout for improved power efficiency:
+
+### Key Async Components
+- **AsyncWeatherDisplayClient**: Main client class with async update and run methods
+- **AsyncNetworkManager**: Manages WiFi with async context managers for automatic power control
+- **httpx.AsyncClient**: Replaces requests for non-blocking HTTP operations
+- **asyncio.Semaphore**: Limits concurrent operations to prevent resource exhaustion
+
+### Power Efficiency Benefits
+- CPU sleeps during network I/O instead of busy-waiting
+- Concurrent operations reduce total wake time
+- Automatic WiFi disable after use saves significant power
+- Better responsiveness to power state changes
+
+### Async Patterns Used
+```python
+# Async context manager for network operations
+async with network_manager.ensure_connectivity() as connected:
+    if connected:
+        await fetch_data()
+# WiFi automatically disabled on exit
+
+# Semaphore for resource limiting
+async with self._semaphore:
+    response = await client.post(url, json=data)
+```
 
 ## Debugging and Development
 
@@ -432,6 +464,34 @@ When `development_mode: true` is set in configuration:
 - I prefer a more friendly tone
 - I prefer to know which files are being modified
 - I like to know the context behind any changes and suggestions
+
+## Testing Best Practices
+
+### AsyncMock RuntimeWarning Resolution
+
+When encountering `RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited`:
+
+1. **Root Cause**: This occurs when an `AsyncMock()` creates a coroutine that is never awaited, often due to mocking the await mechanism itself.
+
+2. **Common Scenario**: 
+   ```python
+   # WRONG - causes warning
+   mock_client_instance.run = AsyncMock()  # Creates coroutine
+   with patch("asyncio.run"):  # But asyncio.run is mocked and won't await it
+       main()  # Leaves unawaited coroutine
+   ```
+
+3. **Solution**:
+   ```python
+   # CORRECT - no warning
+   mock_client_instance.run = Mock()  # Regular Mock when await mechanism is mocked
+   ```
+
+4. **Key Points**:
+   - MagicMock and patch.dict do NOT cause async warnings
+   - Only AsyncMock creates coroutines that can be left unawaited
+   - Test pollution can make warnings appear in unrelated tests
+   - When mocking async methods that won't be awaited (because asyncio.run is mocked), use Mock instead of AsyncMock
 
 ## Code Review
 

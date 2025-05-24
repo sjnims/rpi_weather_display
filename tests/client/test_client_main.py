@@ -1,731 +1,963 @@
-"""Tests for the client main module."""
+"""Tests for the async weather display client."""
 
-
-# pyright: reportPrivateUsage=false
-# ^ Allows tests to access protected members
-# pyright: reportAttributeAccessIssue=false
-# pyright: reportFunctionMemberAccess=false
-# ^ Ignores "Cannot access attribute X for class function"
-
+import asyncio
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from typing import Any
+from unittest.mock import AsyncMock, Mock, patch
 
+import httpx
 import pytest
-import requests
 
-from rpi_weather_display.client.main import WeatherDisplayClient, main
-from rpi_weather_display.models.config import AppConfig
+from rpi_weather_display.client.main import AsyncWeatherDisplayClient, main
 from rpi_weather_display.models.system import BatteryState, BatteryStatus
+from rpi_weather_display.utils.power_manager import PowerState
 
 
-@pytest.fixture()
-def config_path(tmp_path: Path) -> Path:
-    """Create a temporary config file for testing."""
-    config_content = """
-    weather:
-      api_key: test_key
-      location:
-        lat: 0.0
-        lon: 0.0
-      update_interval_minutes: 30
-    display:
-      width: 1872
-      height: 1404
-      rotate: 0
-      partial_refresh: true
-      refresh_interval_minutes: 30
-    power:
-      quiet_hours_start: "23:00"
-      quiet_hours_end: "06:00"
-      low_battery_threshold: 20
-      critical_battery_threshold: 10
-      wake_up_interval_minutes: 60
-      wifi_timeout_seconds: 30
-    server:
-      url: http://localhost
-      port: 8000
-      timeout_seconds: 30
-    logging:
-      level: DEBUG
-      file: null
-    debug: true
-    """
-    config_file = tmp_path / "config.yaml"
-    config_file.write_text(config_content)
-    return config_file
+class TestAsyncWeatherDisplayClient:
+    """Test the AsyncWeatherDisplayClient class."""
+    
+    def _mock_network_manager(self, client: AsyncWeatherDisplayClient, connected: bool = True) -> None:
+        """Helper to mock network manager for tests."""
+        # Create network manager as a Mock with proper async context manager
+        client.network_manager = Mock()
+        client.network_manager.update_battery_status = Mock()
+        
+        # Create a proper async context manager mock
+        context_manager = AsyncMock()
+        context_manager.__aenter__ = AsyncMock(return_value=connected)
+        context_manager.__aexit__ = AsyncMock(return_value=None)
+        
+        # Use a lambda to return the context manager to avoid async detection issues
+        client.network_manager.ensure_connectivity = lambda: context_manager
 
+    @pytest.fixture()
+    def mock_config_path(self, tmp_path: Path) -> Path:
+        """Create a mock configuration file."""
+        config_path = tmp_path / "test_config.yaml"
+        config_content = """
+weather:
+  api_key: "test_key"
+  location:
+    lat: 40.7128
+    lon: -74.0060
+  city_name: "New York"
+display:
+  width: 800
+  height: 600
+server:
+  url: "http://localhost"
+  port: 8000
+  timeout_seconds: 30
+power:
+  quiet_hours_start: "22:00"
+  quiet_hours_end: "06:00"
+logging:
+  level: "INFO"
+debug: false
+"""
+        config_path.write_text(config_content)
+        return config_path
 
-@pytest.fixture()
-def mock_display() -> MagicMock:
-    """Create a mock display."""
-    display = MagicMock()
-    display.initialize = MagicMock()
-    display.display_image = MagicMock()
-    display.close = MagicMock()
-    display.sleep = MagicMock()
-    return display
+    @pytest.fixture()
+    def async_client(self, mock_config_path: Path) -> AsyncWeatherDisplayClient:
+        """Create an AsyncWeatherDisplayClient instance."""
+        with patch("rpi_weather_display.client.main.PowerStateManager"), \
+             patch("rpi_weather_display.client.main.EPaperDisplay"), \
+             patch("rpi_weather_display.client.main.AsyncNetworkManager"), \
+             patch("rpi_weather_display.client.main.setup_logging") as mock_logging:
+            # Mock the logger to prevent stdout pollution
+            mock_logger = Mock()
+            mock_logger.info = Mock()
+            mock_logger.error = Mock()
+            mock_logger.warning = Mock()
+            mock_logger.debug = Mock()
+            mock_logging.return_value = mock_logger
+            
+            client = AsyncWeatherDisplayClient(mock_config_path)
+            # Mock the http client
+            client._http_client = AsyncMock(spec=httpx.AsyncClient)
+            return client
 
-
-@pytest.fixture()
-def mock_power_manager() -> MagicMock:
-    """Create a mock power manager."""
-    power_manager = MagicMock()
-    power_manager.initialize = MagicMock()
-    power_manager.get_battery_status = MagicMock(
-        return_value=BatteryStatus(
-            level=75,
-            voltage=3.7,
-            current=100.0,
-            temperature=25.0,
-            state=BatteryState.DISCHARGING,
-            time_remaining=1200,  # 20 hours
-        )
-    )
-    power_manager.get_system_metrics = MagicMock(
-        return_value={
-            "cpu_temp": 45.0,
-            "cpu_usage": 10.5,
-            "memory_usage": 25.2,
-            "disk_usage": 42.0,
-        }
-    )
-    power_manager.schedule_wakeup = MagicMock(return_value=True)
-    power_manager.shutdown_system = MagicMock()
-    power_manager.should_update_weather = MagicMock(return_value=False)
-    power_manager.should_refresh_display = MagicMock(return_value=False)
-    power_manager.calculate_sleep_time = MagicMock(return_value=60)
-    power_manager.record_display_refresh = MagicMock()
-    power_manager.record_weather_update = MagicMock()
-    return power_manager
-
-
-@pytest.fixture()
-def client(
-    config_path: Path,
-    mock_display: MagicMock,
-    mock_power_manager: MagicMock,
-) -> WeatherDisplayClient:
-    """Create a WeatherDisplayClient with mocked components."""
-    with (
-        patch("rpi_weather_display.client.main.EPaperDisplay", return_value=mock_display),
-        patch("rpi_weather_display.client.main.PowerStateManager", return_value=mock_power_manager),
-    ):
-        client = WeatherDisplayClient(config_path)
-        return client
-
-
-class TestWeatherDisplayClient:
-    """Test suite for the WeatherDisplayClient class."""
-
-    def test_init(self, config_path: Path) -> None:
+    def test_init(self, mock_config_path: Path) -> None:
         """Test client initialization."""
-        with (
-            patch("rpi_weather_display.client.main.EPaperDisplay") as mock_display_cls,
-            patch("rpi_weather_display.client.main.PowerStateManager") as mock_power_cls,
-        ):
-            client = WeatherDisplayClient(config_path)
+        with patch("rpi_weather_display.client.main.PowerStateManager") as mock_power, \
+             patch("rpi_weather_display.client.main.EPaperDisplay") as mock_display, \
+             patch("rpi_weather_display.client.main.AsyncNetworkManager") as mock_network:
+            
+            client = AsyncWeatherDisplayClient(mock_config_path)
+            
+            assert client.config is not None
+            assert client.logger is not None
+            assert client._running is False
+            assert client._http_client is None
+            assert client._semaphore._value == 2  # Max concurrent operations
+            
+            mock_power.assert_called_once()
+            mock_display.assert_called_once()
+            mock_network.assert_called_once()
 
-            # Check that configuration is loaded
-            assert isinstance(client.config, AppConfig)
-
-            # Check that components are initialized
-            mock_power_cls.assert_called_once()
-            mock_display_cls.assert_called_once()
-
-            # Check that cache directory is created
-            assert client.cache_dir.exists()
-            assert client.current_image_path.name == "current.png"
-
-    def test_initialize(self, client: WeatherDisplayClient) -> None:
+    def test_initialize(self, async_client: AsyncWeatherDisplayClient) -> None:
         """Test hardware initialization."""
-        client.initialize()
+        async_client.power_manager = Mock()
+        async_client.display = Mock()
+        
+        async_client.initialize()
+        
+        async_client.power_manager.initialize.assert_called_once()
+        async_client.power_manager.register_state_change_callback.assert_called_once()
+        async_client.display.initialize.assert_called_once()
 
-        # Verify components are initialized
-        client.power_manager.initialize.assert_called_once()
-        client.display.initialize.assert_called_once()
+    @pytest.mark.asyncio()
+    async def test_get_http_client(self, async_client: AsyncWeatherDisplayClient) -> None:
+        """Test HTTP client creation and reuse."""
+        # First call should create a new client
+        async_client._http_client = None
+        client1 = await async_client._get_http_client()
+        assert isinstance(client1, httpx.AsyncClient)
+        
+        # Second call should return the same client
+        client2 = await async_client._get_http_client()
+        assert client1 is client2
 
-    def test_update_weather_success(self, client: WeatherDisplayClient) -> None:
+    @pytest.mark.asyncio()
+    async def test_update_weather_success(self, async_client: AsyncWeatherDisplayClient) -> None:
         """Test successful weather update."""
-        # Mock successful response from server
-        mock_response = MagicMock()
+        # Mock dependencies
+        async_client.power_manager = Mock()
+        async_client.power_manager.get_battery_status.return_value = BatteryStatus(
+            level=80, state=BatteryState.DISCHARGING, voltage=3.7, current=-0.5, temperature=25.0
+        )
+        async_client.power_manager.get_system_metrics.return_value = {
+            "cpu_percent": 10.0,
+            "memory_percent": 30.0
+        }
+        
+        # Mock network manager
+        self._mock_network_manager(async_client, connected=True)
+        
+        # Mock HTTP response
+        mock_response = AsyncMock()
         mock_response.status_code = 200
-        mock_response.content = b"image data"
-
-        with patch("requests.post", return_value=mock_response) as mock_post:
-            result = client.update_weather()
-
-            # Verify result
+        mock_response.content = b"image_data"
+        
+        async_client._http_client = AsyncMock()
+        async_client._http_client.post = AsyncMock(return_value=mock_response)
+        
+        # Mock file write
+        with patch("rpi_weather_display.client.main.write_bytes") as mock_write:
+            result = await async_client.update_weather()
+            
             assert result is True
+            async_client.network_manager.update_battery_status.assert_called_once()  # type: ignore[attr-defined]
+            async_client._http_client.post.assert_called_once()
+            mock_write.assert_called_once()
+            async_client.power_manager.record_weather_update.assert_called_once()
 
-            # Verify request was made correctly
-            mock_post.assert_called_once()
-            args, kwargs = mock_post.call_args
-            assert args[0] == "http://localhost:8000/render"
-            assert "battery" in kwargs["json"]
-            assert "metrics" in kwargs["json"]
+    @pytest.mark.asyncio()
+    async def test_update_weather_no_network(self, async_client: AsyncWeatherDisplayClient) -> None:
+        """Test weather update when network connection fails."""
+        # Mock dependencies
+        async_client.power_manager = Mock()
+        async_client.power_manager.get_battery_status.return_value = BatteryStatus(
+            level=80, state=BatteryState.DISCHARGING, voltage=3.7, current=-0.5, temperature=25.0
+        )
+        
+        # Mock network manager to return no connection
+        self._mock_network_manager(async_client, connected=False)
+        
+        result = await async_client.update_weather()
+        
+        assert result is False
+        async_client.network_manager.update_battery_status.assert_called_once()  # type: ignore[attr-defined]
+        # HTTP client should not be called if no network
+        if async_client._http_client and hasattr(async_client._http_client, 'post'):
+            async_client._http_client.post.assert_not_called()  # type: ignore[attr-defined]
 
-            # Verify the correct battery information is in the payload
-            battery_data = kwargs["json"]["battery"]
-            assert "level" in battery_data
-            assert "state" in battery_data
-            assert "voltage" in battery_data
-            assert "current" in battery_data
-            assert "temperature" in battery_data
-
-            # Verify image was saved
-            assert client.current_image_path.exists()
-
-            # Verify record_weather_update was called
-            client.power_manager.record_weather_update.assert_called_once()
-
-    def test_update_weather_server_error(self, client: WeatherDisplayClient) -> None:
+    @pytest.mark.asyncio()
+    async def test_update_weather_server_error(self, async_client: AsyncWeatherDisplayClient) -> None:
         """Test weather update with server error."""
-        # Mock error response from server
-        mock_response = MagicMock()
+        # Mock dependencies
+        async_client.power_manager = Mock()
+        async_client.power_manager.get_battery_status.return_value = BatteryStatus(
+            level=80, state=BatteryState.DISCHARGING, voltage=3.7, current=-0.5, temperature=25.0
+        )
+        async_client.power_manager.get_system_metrics.return_value = {}
+        
+        # Mock network manager
+        self._mock_network_manager(async_client, connected=True)
+        
+        # Mock HTTP error response
+        mock_response = AsyncMock()
         mock_response.status_code = 500
         mock_response.text = "Internal Server Error"
+        
+        async_client._http_client = AsyncMock()
+        async_client._http_client.post = AsyncMock(return_value=mock_response)
+        
+        result = await async_client.update_weather()
+        
+        assert result is False
+        async_client.power_manager.record_weather_update.assert_not_called()
 
-        with patch("requests.post", return_value=mock_response) as mock_post:
-            result = client.update_weather()
+    @pytest.mark.asyncio()
+    async def test_update_weather_network_error(self, async_client: AsyncWeatherDisplayClient) -> None:
+        """Test weather update with network error."""
+        # Mock dependencies
+        async_client.power_manager = Mock()
+        async_client.power_manager.get_battery_status.return_value = BatteryStatus(
+            level=80, state=BatteryState.DISCHARGING, voltage=3.7, current=-0.5, temperature=25.0
+        )
+        async_client.power_manager.get_system_metrics.return_value = {}
+        
+        # Mock network manager
+        self._mock_network_manager(async_client, connected=True)
+        
+        # Mock network error
+        async_client._http_client = AsyncMock()
+        async_client._http_client.post = AsyncMock(
+            side_effect=httpx.NetworkError("Connection failed")
+        )
+        
+        result = await async_client.update_weather()
+        
+        assert result is False
 
-            # Verify result
-            assert result is False
+    @pytest.mark.asyncio()
+    async def test_update_weather_timeout(self, async_client: AsyncWeatherDisplayClient) -> None:
+        """Test weather update with timeout."""
+        # Mock dependencies
+        async_client.power_manager = Mock()
+        async_client.power_manager.get_battery_status.return_value = BatteryStatus(
+            level=80, state=BatteryState.DISCHARGING, voltage=3.7, current=-0.5, temperature=25.0
+        )
+        async_client.power_manager.get_system_metrics.return_value = {}
+        
+        # Mock network manager
+        self._mock_network_manager(async_client, connected=True)
+        
+        # Mock timeout error
+        async_client._http_client = AsyncMock()
+        async_client._http_client.post = AsyncMock(
+            side_effect=httpx.TimeoutException("Request timed out")
+        )
+        
+        result = await async_client.update_weather()
+        
+        assert result is False
 
-            # Verify request was made
-            mock_post.assert_called_once()
+    @pytest.mark.asyncio()
+    async def test_update_weather_http_error(self, async_client: AsyncWeatherDisplayClient) -> None:
+        """Test weather update with HTTP error."""
+        # Mock dependencies
+        async_client.power_manager = Mock()
+        async_client.power_manager.get_battery_status.return_value = BatteryStatus(
+            level=80, state=BatteryState.DISCHARGING, voltage=3.7, current=-0.5, temperature=25.0
+        )
+        async_client.power_manager.get_system_metrics.return_value = {}
+        
+        # Mock network manager
+        self._mock_network_manager(async_client, connected=True)
+        
+        # Mock HTTP error
+        async_client._http_client = AsyncMock()
+        async_client._http_client.post = AsyncMock(
+            side_effect=httpx.HTTPError("HTTP error occurred")
+        )
+        
+        result = await async_client.update_weather()
+        
+        assert result is False
 
-    def test_update_weather_request_exception(self, client: WeatherDisplayClient) -> None:
-        """Test weather update with request exception."""
-        with patch(
-            "requests.post", side_effect=requests.RequestException("Connection error")
-        ) as mock_post:
-            result = client.update_weather()
+    @pytest.mark.asyncio()
+    async def test_update_weather_general_exception(self, async_client: AsyncWeatherDisplayClient) -> None:
+        """Test weather update with general exception."""
+        # Mock dependencies
+        async_client.power_manager = Mock()
+        async_client.power_manager.get_battery_status.return_value = BatteryStatus(
+            level=80, state=BatteryState.DISCHARGING, voltage=3.7, current=-0.5, temperature=25.0
+        )
+        async_client.power_manager.get_system_metrics.return_value = {}
+        
+        # Mock network manager
+        self._mock_network_manager(async_client, connected=True)
+        
+        # Mock general exception
+        async_client._http_client = AsyncMock()
+        async_client._http_client.post = AsyncMock(
+            side_effect=Exception("Unexpected error")
+        )
+        
+        result = await async_client.update_weather()
+        
+        assert result is False
 
-            # Verify result
-            assert result is False
-
-            # Verify request was attempted
-            mock_post.assert_called_once()
-
-    def test_update_weather_generic_exception(self, client: WeatherDisplayClient) -> None:
-        """Test weather update with generic exception."""
-        with patch("requests.post", side_effect=Exception("Unexpected error")) as mock_post:
-            result = client.update_weather()
-
-            # Verify result
-            assert result is False
-
-            # Verify request was attempted
-            mock_post.assert_called_once()
-
-    def test_refresh_display_with_cached_image(
-        self, client: WeatherDisplayClient, tmp_path: Path
-    ) -> None:
+    def test_refresh_display_with_cached_image(self, async_client: AsyncWeatherDisplayClient) -> None:
         """Test display refresh with cached image."""
-        # Create a mock cached image
-        client.current_image_path.parent.mkdir(exist_ok=True)
-        with open(client.current_image_path, "wb") as f:
-            f.write(b"test image data")
+        # Mock dependencies
+        async_client.power_manager = Mock()
+        async_client.power_manager.get_battery_status.return_value = BatteryStatus(
+            level=80, state=BatteryState.DISCHARGING, voltage=3.7, current=-0.5, temperature=25.0
+        )
+        async_client.display = Mock()
+        
+        # Mock cached image exists
+        with patch("rpi_weather_display.client.main.file_exists", return_value=True):
+            async_client.refresh_display()
+            
+            async_client.display.update_battery_status.assert_called_once()
+            async_client.display.display_image.assert_called_once()
+            async_client.power_manager.record_display_refresh.assert_called_once()
 
-        client.refresh_display()
-
-        # Verify display was refreshed with the image
-        client.display.display_image.assert_called_once_with(client.current_image_path)
-
-        # Verify record_display_refresh was called
-        client.power_manager.record_display_refresh.assert_called_once()
-
-    def test_refresh_display_no_cached_image_update_success(
-        self, client: WeatherDisplayClient
-    ) -> None:
-        """Test display refresh with no cached image and successful update."""
-        # Mock that the current_image_path.exists() returns False to simulate no cached image
-        with (
-            patch.object(Path, "exists", return_value=False),
-            patch.object(client, "update_weather", return_value=True) as mock_update,
-        ):
-            client.refresh_display()
-
+    def test_refresh_display_no_cached_image_update_success(self, async_client: AsyncWeatherDisplayClient) -> None:
+        """Test display refresh without cached image - update succeeds."""
+        # Mock dependencies
+        async_client.power_manager = Mock()
+        async_client.power_manager.get_battery_status.return_value = BatteryStatus(
+            level=80, state=BatteryState.DISCHARGING, voltage=3.7, current=-0.5, temperature=25.0
+        )
+        async_client.display = Mock()
+        
+        # Mock the update_weather to return True
+        async_client.update_weather = AsyncMock(return_value=True)
+        
+        # Mock no cached image exists
+        with patch("rpi_weather_display.client.main.file_exists", return_value=False), \
+             patch("rpi_weather_display.client.main.asyncio.new_event_loop") as mock_loop_fn, \
+             patch("rpi_weather_display.client.main.asyncio.set_event_loop"):
+            
+            # Mock event loop to actually run the coroutine
+            mock_loop = Mock()
+            mock_loop_fn.return_value = mock_loop
+            
+            # Make run_until_complete actually execute the coroutine
+            async def run_coro(coro: Any) -> Any:
+                return await coro
+            
+            mock_loop.run_until_complete.side_effect = lambda coro: asyncio.run(run_coro(coro))
+            
+            async_client.refresh_display()
+            
             # Verify update was attempted
-            mock_update.assert_called_once()
+            mock_loop.run_until_complete.assert_called_once()
+            mock_loop.close.assert_called_once()
+            
+            # Verify display was updated
+            async_client.display.update_battery_status.assert_called_once()
+            async_client.display.display_image.assert_called_once()
+            async_client.power_manager.record_display_refresh.assert_called_once()
 
-            # Verify display was refreshed
-            client.display.display_image.assert_called_once()
-
-    def test_refresh_display_no_cached_image_update_failure(
-        self, client: WeatherDisplayClient
-    ) -> None:
-        """Test display refresh with no cached image and failed update."""
-        # Mock that the current_image_path.exists() returns False to simulate no cached image
-        with (
-            patch.object(Path, "exists", return_value=False),
-            patch.object(client, "update_weather", return_value=False) as mock_update,
-        ):
-            client.refresh_display()
-
+    def test_refresh_display_no_cached_image_update_fails(self, async_client: AsyncWeatherDisplayClient) -> None:
+        """Test display refresh without cached image - update fails."""
+        # Mock dependencies
+        async_client.power_manager = Mock()
+        async_client.power_manager.get_battery_status.return_value = BatteryStatus(
+            level=80, state=BatteryState.DISCHARGING, voltage=3.7, current=-0.5, temperature=25.0
+        )
+        async_client.display = Mock()
+        
+        # Mock the update_weather to return False
+        async_client.update_weather = AsyncMock(return_value=False)
+        
+        # Mock no cached image exists
+        with patch("rpi_weather_display.client.main.file_exists", return_value=False), \
+             patch("rpi_weather_display.client.main.asyncio.new_event_loop") as mock_loop_fn, \
+             patch("rpi_weather_display.client.main.asyncio.set_event_loop"):
+            
+            # Mock event loop to actually run the coroutine
+            mock_loop = Mock()
+            mock_loop_fn.return_value = mock_loop
+            
+            # Make run_until_complete actually execute the coroutine
+            async def run_coro(coro: Any) -> Any:
+                return await coro
+            
+            mock_loop.run_until_complete.side_effect = lambda coro: asyncio.run(run_coro(coro))
+            
+            async_client.refresh_display()
+            
             # Verify update was attempted
-            mock_update.assert_called_once()
+            mock_loop.run_until_complete.assert_called_once()
+            mock_loop.close.assert_called_once()
+            
+            # Verify display was NOT updated
+            async_client.display.display_image.assert_not_called()
+            async_client.power_manager.record_display_refresh.assert_not_called()
 
-            # Verify display was not refreshed
-            client.display.display_image.assert_not_called()
-
-    def test_refresh_display_no_cached_image_update_failure_log(
-        self, client: WeatherDisplayClient
-    ) -> None:
-        """Test that error is logged when no cached image and update fails."""
-        # Set up a patched logger to verify the error message
-        with (
-            patch.object(Path, "exists", return_value=False),
-            patch.object(client, "update_weather", return_value=False),
-            patch.object(client.logger, "error") as mock_error,
-            patch.object(client.logger, "info"),
-        ):
-            # Execute refresh_display
-            client.refresh_display()
-
-            # Assert that the error message was logged
-            # This directly checks line 135 in the codebase
-            mock_error.assert_any_call("No image available and failed to update")
-
-    def test_refresh_display_exception(self, client: WeatherDisplayClient) -> None:
+    def test_refresh_display_exception(self, async_client: AsyncWeatherDisplayClient) -> None:
         """Test display refresh with exception."""
-        # Mock exception during display
-        client.display.display_image.side_effect = Exception("Display error")
+        # Mock dependencies
+        async_client.power_manager = Mock()
+        async_client.power_manager.get_battery_status.return_value = BatteryStatus(
+            level=80, state=BatteryState.DISCHARGING, voltage=3.7, current=-0.5, temperature=25.0
+        )
+        async_client.display = Mock()
+        async_client.display.display_image.side_effect = Exception("Display error")
+        
+        # Mock cached image exists
+        with patch("rpi_weather_display.client.main.file_exists", return_value=True):
+            # Should not raise exception
+            async_client.refresh_display()
+            
+            # Verify exception was caught
+            async_client.display.display_image.assert_called_once()
 
-        # Create a mock cached image
-        client.current_image_path.parent.mkdir(exist_ok=True)
-        with open(client.current_image_path, "wb") as f:
-            f.write(b"test image data")
-
-        # This should not raise an exception
-        client.refresh_display()
-
-        # Verify display was attempted
-        client.display.display_image.assert_called_once()
-
-    def test_run(self, client: WeatherDisplayClient) -> None:
-        """Test the main run method."""
-        # Mock methods
-        with (
-            patch.object(client, "initialize") as mock_initialize,
-            patch.object(client, "update_weather") as mock_update,
-            patch.object(client, "refresh_display") as mock_refresh,
-            # We need to create _running since we're mocking it and it needs to be True initially
-            patch.object(client, "_running", True, create=True),
-            # Set _running to False after first loop iteration with a side effect
-            patch.object(client, "power_manager") as mock_power_manager,
-            # After one iteration, set _running to False
-            patch("time.sleep", side_effect=lambda x: setattr(client, "_running", False)),
-        ):
-            # Configure the power_manager mocks with specific behaviors
-            mock_power_manager.should_update_weather.return_value = True
-            mock_power_manager.should_refresh_display.return_value = True
-            mock_power_manager.calculate_sleep_time.return_value = 5  # Short sleep time
-
-            # Execute the run method
-            client.run()
-
-            # Verify initialization
-            mock_initialize.assert_called_once()
-
-            # Verify initial update and refresh
-            mock_update.assert_called()
-            mock_refresh.assert_called()
-
-            # Verify power manager methods were called
-            mock_power_manager.should_update_weather.assert_called()
-            mock_power_manager.should_refresh_display.assert_called()
-            mock_power_manager.calculate_sleep_time.assert_called()
-
-    def test_quiet_hours_display_sleep_mode(self, client: WeatherDisplayClient) -> None:
-        """Test display sleep during quiet hours."""
-        # Import PowerState
-        from rpi_weather_display.models.system import BatteryState, BatteryStatus
-        from rpi_weather_display.utils.power_manager import PowerState
-
-        # Mock methods
-        with (
-            patch.object(client, "initialize"),
-            patch.object(client, "update_weather"),
-            patch.object(client, "refresh_display"),
-            # We need to create _running since we're mocking it
-            patch.object(client, "_running", True, create=True),
-            patch("time.sleep", side_effect=lambda x: setattr(client, "_running", False)),
-        ):
-            # First test case: Quiet hours and not charging - should put display to sleep
-            # Configure the power manager
-            client.power_manager.get_current_state = MagicMock(return_value=PowerState.QUIET_HOURS)
-            client.power_manager.get_battery_status = MagicMock(
-                return_value=BatteryStatus(
-                    level=50,
-                    voltage=3.7,
-                    current=100.0,
-                    temperature=25.0,
-                    state=BatteryState.DISCHARGING,
-                    time_remaining=1200,
-                )
-            )
-
-            # Reset the display sleep method mock
-            client.display.sleep.reset_mock()
-
-            # Execute the run method (will exit after one iteration due to our mock)
-            client.run()
-
-            # The display should be put to sleep when in quiet hours and not charging
-            client.display.sleep.assert_called_once()
-
-            # Reset the mocks for second test case
-            client._running = True
-            client.display.sleep.reset_mock()
-            client.refresh_display.reset_mock()
-
-            # Second test case: Quiet hours and charging - should NOT put display to sleep
-            client.power_manager.get_current_state = MagicMock(return_value=PowerState.QUIET_HOURS)
-            client.power_manager.get_battery_status = MagicMock(
-                return_value=BatteryStatus(
-                    level=50,
-                    voltage=3.7,
-                    current=100.0,
-                    temperature=25.0,
-                    state=BatteryState.CHARGING,
-                    time_remaining=None,
-                )
-            )
-
-            # Execute the run method again
-            client.run()
-
-            # The display should NOT be put to sleep when in quiet hours and charging
-            client.display.sleep.assert_not_called()
-
-            # Reset the mocks for third test case
-            client._running = True
-            client.display.sleep.reset_mock()
-            client.refresh_display.reset_mock()
-
-            # Third test case: Display is already asleep, but quiet hours end
-            # Set display_sleeping to True via direct attribute (mimicking earlier state)
-            client.display_sleeping = True
-
-            # Now we're not in quiet hours
-            client.power_manager.get_current_state = MagicMock(return_value=PowerState.NORMAL)
-
-            # Execute the run method again
-            client.run()
-
-            # The display should be refreshed to wake it up
-            client.refresh_display.assert_called()
-
-    def test_handle_sleep_deep_sleep_scenario(self, client: WeatherDisplayClient) -> None:
-        """Test the handle_sleep method's deep sleep functionality directly."""
-        # Set debug mode to False so deep sleep is allowed
-        client.config.debug = False
-
-        # Reset all mocks to make sure we have a clean state
-        client.power_manager.schedule_wakeup.reset_mock()
-        client.power_manager.shutdown_system.reset_mock()
-        client.display.sleep.reset_mock()
-
-        # Call _handle_sleep directly with a long duration
-        result = client._handle_sleep(30)  # 30 minutes
-
-        # Verify the result indicates deep sleep
-        assert result is True
-
-        # Verify the correct methods were called for deep sleep
-        client.power_manager.schedule_wakeup.assert_called_once_with(30, dynamic=True)
-        client.display.sleep.assert_called_once()
-        client.power_manager.shutdown_system.assert_called_once()
-
-    def test_run_keyboard_interrupt(self, client: WeatherDisplayClient) -> None:
-        """Test run method with keyboard interrupt."""
-        # Mock initialization to raise KeyboardInterrupt
-        client.initialize = MagicMock(side_effect=KeyboardInterrupt())
-
-        # Mock shutdown
-        with patch.object(client, "shutdown") as mock_shutdown:
-            client.run()
-
-            # Verify shutdown was called
-            mock_shutdown.assert_called_once()
-
-    def test_run_exception(self, client: WeatherDisplayClient) -> None:
-        """Test run method with exception."""
-        # Mock initialization to raise Exception
-        client.initialize = MagicMock(side_effect=Exception("Test error"))
-
-        # Mock shutdown
-        with patch.object(client, "shutdown") as mock_shutdown:
-            client.run()
-
-            # Verify shutdown was called
-            mock_shutdown.assert_called_once()
-
-    def test_handle_sleep_debug_mode(self, client: WeatherDisplayClient) -> None:
-        """Test sleep handling in debug mode."""
-        # Client is initialized with debug=True
-        result = client._handle_sleep(15)
-
-        # In debug mode, should not deep sleep
-        assert result is False
-
-        # Verify no shutdown attempted
-        client.power_manager.schedule_wakeup.assert_not_called()
-        client.power_manager.shutdown_system.assert_not_called()
-        client.display.sleep.assert_not_called()
-
-    def test_handle_sleep_short_duration(self, client: WeatherDisplayClient) -> None:
-        """Test sleep handling with short duration."""
-        # Set debug mode to False
-        client.config.debug = False
-
-        # Short sleep duration
-        result = client._handle_sleep(5)
-
-        # Short duration should not deep sleep
-        assert result is False
-
-        # Verify no shutdown attempted
-        client.power_manager.schedule_wakeup.assert_not_called()
-        client.power_manager.shutdown_system.assert_not_called()
-        client.display.sleep.assert_not_called()
-
-    def test_handle_sleep_long_duration(self, client: WeatherDisplayClient) -> None:
-        """Test sleep handling with long duration."""
-        # Set debug mode to False
-        client.config.debug = False
-
-        # Long sleep duration
-        result = client._handle_sleep(30)
-
-        # Should deep sleep
-        assert result is True
-
-        # Verify proper shutdown sequence
-        client.power_manager.schedule_wakeup.assert_called_once_with(30, dynamic=True)
-        client.display.sleep.assert_called_once()
-        client.power_manager.shutdown_system.assert_called_once()
-
-    def test_handle_sleep_wakeup_failure(self, client: WeatherDisplayClient) -> None:
-        """Test sleep handling with wakeup scheduling failure."""
-        # Set debug mode to False
-        client.config.debug = False
-
-        # Mock wakeup scheduling failure
-        client.power_manager.schedule_wakeup.return_value = False
-
-        # Long sleep duration
-        result = client._handle_sleep(30)
-
-        # Should not deep sleep if wakeup fails
-        assert result is False
-
-        # Verify wakeup was attempted but shutdown wasn't
-        client.power_manager.schedule_wakeup.assert_called_once_with(30, dynamic=True)
-        client.display.sleep.assert_not_called()
-        client.power_manager.shutdown_system.assert_not_called()
-
-    def test_shutdown(self, client: WeatherDisplayClient) -> None:
-        """Test client shutdown."""
-        client.shutdown()
-
-        # Verify display is closed
-        client.display.close.assert_called_once()
-
-    def test_handle_power_state_change_critical(self, client: WeatherDisplayClient) -> None:
+    def test_handle_power_state_change_critical(self, async_client: AsyncWeatherDisplayClient) -> None:
         """Test handling critical power state change."""
-        # Import PowerState from power_manager module
-        from rpi_weather_display.utils.power_manager import PowerState
-
-        # Mock display_text method, which might not be in default mock
-        client.display.display_text = MagicMock()
-
-        # Call the handler with NORMAL -> CRITICAL transition
-        with patch("time.sleep") as mock_sleep:
-            client._handle_power_state_change(PowerState.NORMAL, PowerState.CRITICAL)
-
-            # Verify the actions taken
-            client.display.display_text.assert_called_once_with(
+        # Mock dependencies
+        async_client.display = Mock()
+        async_client.power_manager = Mock()
+        async_client._running = True
+        
+        # Mock the shutdown method to prevent async issues
+        async_client.shutdown = AsyncMock()
+        
+        # Mock asyncio event loop creation
+        with patch("rpi_weather_display.client.main.asyncio.new_event_loop") as mock_loop_fn, \
+             patch("rpi_weather_display.client.main.asyncio.set_event_loop"):
+            
+            mock_loop = Mock()
+            mock_loop_fn.return_value = mock_loop
+            
+            # Make run_until_complete actually execute the coroutine
+            async def run_coro(coro: Any) -> Any:
+                return await coro
+            
+            mock_loop.run_until_complete.side_effect = lambda coro: asyncio.run(run_coro(coro))
+            
+            # Trigger critical state change
+            async_client._handle_power_state_change(PowerState.NORMAL, PowerState.CRITICAL)
+            
+            # Verify critical shutdown sequence
+            async_client.display.display_text.assert_called_once_with(
                 "CRITICAL BATTERY", "Shutting down to preserve battery"
             )
-            mock_sleep.assert_called_once_with(5)
-            client.power_manager.schedule_wakeup.assert_called_once_with(12 * 60, dynamic=True)
-            client.power_manager.shutdown_system.assert_called_once()
+            assert async_client._running is False
+            async_client.power_manager.schedule_wakeup.assert_called_once()
+            async_client.power_manager.shutdown_system.assert_called_once()
 
-    def test_handle_power_state_change_non_critical(self, client: WeatherDisplayClient) -> None:
+    def test_handle_power_state_change_critical_with_exception(self, async_client: AsyncWeatherDisplayClient) -> None:
+        """Test handling critical power state change with exceptions."""
+        # Mock dependencies
+        async_client.display = Mock()
+        async_client.display.display_text.side_effect = Exception("Display error")
+        async_client.power_manager = Mock()
+        async_client.power_manager.schedule_wakeup = Mock(return_value=True)
+        # Make shutdown fail in exception handler to trigger RuntimeError
+        async_client.power_manager.shutdown_system.side_effect = Exception("Final error")
+        async_client._running = True
+        
+        # Use patch to mock the event loop - make shutdown() fail to trigger exception handler
+        with patch("asyncio.new_event_loop") as mock_new_loop:
+            mock_loop = Mock()
+            mock_new_loop.return_value = mock_loop
+            # Make run_until_complete raise an exception to trigger the exception handler
+            mock_loop.run_until_complete = Mock(side_effect=Exception("Shutdown failed"))
+        
+            # Trigger critical state change - should raise due to shutdown failure in exception handler
+            with pytest.raises(RuntimeError, match="Failed to perform critical shutdown"):
+                async_client._handle_power_state_change(PowerState.NORMAL, PowerState.CRITICAL)
+        
+        # Verify shutdown was attempted in exception handler
+        assert async_client.power_manager.shutdown_system.call_count == 1
+
+    def test_handle_power_state_change_non_critical(self, async_client: AsyncWeatherDisplayClient) -> None:
         """Test handling non-critical power state changes."""
-        # Import PowerState from power_manager module
-        from rpi_weather_display.utils.power_manager import PowerState
+        # Mock dependencies
+        async_client.display = Mock()
+        async_client.power_manager = Mock()
+        async_client._running = True
+        
+        # Trigger non-critical state change
+        async_client._handle_power_state_change(PowerState.CONSERVING, PowerState.NORMAL)
+        
+        # Verify no shutdown sequence
+        async_client.display.display_text.assert_not_called()
+        assert async_client._running is True
+        async_client.power_manager.shutdown_system.assert_not_called()
 
-        # Mock methods
-        client.display.display_text = MagicMock()
-        client.power_manager.schedule_wakeup = MagicMock()
-        client.power_manager.shutdown_system = MagicMock()
+    def test_handle_sleep_deep_sleep_scenario(self, async_client: AsyncWeatherDisplayClient) -> None:
+        """Test deep sleep handling."""
+        async_client.config.debug = False
+        async_client.power_manager = Mock()
+        async_client.power_manager.schedule_wakeup.return_value = True
+        async_client.display = Mock()
+        
+        # Test with long sleep duration (should trigger deep sleep)
+        result = async_client._handle_sleep(30)  # 30 minutes
+        
+        assert result is True
+        async_client.power_manager.schedule_wakeup.assert_called_once_with(30, dynamic=True)
+        async_client.display.sleep.assert_called_once()
+        async_client.power_manager.shutdown_system.assert_called_once()
 
-        # Test various non-critical state transitions
-        transitions = [
-            (PowerState.NORMAL, PowerState.CONSERVING),
-            (PowerState.CONSERVING, PowerState.NORMAL),
-            (PowerState.NORMAL, PowerState.QUIET_HOURS),
-            (PowerState.CONSERVING, PowerState.CHARGING),
-        ]
+    def test_handle_sleep_debug_mode(self, async_client: AsyncWeatherDisplayClient) -> None:
+        """Test sleep handling in debug mode."""
+        async_client.config.debug = True
+        async_client.power_manager = Mock()
+        
+        # Should not trigger deep sleep in debug mode
+        result = async_client._handle_sleep(30)
+        
+        assert result is False
+        async_client.power_manager.schedule_wakeup.assert_not_called()
 
-        for old_state, new_state in transitions:
-            # Reset mocks
-            client.display.display_text.reset_mock()
-            client.power_manager.schedule_wakeup.reset_mock()
-            client.power_manager.shutdown_system.reset_mock()
+    def test_handle_sleep_short_duration(self, async_client: AsyncWeatherDisplayClient) -> None:
+        """Test sleep handling with short duration."""
+        async_client.config.debug = False
+        async_client.power_manager = Mock()
+        
+        # Test with short sleep duration (should not trigger deep sleep)
+        result = async_client._handle_sleep(5)  # 5 minutes
+        
+        assert result is False
+        async_client.power_manager.schedule_wakeup.assert_not_called()
 
-            # Call the handler with non-critical transition
-            client._handle_power_state_change(old_state, new_state)
+    def test_handle_sleep_schedule_wakeup_fails(self, async_client: AsyncWeatherDisplayClient) -> None:
+        """Test sleep handling when schedule_wakeup fails."""
+        async_client.config.debug = False
+        async_client.power_manager = Mock()
+        async_client.power_manager.schedule_wakeup.return_value = False
+        async_client.display = Mock()
+        
+        # Test with long sleep duration but wakeup scheduling fails
+        result = async_client._handle_sleep(30)  # 30 minutes
+        
+        assert result is False
+        async_client.power_manager.schedule_wakeup.assert_called_once_with(30, dynamic=True)
+        async_client.display.sleep.assert_not_called()
+        async_client.power_manager.shutdown_system.assert_not_called()
 
-            # Verify no actions were taken
-            client.display.display_text.assert_not_called()
-            client.power_manager.schedule_wakeup.assert_not_called()
-            client.power_manager.shutdown_system.assert_not_called()
+    @pytest.mark.asyncio()
+    async def test_shutdown(self, async_client: AsyncWeatherDisplayClient) -> None:
+        """Test client shutdown."""
+        # Mock dependencies
+        async_client._http_client = AsyncMock(spec=httpx.AsyncClient)
+        async_client._http_client.aclose = AsyncMock()
+        async_client.display = Mock()
+        
+        # Keep a reference to the mocked client before shutdown
+        http_client_mock = async_client._http_client
+        
+        await async_client.shutdown()
+        
+        http_client_mock.aclose.assert_called_once()
+        async_client.display.close.assert_called_once()
+        assert async_client._http_client is None
 
-    def test_critical_state_exception_handling(self, client: WeatherDisplayClient) -> None:
-        """Test critical state exception handling in power state callback."""
-        from rpi_weather_display.utils.power_manager import PowerState
+    @pytest.mark.asyncio()
+    async def test_shutdown_no_http_client(self, async_client: AsyncWeatherDisplayClient) -> None:
+        """Test client shutdown when no HTTP client exists."""
+        # No HTTP client
+        async_client._http_client = None
+        async_client.display = Mock()
+        
+        await async_client.shutdown()
+        
+        # Should not crash
+        async_client.display.close.assert_called_once()
 
-        # Create a clean mock setup to isolate error path
-        with patch("time.sleep"):
-            # Using the existing client from the fixture
-            # Reset mocks to ensure clean state
-            client.logger = MagicMock()
-            client.display = MagicMock()
-            client.display.display_text.side_effect = Exception("Display error")
-            client.power_manager.schedule_wakeup = MagicMock()
-            client.power_manager.shutdown_system = MagicMock()
-            client.shutdown = MagicMock()
+    @pytest.mark.asyncio()
+    async def test_shutdown_no_display(self, async_client: AsyncWeatherDisplayClient) -> None:
+        """Test client shutdown when no display exists."""
+        # Mock HTTP client
+        mock_http_client = AsyncMock(spec=httpx.AsyncClient)
+        mock_http_client.aclose = AsyncMock()
+        async_client._http_client = mock_http_client
+        # Remove display to test edge case
+        async_client.display = None  # type: ignore[assignment]
+        
+        await async_client.shutdown()
+        
+        # Should not crash and http client should be closed
+        mock_http_client.aclose.assert_called_once()
+        # Verify http client is set to None after shutdown
+        assert async_client._http_client is None
 
-            # Manually set _running to ensure it's defined
-            client._running = True
-
-            # Call the handler method directly
-            client._handle_power_state_change(PowerState.NORMAL, PowerState.CRITICAL)
-
-            # Verify error is logged
-            client.logger.error.assert_called_with(
-                f"Error during critical shutdown: {client.display.display_text.side_effect}"
-            )
-
-    def test_handle_power_state_change_critical_shutdown_exception(
-        self, client: WeatherDisplayClient
-    ) -> None:
-        """Test handling shutdown exceptions during critical power state change."""
-        # Import PowerState from power_manager module
-        from rpi_weather_display.utils.power_manager import PowerState
-
-        # Mock methods
-        client.display.display_text = MagicMock()
-        client.shutdown = MagicMock()
-        client.power_manager.schedule_wakeup = MagicMock()
-        client.power_manager.shutdown_system = MagicMock(
-            side_effect=[Exception("First shutdown error"), None]
+    @pytest.mark.asyncio()
+    async def test_run_main_loop(self, async_client: AsyncWeatherDisplayClient) -> None:
+        """Test the main run loop."""
+        # Mock dependencies
+        async_client.power_manager = Mock()
+        async_client.power_manager.get_current_state.return_value = PowerState.NORMAL
+        async_client.power_manager.get_battery_status.return_value = BatteryStatus(
+            level=80, state=BatteryState.DISCHARGING, voltage=3.7, current=-0.5, temperature=25.0
         )
+        async_client.power_manager.should_update_weather.return_value = False
+        async_client.power_manager.should_refresh_display.return_value = False
+        async_client.power_manager.calculate_sleep_time.return_value = 1  # 1 second
+        
+        async_client.display = Mock()
+        
+        # Mock methods
+        async_client.initialize = Mock()
+        async_client.update_weather = AsyncMock(return_value=True)
+        async_client.refresh_display = Mock()
+        async_client.shutdown = AsyncMock()
+        
+        # Run for a short time then stop
+        async def stop_after_delay() -> None:
+            await asyncio.sleep(0.1)
+            async_client._running = False
+        
+        # Run both coroutines concurrently
+        await asyncio.gather(
+            async_client.run(),
+            stop_after_delay()
+        )
+        
+        # Verify initialization and updates were called
+        async_client.initialize.assert_called_once()
+        async_client.update_weather.assert_called()
+        async_client.refresh_display.assert_called()
 
-        # Call the handler
-        with patch("time.sleep"):
-            client._handle_power_state_change(PowerState.NORMAL, PowerState.CRITICAL)
+    @pytest.mark.asyncio()
+    async def test_run_quiet_hours_transitions(self, async_client: AsyncWeatherDisplayClient) -> None:
+        """Test quiet hours transitions in main loop."""
+        # Mock dependencies
+        async_client.power_manager = Mock()
+        async_client.power_manager.get_battery_status.return_value = BatteryStatus(
+            level=80, state=BatteryState.DISCHARGING, voltage=3.7, current=-0.5, temperature=25.0
+        )
+        async_client.power_manager.should_update_weather.return_value = False
+        async_client.power_manager.should_refresh_display.return_value = False
+        async_client.power_manager.calculate_sleep_time.return_value = 0.1
+        
+        async_client.display = Mock()
+        
+        # Mock methods
+        async_client.initialize = Mock()
+        async_client.update_weather = AsyncMock(return_value=True)
+        async_client.refresh_display = Mock()
+        async_client.shutdown = AsyncMock()
+        
+        # Simulate state transitions
+        state_sequence = [
+            PowerState.QUIET_HOURS,  # First check - should sleep display
+            PowerState.QUIET_HOURS,  # Second check - no change
+            PowerState.NORMAL,       # Third check - should wake display
+        ]
+        async_client.power_manager.get_current_state.side_effect = state_sequence
+        
+        # Track iterations
+        iteration_count = 0
+        
+        async def stop_after_iterations() -> None:
+            nonlocal iteration_count
+            while iteration_count < 4:  # Need 4 iterations to ensure transition happens
+                await asyncio.sleep(0.05)
+            async_client._running = False
+        
+        # Override sleep to count iterations
+        original_sleep = asyncio.sleep
+        async def mock_sleep(duration: float) -> None:
+            nonlocal iteration_count
+            iteration_count += 1
+            await original_sleep(min(duration, 0.01))
+        
+        with patch("asyncio.sleep", mock_sleep):
+            # Run both coroutines concurrently
+            await asyncio.gather(
+                async_client.run(),
+                stop_after_iterations()
+            )
+        
+        # Verify display sleep/wake transitions
+        assert async_client.display.sleep.call_count >= 1
+        assert async_client.refresh_display.call_count >= 2  # Initial + wake from quiet hours
 
-            # Should call shutdown_system twice: once in normal flow, once in error handler
-            assert client.power_manager.shutdown_system.call_count == 2
+    @pytest.mark.asyncio()
+    async def test_run_with_charging_during_quiet_hours(self, async_client: AsyncWeatherDisplayClient) -> None:
+        """Test charging behavior during quiet hours."""
+        # Mock dependencies
+        async_client.power_manager = Mock()
+        async_client.power_manager.get_current_state.return_value = PowerState.QUIET_HOURS
+        async_client.power_manager.get_battery_status.side_effect = [
+            BatteryStatus(level=80, state=BatteryState.DISCHARGING, voltage=3.7, current=-0.5, temperature=25.0),
+            BatteryStatus(level=80, state=BatteryState.DISCHARGING, voltage=3.7, current=-0.5, temperature=25.0),
+            BatteryStatus(level=85, state=BatteryState.CHARGING, voltage=4.0, current=0.5, temperature=25.0),  # Now charging
+        ]
+        async_client.power_manager.should_update_weather.return_value = False
+        async_client.power_manager.should_refresh_display.return_value = False
+        async_client.power_manager.calculate_sleep_time.return_value = 0.1
+        
+        async_client.display = Mock()
+        
+        # Mock methods
+        async_client.initialize = Mock()
+        async_client.update_weather = AsyncMock(return_value=True)
+        async_client.refresh_display = Mock()
+        async_client.shutdown = AsyncMock()
+        
+        # Track iterations
+        iteration_count = 0
+        
+        async def stop_after_iterations() -> None:
+            nonlocal iteration_count
+            while iteration_count < 4:  # Need 4 iterations to ensure charging state is processed
+                await asyncio.sleep(0.05)
+            async_client._running = False
+        
+        # Override sleep to count iterations
+        original_sleep = asyncio.sleep
+        async def mock_sleep(duration: float) -> None:
+            nonlocal iteration_count
+            iteration_count += 1
+            await original_sleep(min(duration, 0.01))
+        
+        with patch("asyncio.sleep", mock_sleep):
+            # Run both coroutines concurrently
+            await asyncio.gather(
+                async_client.run(),
+                stop_after_iterations()
+            )
+        
+        # Verify display woke up when charging started
+        assert async_client.refresh_display.call_count >= 2  # Initial + wake when charging
 
-    def test_main_path_for_early_return(self) -> None:
-        """Test the early return path in the main function when config file doesn't exist."""
-        # Mock a non-existent config file
-        mock_args = MagicMock()
-        mock_args.config = MagicMock(spec=Path)
+    @pytest.mark.asyncio()
+    async def test_run_with_update_triggers(self, async_client: AsyncWeatherDisplayClient) -> None:
+        """Test weather update and display refresh triggers in main loop."""
+        # Mock dependencies
+        async_client.power_manager = Mock()
+        async_client.power_manager.get_current_state.return_value = PowerState.NORMAL
+        async_client.power_manager.get_battery_status.return_value = BatteryStatus(
+            level=80, state=BatteryState.DISCHARGING, voltage=3.7, current=-0.5, temperature=25.0
+        )
+        async_client.power_manager.should_update_weather.side_effect = [False, True, False]  # Trigger on second iteration
+        async_client.power_manager.should_refresh_display.side_effect = [False, False, True]  # Trigger on third iteration
+        async_client.power_manager.calculate_sleep_time.return_value = 0.1
+        
+        async_client.display = Mock()
+        
+        # Mock methods
+        async_client.initialize = Mock()
+        async_client.update_weather = AsyncMock(return_value=True)
+        async_client.refresh_display = Mock()
+        async_client.shutdown = AsyncMock()
+        
+        # Track iterations
+        iteration_count = 0
+        
+        async def stop_after_iterations() -> None:
+            nonlocal iteration_count
+            while iteration_count < 4:  # Need 4 iterations: initial + 3 loop iterations
+                await asyncio.sleep(0.05)
+            async_client._running = False
+        
+        # Override sleep to count iterations
+        original_sleep = asyncio.sleep
+        async def mock_sleep(duration: float) -> None:
+            nonlocal iteration_count
+            iteration_count += 1
+            await original_sleep(min(duration, 0.01))
+        
+        with patch("asyncio.sleep", mock_sleep):
+            # Run both coroutines concurrently
+            await asyncio.gather(
+                async_client.run(),
+                stop_after_iterations()
+            )
+        
+        # Verify update triggers
+        assert async_client.update_weather.call_count == 2  # Initial + triggered
+        assert async_client.refresh_display.call_count == 2  # Initial + triggered
 
-        # Mock argparse
-        mock_parser = MagicMock()
-        mock_parser.parse_args.return_value = mock_args
+    @pytest.mark.asyncio()
+    async def test_run_with_deep_sleep_trigger(self, async_client: AsyncWeatherDisplayClient) -> None:
+        """Test deep sleep trigger in main loop."""
+        # Mock dependencies
+        async_client.power_manager = Mock()
+        async_client.power_manager.get_current_state.return_value = PowerState.NORMAL
+        async_client.power_manager.get_battery_status.return_value = BatteryStatus(
+            level=80, state=BatteryState.DISCHARGING, voltage=3.7, current=-0.5, temperature=25.0
+        )
+        async_client.power_manager.should_update_weather.return_value = False
+        async_client.power_manager.should_refresh_display.return_value = False
+        async_client.power_manager.calculate_sleep_time.return_value = 900  # 15 minutes - should trigger deep sleep
+        
+        async_client.display = Mock()
+        
+        # Mock methods
+        async_client.initialize = Mock()
+        async_client.update_weather = AsyncMock(return_value=True)
+        async_client.refresh_display = Mock()
+        async_client._handle_sleep = Mock(return_value=True)  # Simulate deep sleep triggered
+        async_client.shutdown = AsyncMock()
+        
+        # Run the loop
+        await async_client.run()
+        
+        # Verify deep sleep was triggered
+        async_client._handle_sleep.assert_called_once_with(15)
 
-        # For this test, let's define a validate_config_path function that prints and exits
-        def validate_side_effect(
-            config_path,
-        ) -> None:  # typing.Never would be more accurate, but we'll use None for simplicity
-            print("Error: Configuration file not found")
-            raise SystemExit(1)
+    @pytest.mark.asyncio()
+    async def test_run_with_keyboard_interrupt(self, async_client: AsyncWeatherDisplayClient) -> None:
+        """Test handling keyboard interrupt in main loop."""
+        # Mock dependencies
+        async_client.power_manager = Mock()
+        async_client.power_manager.get_current_state.return_value = PowerState.NORMAL
+        async_client.power_manager.get_battery_status.return_value = BatteryStatus(
+            level=80, state=BatteryState.DISCHARGING, voltage=3.7, current=-0.5, temperature=25.0
+        )
+        async_client.power_manager.should_update_weather.return_value = False
+        async_client.power_manager.should_refresh_display.return_value = False
+        async_client.power_manager.calculate_sleep_time.return_value = 1
+        
+        async_client.display = Mock()
+        
+        # Mock methods
+        async_client.initialize = Mock()
+        async_client.update_weather = AsyncMock(return_value=True)
+        async_client.refresh_display = Mock()
+        async_client.shutdown = AsyncMock()
+        
+        # Simulate keyboard interrupt
+        async def trigger_interrupt() -> None:
+            await asyncio.sleep(0.1)
+            # Set side_effect on the Mock object itself
+            async_client.power_manager.calculate_sleep_time = Mock(side_effect=KeyboardInterrupt())
+        
+        # Run both coroutines
+        await asyncio.gather(
+            async_client.run(),
+            trigger_interrupt()
+        )
+        
+        # Verify clean shutdown
+        assert async_client._running is False
+        async_client.shutdown.assert_called_once()
 
-        with (
-            patch("argparse.ArgumentParser", return_value=mock_parser),
-            patch("builtins.print", wraps=print) as mock_print,
-            patch("rpi_weather_display.client.main.WeatherDisplayClient"),
-            patch(
-                "rpi_weather_display.client.main.validate_config_path",
-                side_effect=validate_side_effect,
-            ),
-        ):
-            # Call the main function
-            from rpi_weather_display.client.main import main
+    @pytest.mark.asyncio()
+    async def test_run_with_general_exception(self, async_client: AsyncWeatherDisplayClient) -> None:
+        """Test handling general exception in main loop."""
+        # Mock dependencies
+        async_client.power_manager = Mock()
+        async_client.power_manager.get_current_state.return_value = PowerState.NORMAL
+        async_client.power_manager.get_battery_status.return_value = BatteryStatus(
+            level=80, state=BatteryState.DISCHARGING, voltage=3.7, current=-0.5, temperature=25.0
+        )
+        async_client.power_manager.should_update_weather.return_value = False
+        async_client.power_manager.should_refresh_display.return_value = False
+        async_client.power_manager.calculate_sleep_time = Mock(side_effect=Exception("Unexpected error"))
+        
+        async_client.display = Mock()
+        
+        # Mock methods
+        async_client.initialize = Mock()
+        async_client.update_weather = AsyncMock(return_value=True)
+        async_client.refresh_display = Mock()
+        async_client.shutdown = AsyncMock()
+        
+        # Run the loop
+        await async_client.run()
+        
+        # Verify clean shutdown
+        assert async_client._running is False
+        async_client.shutdown.assert_called_once()
 
-            # The SystemExit exception will be raised - capture the value for special handling
+    @pytest.mark.asyncio()
+    async def test_semaphore_concurrency_limit(self, async_client: AsyncWeatherDisplayClient) -> None:
+        """Test that semaphore limits concurrent operations."""
+        # Mock dependencies
+        async_client.power_manager = Mock()
+        async_client.power_manager.get_battery_status.return_value = BatteryStatus(
+            level=80, state=BatteryState.DISCHARGING, voltage=3.7, current=-0.5, temperature=25.0
+        )
+        async_client.power_manager.get_system_metrics.return_value = {}
+        async_client.power_manager.record_weather_update = Mock()
+        
+        # Track concurrent operations inside the semaphore
+        concurrent_count = 0
+        max_concurrent = 0
+        
+        # Mock slow HTTP response that tracks concurrency
+        async def slow_post(*_args: object, **_kwargs: object) -> AsyncMock:
+            nonlocal concurrent_count, max_concurrent
+            concurrent_count += 1
+            max_concurrent = max(max_concurrent, concurrent_count)
             try:
-                main()
-            except SystemExit:
-                pass  # Expected behavior
+                await asyncio.sleep(0.1)
+                response = AsyncMock()
+                response.status_code = 200
+                response.content = b"image_data"
+                return response
+            finally:
+                concurrent_count -= 1
+        
+        # Create a real mock client and assign the slow_post method
+        mock_http_client = AsyncMock()
+        mock_http_client.post = slow_post
+        async_client._http_client = mock_http_client
+        
+        # Try to run more than semaphore limit
+        with patch("rpi_weather_display.client.main.write_bytes"):
+            results = await asyncio.gather(
+                async_client.update_weather(),
+                async_client.update_weather(),
+                async_client.update_weather(),
+                async_client.update_weather(),
+            )
+        
+        # All should succeed
+        assert all(results)
+        # But max concurrent should be limited by semaphore (2)
+        assert max_concurrent <= 2
 
-            # Verify an error message was printed - using any_call which is more robust
-            assert mock_print.call_count >= 1
 
+class TestAsyncMainFunction:
+    """Test the main entry point function."""
+    
+    def _mock_network_manager(self, client: AsyncWeatherDisplayClient, connected: bool = True) -> None:
+        """Helper to mock network manager for tests."""
+        # Create network manager as a Mock with proper async context manager
+        client.network_manager = Mock()
+        client.network_manager.update_battery_status = Mock()
+        
+        # Create a proper async context manager mock
+        context_manager = AsyncMock()
+        context_manager.__aenter__ = AsyncMock(return_value=connected)
+        context_manager.__aexit__ = AsyncMock(return_value=None)
+        
+        # Use a lambda to return the context manager to avoid async detection issues
+        client.network_manager.ensure_connectivity = lambda: context_manager
+    
+    def test_main_success(self, tmp_path: Path) -> None:
+        """Test successful main execution."""
+        # Create test config
+        config_path = tmp_path / "test_config.yaml"
+        config_path.write_text("""
+weather:
+  api_key: "test"
+  location: {lat: 0, lon: 0}
+display:
+  width: 800
+  height: 600
+server:
+  url: "http://localhost"
+  port: 8000
+power:
+  quiet_hours_start: "22:00"
+  quiet_hours_end: "06:00"
+logging:
+  level: "INFO"
+""")
+        
+        # Mock the client and asyncio.run
+        with patch("rpi_weather_display.client.main.AsyncWeatherDisplayClient") as mock_client, \
+             patch("rpi_weather_display.client.main.asyncio.run") as mock_run, \
+             patch("sys.argv", ["async-client", "--config", str(config_path)]):
+            
+            mock_client_instance = mock_client.return_value
+            # Use a regular Mock since asyncio.run is mocked and won't actually await it
+            mock_client_instance.run = Mock()
+            
+            main()
+            
+            mock_client.assert_called_once()
+            mock_run.assert_called_once()
 
-class TestMainFunction:
-    """Test suite for the main function."""
-
-    @patch("rpi_weather_display.client.main.WeatherDisplayClient")
-    @patch("rpi_weather_display.client.main.argparse.ArgumentParser")
-    def test_main_success(self, mock_parser_cls: MagicMock, mock_client_cls: MagicMock) -> None:
-        """Test successful execution of main function."""
-        # Mock argument parser
-        mock_parser = MagicMock()
-        mock_parser_cls.return_value = mock_parser
-
-        # Mock parsed args
-        mock_args = MagicMock()
-        mock_args.config = MagicMock(spec=Path)
-        mock_args.config.exists.return_value = True
-        mock_parser.parse_args.return_value = mock_args
-
-        # Mock client
-        mock_client = MagicMock()
-        mock_client_cls.return_value = mock_client
-
-        # Call main function
-        main()
-
-        # Verify client was created and run
-        mock_client_cls.assert_called_once_with(mock_args.config)
-        mock_client.run.assert_called_once()
-
-    @patch("rpi_weather_display.client.main.WeatherDisplayClient")
-    @patch("rpi_weather_display.client.main.argparse.ArgumentParser")
-    @patch("builtins.print")
-    def test_main_config_not_found(
-        self, mock_print: MagicMock, mock_parser_cls: MagicMock, mock_client_cls: MagicMock
-    ) -> None:
-        """Test main function with missing config file."""
-        # Mock argument parser
-        mock_parser = MagicMock()
-        mock_parser_cls.return_value = mock_parser
-
-        # Mock parsed args with non-existent config
-        mock_args = MagicMock()
-        mock_args.config = MagicMock(spec=Path)
-        mock_parser.parse_args.return_value = mock_args
-
-        # Mock validate_config_path to exit
-        with patch(
-            "rpi_weather_display.client.main.validate_config_path", side_effect=SystemExit(1)
-        ):
-            # Set return value here to satisfy test assertion - this will handle the case where
-            # WeatherDisplayClient is called with __call__ but we'll exit with SystemExit before it's actually created
-            with patch.object(mock_client_cls, "__call__", return_value=None):
-                # Call main function and expect a SystemExit
-                with pytest.raises(SystemExit):
-                    main()
-
-            # Note: In tests with SystemExit, asserting mock_client_cls.assert_not_called() is not reliable
-            # since the execution doesn't complete normally - this is why we patched __call__ above
+    def test_main_config_not_found(self) -> None:
+        """Test main with missing config file."""
+        with patch("sys.argv", ["async-client", "--config", "/nonexistent/config.yaml"]), \
+             pytest.raises(FileNotFoundError):
+            main()
