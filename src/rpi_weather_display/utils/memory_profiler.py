@@ -11,7 +11,13 @@ from dataclasses import dataclass
 
 from typing_extensions import TypedDict
 
-from rpi_weather_display.constants import BYTES_PER_MEGABYTE
+from rpi_weather_display.constants import (
+    BYTES_PER_MEGABYTE,
+    DEFAULT_MEMORY_PROFILER_HISTORY_SIZE,
+    MEMORY_GROWTH_THRESHOLD_MB,
+    MEMORY_LEAK_DETECTION_MIN_SAMPLES,
+    MEMORY_LEAK_GROWTH_THRESHOLD,
+)
 from rpi_weather_display.utils.error_utils import get_error_location
 
 # Dynamic import to avoid dependency on development machines
@@ -90,7 +96,7 @@ class MemoryProfiler:
         _max_history: Maximum number of snapshots to keep
     """
 
-    def __init__(self, max_history: int = 100) -> None:
+    def __init__(self, max_history: int = DEFAULT_MEMORY_PROFILER_HISTORY_SIZE) -> None:
         """Initialize the memory profiler.
 
         Args:
@@ -177,7 +183,7 @@ class MemoryProfiler:
 
         return (rss_delta, percent_change)
 
-    def check_memory_growth(self, threshold_mb: float = 50.0) -> bool:
+    def check_memory_growth(self, threshold_mb: float = MEMORY_GROWTH_THRESHOLD_MB) -> bool:
         """Check if memory has grown beyond threshold.
 
         Args:
@@ -242,12 +248,12 @@ class MemoryProfiler:
             }
 
             # Check for memory leak pattern (consistent growth)
-            if len(self._history) >= 10:
-                recent = self._history[-10:]
+            if len(self._history) >= MEMORY_LEAK_DETECTION_MIN_SAMPLES:
+                recent = self._history[-MEMORY_LEAK_DETECTION_MIN_SAMPLES:]
                 growth_count = sum(
                     1 for i in range(1, len(recent)) if recent[i].rss_mb > recent[i - 1].rss_mb
                 )
-                if growth_count >= 8:  # 80% growing
+                if growth_count >= MEMORY_LEAK_GROWTH_THRESHOLD:
                     report["warning"] = "Possible memory leak detected (consistent growth)"
 
         return report

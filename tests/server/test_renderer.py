@@ -29,6 +29,7 @@ from rpi_weather_display.constants import (
     MOON_PHASE_LAST_QUARTER_MAX,
     MOON_PHASE_LAST_QUARTER_MIN,
     MOON_PHASE_NEW_THRESHOLD,
+    SECONDS_PER_MINUTE,
     UVI_CACHE_FILENAME,
 )
 from rpi_weather_display.models.config import (
@@ -192,7 +193,7 @@ def weather_data(
         lat=51.5074,
         lon=-0.1278,
         timezone="Europe/London",
-        timezone_offset=3600,
+        timezone_offset=SECONDS_PER_MINUTE * 60,  # 1 hour
         current=current_weather,
         daily=[daily_weather] * 5,  # 5 days of forecast
         hourly=[hourly_weather] * 24,  # 24 hours of forecast
@@ -1463,8 +1464,8 @@ class TestWeatherRenderer:
 
         # Manually calculate daylight hours using the same logic from the fix
         daylight_seconds = weather_data.current.sunset - weather_data.current.sunrise
-        daylight_hours = daylight_seconds // 3600
-        daylight_minutes = (daylight_seconds % 3600) // 60
+        daylight_hours = daylight_seconds // (SECONDS_PER_MINUTE * 60)
+        daylight_minutes = (daylight_seconds % (SECONDS_PER_MINUTE * 60)) // SECONDS_PER_MINUTE
 
         # Check calculation results
         assert daylight_hours == expected_hours

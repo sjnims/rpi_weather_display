@@ -15,6 +15,7 @@ import httpx
 
 from rpi_weather_display.client.display import EPaperDisplay
 from rpi_weather_display.constants import (
+    CLIENT_MEMORY_GROWTH_THRESHOLD_MB,
     CONNECTION_TIMEOUT,
     DEFAULT_CONFIG_PATH,
     DEFAULT_IMAGE_FILENAME,
@@ -278,7 +279,9 @@ class AsyncWeatherDisplayClient:
                     memory_profiler.record_snapshot()
 
                     # Check for memory growth
-                    if memory_profiler.check_memory_growth(threshold_mb=20.0):
+                    if memory_profiler.check_memory_growth(
+                        threshold_mb=CLIENT_MEMORY_GROWTH_THRESHOLD_MB
+                    ):
                         self.logger.warning("Memory growth detected during weather update")
                         # Log memory report
                         report = memory_profiler.get_report()

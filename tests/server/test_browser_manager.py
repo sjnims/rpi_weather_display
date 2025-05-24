@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
+from rpi_weather_display.constants import BROWSER_LAUNCH_DELAY
 from rpi_weather_display.server.browser_manager import BrowserManager, PlaywrightPageProtocol
 
 
@@ -341,7 +342,7 @@ class TestBrowserManager:
         async def mock_launch(*_: Any, **_kwargs: Any) -> MagicMock:
             nonlocal call_count
             call_count += 1
-            await asyncio.sleep(0.1)  # Simulate slow browser launch
+            await asyncio.sleep(BROWSER_LAUNCH_DELAY)  # Simulate slow browser launch
             browser = MagicMock()
             browser.is_connected = Mock(return_value=True)
             browser.new_context = AsyncMock()

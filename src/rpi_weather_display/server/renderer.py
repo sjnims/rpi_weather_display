@@ -12,10 +12,12 @@ import jinja2
 
 from rpi_weather_display.constants import (
     AQI_LEVELS,
+    BEAUFORT_SCALE_DIVISOR,
     CARDINAL_DIRECTIONS_COUNT,
     DEGREES_PER_CARDINAL,
     HPA_TO_INHG,
     HPA_TO_MMHG,
+    MOON_PHASE_CYCLE_DAYS,
     MOON_PHASE_FIRST_QUARTER_MAX,
     MOON_PHASE_FIRST_QUARTER_MIN,
     MOON_PHASE_FULL_MAX,
@@ -23,6 +25,8 @@ from rpi_weather_display.constants import (
     MOON_PHASE_LAST_QUARTER_MAX,
     MOON_PHASE_LAST_QUARTER_MIN,
     MOON_PHASE_NEW_THRESHOLD,
+    SECONDS_PER_HOUR,
+    SECONDS_PER_MINUTE,
     UVI_CACHE_FILENAME,
 )
 from rpi_weather_display.models.config import AppConfig
@@ -260,14 +264,14 @@ class WeatherRenderer:
             units_pressure = self.config.display.pressure_units
 
             # Handle Beaufort scale for wind (simplified)
-            bft = min(int(weather_data.current.wind_speed / 3.5) + 1, 12)
+            bft = min(int(weather_data.current.wind_speed / BEAUFORT_SCALE_DIVISOR) + 1, 12)
 
             # Prepare mock data for fields that require calculation
             # Calculate daylight hours from sunrise and sunset
             if hasattr(weather_data.current, "sunrise") and hasattr(weather_data.current, "sunset"):
                 daylight_seconds = weather_data.current.sunset - weather_data.current.sunrise
-                daylight_hours = daylight_seconds // 3600
-                daylight_minutes = (daylight_seconds % 3600) // 60
+                daylight_hours = daylight_seconds // SECONDS_PER_HOUR
+                daylight_minutes = (daylight_seconds % SECONDS_PER_HOUR) // SECONDS_PER_MINUTE
                 daylight = f"{daylight_hours}h {daylight_minutes}m"
             else:
                 daylight = "12h 30m"  # Fallback value if sunrise/sunset not available
@@ -399,7 +403,7 @@ class WeatherRenderer:
                     "waning-crescent-5",  # 0.95
                     "waning-crescent-6",  # 0.99
                 ]
-                index = min(int(phase * 28), 27)  # Ensure index is within bounds
+                index = min(int(phase * MOON_PHASE_CYCLE_DAYS), 27)  # Ensure index is within bounds
                 return f"wi-moon-alt-{phases[index]}"
 
             # Helper filter for moon phase label

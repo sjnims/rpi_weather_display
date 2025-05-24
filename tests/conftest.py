@@ -9,6 +9,12 @@ import pytest
 import yaml
 from fastapi.testclient import TestClient
 
+from rpi_weather_display.constants import (
+    PREVIEW_BATTERY_CURRENT,
+    PREVIEW_BATTERY_LEVEL,
+    PREVIEW_BATTERY_TEMP,
+    PREVIEW_BATTERY_VOLTAGE,
+)
 from rpi_weather_display.models.config import AppConfig
 from rpi_weather_display.models.system import BatteryState, BatteryStatus
 
@@ -72,10 +78,10 @@ def app_config(test_config_data: dict[str, Any]) -> AppConfig:
 def mock_battery_status() -> BatteryStatus:
     """Create a mock battery status for testing."""
     return BatteryStatus(
-        level=85,
-        voltage=3.9,
-        current=0.5,
-        temperature=25.0,
+        level=PREVIEW_BATTERY_LEVEL,
+        voltage=PREVIEW_BATTERY_VOLTAGE,
+        current=PREVIEW_BATTERY_CURRENT,
+        temperature=PREVIEW_BATTERY_TEMP,
         state=BatteryState.FULL,
     )
 

@@ -197,7 +197,7 @@ async def test_get_weather_data_cached(app_config: AppConfig, mock_weather_data:
         cache_key = f"weather_{lat}_{lon}_{api_client.config.units}_{api_client.config.language}"
 
         # Put the weather data in the cache (estimate size as 10KB for test)
-        api_client._cache.put(cache_key, weather, size_bytes=10240)
+        api_client._cache.put(cache_key, weather, size_bytes=10 * 1024)
 
         # Call without force refresh
         result = await api_client.get_weather_data(force_refresh=False)
@@ -300,7 +300,7 @@ async def test_get_weather_data_http_error_with_cache(
     cache_key = f"weather_{lat}_{lon}_{api_client.config.units}_{api_client.config.language}"
 
     # Put the weather data in the cache
-    api_client._cache.put(cache_key, weather, size_bytes=10240)
+    api_client._cache.put(cache_key, weather, size_bytes=10 * 1024)
 
     # Call should return cached data despite HTTP error
     result = await api_client.get_weather_data(force_refresh=True)
@@ -536,7 +536,7 @@ async def test_get_weather_data_general_exception_with_cache(
     cache_key = f"weather_{lat}_{lon}_{api_client.config.units}_{api_client.config.language}"
 
     # Put the weather data in the cache
-    api_client._cache.put(cache_key, weather, size_bytes=10240)
+    api_client._cache.put(cache_key, weather, size_bytes=10 * 1024)
 
     # Call should return cached data despite general exception
     result = await api_client.get_weather_data(force_refresh=True)

@@ -10,7 +10,14 @@ from collections import OrderedDict
 from pathlib import Path
 from typing import Generic, TypeVar
 
-from rpi_weather_display.constants import BYTES_PER_KILOBYTE, BYTES_PER_MEGABYTE
+from rpi_weather_display.constants import (
+    BYTES_PER_KILOBYTE,
+    BYTES_PER_MEGABYTE,
+    DEFAULT_CACHE_TTL_SECONDS,
+    DEFAULT_FILE_CACHE_SIZE_MB,
+    DEFAULT_FILE_CACHE_TTL_SECONDS,
+    DEFAULT_MEMORY_CACHE_SIZE_MB,
+)
 from rpi_weather_display.utils.error_utils import get_error_location
 
 T = TypeVar("T")
@@ -34,8 +41,8 @@ class MemoryAwareCache(Generic[T]):
 
     def __init__(
         self,
-        max_size_mb: float = 50.0,
-        ttl_seconds: int = 900,  # 15 minutes default
+        max_size_mb: float = DEFAULT_MEMORY_CACHE_SIZE_MB,
+        ttl_seconds: int = DEFAULT_CACHE_TTL_SECONDS,
     ) -> None:
         """Initialize the cache.
 
@@ -152,8 +159,8 @@ class FileCache:
     def __init__(
         self,
         cache_dir: Path,
-        max_size_mb: float = 100.0,
-        ttl_seconds: int = 3600,  # 1 hour default
+        max_size_mb: float = DEFAULT_FILE_CACHE_SIZE_MB,
+        ttl_seconds: int = DEFAULT_FILE_CACHE_TTL_SECONDS,
     ) -> None:
         """Initialize file cache.
 

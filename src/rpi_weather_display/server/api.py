@@ -15,6 +15,8 @@ from rpi_weather_display.constants import (
     OWM_AIR_POLLUTION_URL,
     OWM_GEOCODING_URL,
     OWM_ONECALL_URL,
+    SECONDS_PER_MINUTE,
+    WEATHER_API_CACHE_SIZE_MB,
 )
 from rpi_weather_display.models.config import WeatherConfig
 from rpi_weather_display.models.weather import (
@@ -59,10 +61,10 @@ class WeatherAPIClient:
         """
         self.config = config
         self.logger = logging.getLogger(__name__)
-        # Initialize memory-aware cache with 20MB limit
+        # Initialize memory-aware cache
         self._cache = MemoryAwareCache[WeatherData](
-            max_size_mb=20.0,
-            ttl_seconds=int(config.update_interval_minutes * 60),  # Convert minutes to seconds
+            max_size_mb=WEATHER_API_CACHE_SIZE_MB,
+            ttl_seconds=int(config.update_interval_minutes * SECONDS_PER_MINUTE),
         )
 
     async def get_coordinates(self) -> tuple[float, float]:

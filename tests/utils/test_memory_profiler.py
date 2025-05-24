@@ -5,6 +5,11 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
+from rpi_weather_display.constants import (
+    BYTES_PER_MEGABYTE,
+    DEFAULT_MEMORY_PROFILER_HISTORY_SIZE,
+    MEMORY_GROWTH_THRESHOLD_MB,
+)
 from rpi_weather_display.utils.memory_profiler import (
     MemoryProfiler,
     MemoryStats,
@@ -20,14 +25,14 @@ def mock_psutil() -> Mock:
     # Mock process
     mock_process = MagicMock()
     mock_memory_info = MagicMock()
-    mock_memory_info.rss = 100 * 1024 * 1024  # 100 MB
-    mock_memory_info.vms = 200 * 1024 * 1024  # 200 MB
+    mock_memory_info.rss = 100 * BYTES_PER_MEGABYTE  # 100 MB
+    mock_memory_info.vms = 200 * BYTES_PER_MEGABYTE  # 200 MB
     mock_process.memory_info.return_value = mock_memory_info
     mock_process.memory_percent.return_value = 5.0
     
     # Mock virtual memory
     mock_virtual_memory = MagicMock()
-    mock_virtual_memory.available = 1000 * 1024 * 1024  # 1000 MB
+    mock_virtual_memory.available = 1000 * BYTES_PER_MEGABYTE  # 1000 MB
     mock.virtual_memory.return_value = mock_virtual_memory
     
     # Make Process return our mock process
@@ -166,7 +171,7 @@ class TestMemoryProfiler:
             profiler.set_baseline()
             
             # Change memory values
-            mock_psutil.Process.return_value.memory_info.return_value.rss = 150 * 1024 * 1024  # 150 MB
+            mock_psutil.Process.return_value.memory_info.return_value.rss = 150 * BYTES_PER_MEGABYTE  # 150 MB
             
             # Get delta
             delta = profiler.get_memory_delta()
@@ -183,7 +188,7 @@ class TestMemoryProfiler:
             profiler.set_baseline()
             
             # Change to non-zero
-            mock_psutil.Process.return_value.memory_info.return_value.rss = 100 * 1024 * 1024
+            mock_psutil.Process.return_value.memory_info.return_value.rss = 100 * BYTES_PER_MEGABYTE
             
             # Get delta - should handle division by zero
             delta = profiler.get_memory_delta()
@@ -204,9 +209,9 @@ class TestMemoryProfiler:
             profiler.set_baseline()
             
             # Small increase
-            mock_psutil.Process.return_value.memory_info.return_value.rss = 120 * 1024 * 1024  # 120 MB
+            mock_psutil.Process.return_value.memory_info.return_value.rss = 120 * BYTES_PER_MEGABYTE  # 120 MB
             
-            result = profiler.check_memory_growth(threshold_mb=50.0)
+            result = profiler.check_memory_growth(threshold_mb=MEMORY_GROWTH_THRESHOLD_MB)
             assert result is False
 
     def test_check_memory_growth_above_threshold(self, profiler: MemoryProfiler, mock_psutil: Mock, caplog: pytest.LogCaptureFixture) -> None:
@@ -217,9 +222,9 @@ class TestMemoryProfiler:
             profiler.set_baseline()
             
             # Large increase
-            mock_psutil.Process.return_value.memory_info.return_value.rss = 200 * 1024 * 1024  # 200 MB
+            mock_psutil.Process.return_value.memory_info.return_value.rss = 200 * BYTES_PER_MEGABYTE  # 200 MB
             
-            result = profiler.check_memory_growth(threshold_mb=50.0)
+            result = profiler.check_memory_growth(threshold_mb=MEMORY_GROWTH_THRESHOLD_MB)
             assert result is True
             assert "Memory growth detected: 100.0MB increase" in caplog.text
 
@@ -251,7 +256,7 @@ class TestMemoryProfiler:
             profiler.set_baseline()
             
             # Change memory
-            mock_psutil.Process.return_value.memory_info.return_value.rss = 150 * 1024 * 1024
+            mock_psutil.Process.return_value.memory_info.return_value.rss = 150 * BYTES_PER_MEGABYTE
             
             report = profiler.get_report()
             
@@ -280,7 +285,7 @@ class TestMemoryProfiler:
             # Record multiple snapshots with different memory values
             memory_values = [100, 120, 110, 130, 125]  # in MB
             for mb in memory_values:
-                mock_psutil.Process.return_value.memory_info.return_value.rss = mb * 1024 * 1024
+                mock_psutil.Process.return_value.memory_info.return_value.rss = mb * BYTES_PER_MEGABYTE
                 profiler.record_snapshot()
             
             report = profiler.get_report()
@@ -300,7 +305,7 @@ class TestMemoryProfiler:
             # Record 10 snapshots with consistent growth
             for i in range(10):
                 mb = 100 + (i * 10)  # Consistent growth
-                mock_psutil.Process.return_value.memory_info.return_value.rss = mb * 1024 * 1024
+                mock_psutil.Process.return_value.memory_info.return_value.rss = mb * BYTES_PER_MEGABYTE
                 profiler.record_snapshot()
             
             report = profiler.get_report()
@@ -316,7 +321,7 @@ class TestMemoryProfiler:
             # Record 10 snapshots with fluctuating values
             memory_values = [100, 110, 105, 115, 110, 120, 115, 125, 120, 130]
             for mb in memory_values:
-                mock_psutil.Process.return_value.memory_info.return_value.rss = mb * 1024 * 1024
+                mock_psutil.Process.return_value.memory_info.return_value.rss = mb * BYTES_PER_MEGABYTE
                 profiler.record_snapshot()
             
             report = profiler.get_report()
@@ -348,7 +353,7 @@ class TestMemoryProfiler:
             caplog.clear()
             
             # Change memory
-            mock_psutil.Process.return_value.memory_info.return_value.rss = 150 * 1024 * 1024
+            mock_psutil.Process.return_value.memory_info.return_value.rss = 150 * BYTES_PER_MEGABYTE
             
             profiler.log_memory_status()
             
@@ -362,4 +367,4 @@ class TestGlobalMemoryProfiler:
     def test_global_instance(self) -> None:
         """Test that global instance is available."""
         assert isinstance(memory_profiler, MemoryProfiler)
-        assert memory_profiler._max_history == 100  # Default value
+        assert memory_profiler._max_history == DEFAULT_MEMORY_PROFILER_HISTORY_SIZE  # Default value

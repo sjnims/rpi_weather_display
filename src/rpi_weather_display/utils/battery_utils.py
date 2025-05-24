@@ -9,6 +9,7 @@ from rpi_weather_display.constants import (
     BATTERY_FULL_THRESHOLD,
     BATTERY_HIGH_THRESHOLD,
     BATTERY_LOW_THRESHOLD,
+    SECONDS_PER_HOUR,
 )
 from rpi_weather_display.models.config import PowerConfig
 from rpi_weather_display.models.system import BatteryState, BatteryStatus
@@ -102,7 +103,7 @@ def get_battery_icon(status: BatteryStatus) -> str:
     """
     if status.state == BatteryState.CHARGING:
         return "battery-charging-bold"
-    elif status.level > BATTERY_FULL_THRESHOLD:
+    elif status.level >= BATTERY_FULL_THRESHOLD:
         return "battery-full-bold"
     elif status.level > BATTERY_HIGH_THRESHOLD:
         return "battery-high-bold"
@@ -128,9 +129,9 @@ def get_battery_text_description(status: BatteryStatus) -> str:
             return f"Charging ({level}%)"
         case (BatteryState.FULL, _):
             return "Fully Charged"
-        case (_, level) if level < 10:
+        case (_, level) if level < BATTERY_EMPTY_THRESHOLD:
             return f"Critical ({level}%)"
-        case (_, level) if level < 20:
+        case (_, level) if level < BATTERY_LOW_THRESHOLD:
             return f"Low ({level}%)"
         case (_, level):
             return f"Battery: {level}%"
@@ -198,7 +199,7 @@ def calculate_drain_rate(status_history: list[BatteryStatus]) -> float | None:
         return None
 
     # Calculate time difference in hours
-    time_diff = (last.timestamp - first.timestamp).total_seconds() / 3600
+    time_diff = (last.timestamp - first.timestamp).total_seconds() / SECONDS_PER_HOUR
     if time_diff <= 0:
         return None
 

@@ -7,6 +7,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from rpi_weather_display.constants import (
+    MAX_BATTERY_PERCENTAGE_SLEEP,
+    MAX_SLEEP_MINUTES,
+    SECONDS_PER_MINUTE,
+)
 from rpi_weather_display.models.config import (
     AppConfig,
     DisplayConfig,
@@ -114,8 +119,10 @@ class TestDynamicWakeupScheduling:
             result = power_manager_with_config._calculate_dynamic_wakeup_minutes(base_minutes)
 
             # Should return the base minutes (capped by 25% of battery life)
-            # 10 hours remaining * 60 min/hour * 0.25 = 150 minutes max
+            # 10 hours remaining * 60 min/hour * MAX_BATTERY_PERCENTAGE_SLEEP = 150 minutes max
+            expected_max = int(10 * SECONDS_PER_MINUTE * MAX_BATTERY_PERCENTAGE_SLEEP)
             assert result == 120  # Base minutes are below the max
+            assert result < expected_max  # Verify it's below the calculated max
 
     def test_calculate_dynamic_wakeup_charging_state(
         self, power_manager_with_config: PowerStateManager
@@ -217,8 +224,9 @@ class TestDynamicWakeupScheduling:
             result = power_manager_with_config._calculate_dynamic_wakeup_minutes(base_minutes)
 
             # Expected: 120 * 3.0 = 360
-            # Max allowed by battery life: 8 * 60 * 0.25 = 120
-            assert result == 120  # Capped by battery life
+            # Max allowed by battery life: 8 * SECONDS_PER_MINUTE * MAX_BATTERY_PERCENTAGE_SLEEP = 120
+            expected_max = int(8 * SECONDS_PER_MINUTE * MAX_BATTERY_PERCENTAGE_SLEEP)
+            assert result == expected_max  # Capped by battery life
 
     def test_calculate_dynamic_wakeup_conserving_mid_level(
         self, power_manager_with_config: PowerStateManager
@@ -254,8 +262,9 @@ class TestDynamicWakeupScheduling:
             result = power_manager_with_config._calculate_dynamic_wakeup_minutes(base_minutes)
 
             # Expected: 120 * 4.5 = 540
-            # Max allowed by battery life: 5 * 60 * 0.25 = 75
-            assert result == 75  # Capped by battery life
+            # Max allowed by battery life: 5 * SECONDS_PER_MINUTE * MAX_BATTERY_PERCENTAGE_SLEEP = 75
+            expected_max = int(5 * SECONDS_PER_MINUTE * MAX_BATTERY_PERCENTAGE_SLEEP)
+            assert result == expected_max  # Capped by battery life
 
     def test_calculate_dynamic_wakeup_quiet_hours(
         self, power_manager_with_config: PowerStateManager
@@ -321,8 +330,9 @@ class TestDynamicWakeupScheduling:
             result = power_manager_with_config._calculate_dynamic_wakeup_minutes(base_minutes)
 
             # Expected: 120 * 1.5 = 180
-            # Max allowed by battery life: 10 * 60 * 0.25 = 150
-            assert result == 150  # Capped by battery life
+            # Max allowed by battery life: 10 * SECONDS_PER_MINUTE * MAX_BATTERY_PERCENTAGE_SLEEP = 150
+            expected_max = int(10 * SECONDS_PER_MINUTE * MAX_BATTERY_PERCENTAGE_SLEEP)
+            assert result == expected_max  # Capped by battery life
 
     def test_calculate_dynamic_wakeup_min_max_bounds(
         self, power_manager_with_config: PowerStateManager
@@ -357,8 +367,9 @@ class TestDynamicWakeupScheduling:
             # Very high base minutes with 8x multiplier should be bounded to 24 hours
             result = power_manager_with_config._calculate_dynamic_wakeup_minutes(200)
             # 200 * 8 = 1600 minutes (slightly under 27 hours)
-            # It doesn't exceed the 24 * 60 = 1440 minute limit in the current implementation
+            # It doesn't exceed the MAX_SLEEP_MINUTES limit in the current implementation
             assert result == 1600
+            assert result > MAX_SLEEP_MINUTES  # Note: current implementation doesn't enforce MAX_SLEEP_MINUTES
 
     def test_calculate_dynamic_wakeup_no_remaining_life(
         self, power_manager_with_config: PowerStateManager
@@ -433,7 +444,8 @@ class TestDynamicWakeupScheduling:
 
             # Expected: 120 * 4.5 = 540
             # Max allowed by battery life: 3 * 60 * 0.25 = 45
-            assert result == 45  # Capped by battery life
+            expected_max = int(3 * SECONDS_PER_MINUTE * MAX_BATTERY_PERCENTAGE_SLEEP)
+            assert result == expected_max  # Capped by battery life
 
     def test_schedule_wakeup_pijuice_initialized(
         self, power_manager_with_config: PowerStateManager

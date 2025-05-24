@@ -110,14 +110,35 @@ MINIMUM_MOCK_SLEEP_TIME = 10  # Minimum sleep time for mock operations in second
 HPA_TO_MMHG = 0.75006  # Conversion factor from hectopascals to millimeters of mercury
 HPA_TO_INHG = 0.02953  # Conversion factor from hectopascals to inches of mercury
 SECONDS_PER_MINUTE = 60  # Seconds in a minute
+SECONDS_PER_HOUR = 3600  # Seconds in an hour
 MILLIAMPS_PER_AMP = 1000  # Milliamps in an amp
 AMPS_PER_MILLIAMP = 0.001  # Conversion from milliamps to amps
 BYTES_PER_KILOBYTE = 1024  # Bytes in a kilobyte
 BYTES_PER_MEGABYTE = 1024 * 1024  # Bytes in a megabyte
 PERCENT_MAX = 100.0  # Maximum percentage value
 
-# Cache file constants
+# Cache constants
 UVI_CACHE_FILENAME = "uvi_max_cache.json"  # Filename for UV index cache
+# Memory cache defaults
+DEFAULT_MEMORY_CACHE_SIZE_MB = 50.0  # Default memory cache size in MB
+DEFAULT_CACHE_TTL_SECONDS = 900  # Default memory cache TTL (15 minutes)
+WEATHER_API_CACHE_SIZE_MB = 20.0  # Weather API response cache size in MB
+# File cache defaults
+DEFAULT_FILE_CACHE_SIZE_MB = 100.0  # Default file cache size in MB
+DEFAULT_FILE_CACHE_TTL_SECONDS = 3600  # Default file cache TTL (1 hour)
+# Memory profiler constants
+DEFAULT_MEMORY_PROFILER_HISTORY_SIZE = 100  # Max history snapshots for memory profiler
+MEMORY_GROWTH_THRESHOLD_MB = 50.0  # Threshold for detecting excessive memory growth
+MEMORY_LEAK_DETECTION_MIN_SAMPLES = 10  # Minimum samples needed for leak detection
+MEMORY_LEAK_GROWTH_THRESHOLD = 8  # Number of growth samples to trigger leak warning (80%)
+# Server-specific memory thresholds
+SERVER_IMAGE_CACHE_SIZE_MB = 50.0  # Image cache size for server
+SERVER_IMAGE_CACHE_TTL_SECONDS = 3600  # Image cache TTL for server (1 hour)
+SERVER_MEMORY_GROWTH_THRESHOLD_MB = 100.0  # Memory growth threshold for server rendering
+# Browser management constants
+BROWSER_LAUNCH_DELAY = 0.1  # Delay after browser launch to ensure it's ready (seconds)
+# Client-specific memory thresholds
+CLIENT_MEMORY_GROWTH_THRESHOLD_MB = 20.0  # Memory growth threshold for client operations
 # File type/extension constants
 DEFAULT_IMAGE_FILENAME = "current.png"  # Default filename for weather image
 IMAGE_FILE_EXTENSION = ".png"  # Image file extension
@@ -133,6 +154,8 @@ PREVIEW_BATTERY_TEMP = 25.0  # Default battery temperature (°C) for preview mod
 # Weather/API constants
 # AQI (Air Quality Index) levels and descriptions
 AQI_LEVELS = {1: "Good", 2: "Fair", 3: "Moderate", 4: "Poor", 5: "Very Poor"}
+# Wind speed conversion
+BEAUFORT_SCALE_DIVISOR = 3.5  # Divisor for converting m/s to Beaufort scale
 
 # Moon phase thresholds for phase detection
 MOON_PHASE_NEW_THRESHOLD = 0.03  # Below this or above 0.97 = new moon
@@ -142,6 +165,7 @@ MOON_PHASE_FULL_MIN = 0.49  # Full moon starts
 MOON_PHASE_FULL_MAX = 0.52  # Full moon ends
 MOON_PHASE_LAST_QUARTER_MIN = 0.74  # Last quarter starts
 MOON_PHASE_LAST_QUARTER_MAX = 0.77  # Last quarter ends
+MOON_PHASE_CYCLE_DAYS = 28  # Days in a lunar cycle
 
 # Cardinal direction constants
 CARDINAL_DIRECTIONS_COUNT = 16  # Number of cardinal directions (N, NNE, NE, etc.)

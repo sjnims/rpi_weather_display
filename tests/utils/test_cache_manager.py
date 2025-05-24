@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
+from rpi_weather_display.constants import BYTES_PER_MEGABYTE, DEFAULT_FILE_CACHE_TTL_SECONDS
 from rpi_weather_display.utils.cache_manager import FileCache, MemoryAwareCache
 
 
@@ -17,7 +18,7 @@ class TestMemoryAwareCache:
         """Test cache initialization."""
         cache: MemoryAwareCache[str] = MemoryAwareCache(max_size_mb=10.0, ttl_seconds=300)
         
-        assert cache.max_size_bytes == 10 * 1024 * 1024
+        assert cache.max_size_bytes == 10 * BYTES_PER_MEGABYTE
         assert cache.ttl_seconds == 300
         assert cache.size_mb == 0.0
         assert cache.item_count == 0
@@ -119,7 +120,7 @@ class TestMemoryAwareCache:
         cache: MemoryAwareCache[str] = MemoryAwareCache()
         
         # Add 1MB of data
-        cache.put("key1", "value1", 1024 * 1024)
+        cache.put("key1", "value1", BYTES_PER_MEGABYTE)
         assert cache.size_mb == 1.0
 
     def test_logging(self, caplog: pytest.LogCaptureFixture) -> None:
@@ -175,9 +176,15 @@ class TestFileCache:
         cache = FileCache(temp_cache_dir, max_size_mb=50.0, ttl_seconds=1800)
         
         assert cache.cache_dir == temp_cache_dir
-        assert cache.max_size_bytes == 50 * 1024 * 1024
+        assert cache.max_size_bytes == 50 * BYTES_PER_MEGABYTE
         assert cache.ttl_seconds == 1800
         assert isinstance(cache.logger, logging.Logger)
+
+    def test_init_default_ttl(self, temp_cache_dir: Path) -> None:
+        """Test file cache initialization with default TTL."""
+        cache = FileCache(temp_cache_dir)
+        
+        assert cache.ttl_seconds == DEFAULT_FILE_CACHE_TTL_SECONDS
 
     def test_init_creates_directory(self, tmp_path: Path) -> None:
         """Test that init creates cache directory if it doesn't exist."""

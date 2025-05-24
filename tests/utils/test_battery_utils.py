@@ -4,6 +4,17 @@ from datetime import datetime, timedelta
 
 import pytest
 
+from rpi_weather_display.constants import (
+    ABNORMAL_DISCHARGE_FACTOR,
+    BATTERY_EMPTY_THRESHOLD,
+    BATTERY_FULL_THRESHOLD,
+    BATTERY_HIGH_THRESHOLD,
+    BATTERY_LOW_THRESHOLD,
+    MOCK_BATTERY_CURRENT,
+    MOCK_BATTERY_LEVEL,
+    MOCK_BATTERY_TEMPERATURE,
+    MOCK_BATTERY_VOLTAGE,
+)
 from rpi_weather_display.models.config import PowerConfig
 from rpi_weather_display.models.system import BatteryState, BatteryStatus
 from rpi_weather_display.utils import (
@@ -37,10 +48,10 @@ def power_config() -> PowerConfig:
 def normal_battery() -> BatteryStatus:
     """Create a normal battery status for testing."""
     return BatteryStatus(
-        level=50,
-        voltage=3.7,
-        current=-100.0,
-        temperature=25.0,
+        level=MOCK_BATTERY_LEVEL,
+        voltage=MOCK_BATTERY_VOLTAGE,
+        current=-MOCK_BATTERY_CURRENT,  # Negative for discharging
+        temperature=MOCK_BATTERY_TEMPERATURE,
         state=BatteryState.DISCHARGING,
         time_remaining=300,
         timestamp=datetime.now(),
@@ -52,9 +63,9 @@ def low_battery() -> BatteryStatus:
     """Create a low battery status for testing."""
     return BatteryStatus(
         level=15,
-        voltage=3.5,
-        current=-150.0,
-        temperature=28.0,
+        voltage=MOCK_BATTERY_VOLTAGE - 0.2,  # 3.5V
+        current=-MOCK_BATTERY_CURRENT,  # -150mA
+        temperature=MOCK_BATTERY_TEMPERATURE + 6.0,  # 28.0°C
         state=BatteryState.DISCHARGING,
         time_remaining=90,
         timestamp=datetime.now(),
@@ -66,9 +77,9 @@ def critical_battery() -> BatteryStatus:
     """Create a critical battery status for testing."""
     return BatteryStatus(
         level=5,
-        voltage=3.2,
+        voltage=MOCK_BATTERY_VOLTAGE - 0.5,  # 3.2V
         current=-180.0,
-        temperature=30.0,
+        temperature=MOCK_BATTERY_TEMPERATURE + 8.0,  # 30.0°C
         state=BatteryState.DISCHARGING,
         time_remaining=30,
         timestamp=datetime.now(),
@@ -82,7 +93,7 @@ def charging_battery() -> BatteryStatus:
         level=25,
         voltage=4.1,
         current=500.0,
-        temperature=32.0,
+        temperature=MOCK_BATTERY_TEMPERATURE + 10.0,  # 32.0°C
         state=BatteryState.CHARGING,
         time_remaining=None,
         timestamp=datetime.now(),
@@ -93,10 +104,10 @@ def charging_battery() -> BatteryStatus:
 def full_battery() -> BatteryStatus:
     """Create a full battery status for testing."""
     return BatteryStatus(
-        level=100,
+        level=BATTERY_FULL_THRESHOLD,
         voltage=4.2,
         current=0.0,
-        temperature=25.0,
+        temperature=MOCK_BATTERY_TEMPERATURE + 3.0,  # 25.0°C
         state=BatteryState.FULL,
         time_remaining=None,
         timestamp=datetime.now(),
@@ -142,20 +153,20 @@ def test_is_battery_critical(
 ) -> None:
     """Test is_battery_critical function."""
     # Normal battery should not be critical
-    assert is_battery_critical(normal_battery, 10) is False
+    assert is_battery_critical(normal_battery, BATTERY_EMPTY_THRESHOLD) is False
 
     # Low battery should not be critical with threshold of 10
-    assert is_battery_critical(low_battery, 10) is False
+    assert is_battery_critical(low_battery, BATTERY_EMPTY_THRESHOLD) is False
 
     # Low battery should be critical with threshold of 20
-    assert is_battery_critical(low_battery, 20) is True
+    assert is_battery_critical(low_battery, BATTERY_LOW_THRESHOLD) is True
 
     # Critical battery should be critical with threshold of 10
-    assert is_battery_critical(critical_battery, 10) is True
+    assert is_battery_critical(critical_battery, BATTERY_EMPTY_THRESHOLD) is True
     
     # Charging battery with low level should not be critical
     low_charging = charging_battery.model_copy(update={"level": 5})
-    assert is_battery_critical(low_charging, 10) is False
+    assert is_battery_critical(low_charging, BATTERY_EMPTY_THRESHOLD) is False
 
 
 def test_is_battery_low(
@@ -164,17 +175,17 @@ def test_is_battery_low(
 ) -> None:
     """Test is_battery_low function."""
     # Normal battery should not be low
-    assert is_battery_low(normal_battery, 20) is False
+    assert is_battery_low(normal_battery, BATTERY_LOW_THRESHOLD) is False
 
-    # Low battery (15%) should be low with threshold of 20
-    assert is_battery_low(low_battery, 20) is True
+    # Low battery (15%) should be low with threshold of 30
+    assert is_battery_low(low_battery, BATTERY_LOW_THRESHOLD) is True
 
     # Critical battery should be low
-    assert is_battery_low(critical_battery, 20) is True
+    assert is_battery_low(critical_battery, BATTERY_LOW_THRESHOLD) is True
     
     # Charging battery with low level should not be considered low
     low_charging = charging_battery.model_copy(update={"level": 15})
-    assert is_battery_low(low_charging, 20) is False
+    assert is_battery_low(low_charging, BATTERY_LOW_THRESHOLD) is False
 
 
 def test_is_charging(normal_battery: BatteryStatus, charging_battery: BatteryStatus) -> None:
@@ -237,8 +248,8 @@ def test_get_battery_icon(
     full_battery: BatteryStatus,
 ) -> None:
     """Test get_battery_icon function."""
-    # Test battery icon for normal battery
-    assert get_battery_icon(normal_battery) == "battery-medium-bold"
+    # Test battery icon for normal battery (75% = high)
+    assert get_battery_icon(normal_battery) == "battery-high-bold"
 
     # Test battery icon for low battery
     assert get_battery_icon(low_battery) == "battery-low-bold"
@@ -266,7 +277,7 @@ def test_get_battery_text_description(
 ) -> None:
     """Test get_battery_text_description function."""
     # Normal battery description
-    assert get_battery_text_description(normal_battery) == "Battery: 50%"
+    assert get_battery_text_description(normal_battery) == f"Battery: {MOCK_BATTERY_LEVEL}%"
 
     # Low battery description
     assert get_battery_text_description(low_battery) == "Low (15%)"
@@ -312,12 +323,12 @@ def test_is_discharge_rate_abnormal() -> None:
     # Normal rate (5% per hour with expected 5%)
     assert is_discharge_rate_abnormal(5.0, 5.0) is False
 
-    # Slightly above expected (not abnormal with default factor 1.5)
+    # Slightly above expected (not abnormal with default factor ABNORMAL_DISCHARGE_FACTOR)
     assert is_discharge_rate_abnormal(6.0, 5.0) is False
     assert is_discharge_rate_abnormal(7.0, 5.0) is False
 
-    # Abnormal rate (50% higher with default factor 1.5)
-    assert is_discharge_rate_abnormal(7.5, 5.0) is True
+    # Abnormal rate (exactly at threshold with ABNORMAL_DISCHARGE_FACTOR = 1.5)
+    assert is_discharge_rate_abnormal(5.0 * ABNORMAL_DISCHARGE_FACTOR, 5.0) is True
 
     # Highly abnormal rate
     assert is_discharge_rate_abnormal(10.0, 5.0) is True
@@ -338,8 +349,8 @@ def test_get_battery_icon_high_battery(normal_battery: BatteryStatus) -> None:
     high_battery = normal_battery.model_copy(update={"level": 85})
     assert get_battery_icon(high_battery) == "battery-high-bold"
     
-    # Test battery at 75% (just above high threshold)
-    high_battery = normal_battery.model_copy(update={"level": 76})
+    # Test battery at just above high threshold
+    high_battery = normal_battery.model_copy(update={"level": BATTERY_HIGH_THRESHOLD + 1})
     assert get_battery_icon(high_battery) == "battery-high-bold"
 
 

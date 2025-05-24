@@ -1127,7 +1127,7 @@ class PowerStateManager:
         if remaining_hours is not None:
             # Calculate a reasonable maximum sleep time based on remaining battery life
             # Never sleep more than a percentage of remaining battery life
-            max_sleep_minutes = remaining_hours * 60 * MAX_BATTERY_PERCENTAGE_SLEEP
+            max_sleep_minutes = remaining_hours * SECONDS_PER_MINUTE * MAX_BATTERY_PERCENTAGE_SLEEP
 
             # But also never less than minimum minutes to avoid too frequent wakeups
             max_sleep_minutes = max(max_sleep_minutes, MIN_SLEEP_MINUTES)

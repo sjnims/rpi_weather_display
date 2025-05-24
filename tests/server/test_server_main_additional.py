@@ -7,6 +7,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from rpi_weather_display.constants import SERVER_MEMORY_GROWTH_THRESHOLD_MB
 from rpi_weather_display.models.config import AppConfig
 from rpi_weather_display.server.main import WeatherDisplayServer, lifespan
 
@@ -174,7 +175,7 @@ class TestMemoryGrowthWarning:
             await test_server_with_static_mock._handle_render(request, mock_bg_instance)
             
             # Verify memory growth was checked and warning was logged
-            mock_profiler.check_memory_growth.assert_called_once_with(threshold_mb=100.0)
+            mock_profiler.check_memory_growth.assert_called_once_with(threshold_mb=SERVER_MEMORY_GROWTH_THRESHOLD_MB)
             assert "Excessive memory growth detected during rendering" in caplog.text
 
 

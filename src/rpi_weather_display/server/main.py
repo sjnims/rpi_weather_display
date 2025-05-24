@@ -28,6 +28,9 @@ from rpi_weather_display.constants import (
     PREVIEW_BATTERY_LEVEL,
     PREVIEW_BATTERY_TEMP,
     PREVIEW_BATTERY_VOLTAGE,
+    SERVER_IMAGE_CACHE_SIZE_MB,
+    SERVER_IMAGE_CACHE_TTL_SECONDS,
+    SERVER_MEMORY_GROWTH_THRESHOLD_MB,
 )
 from rpi_weather_display.models.config import AppConfig
 from rpi_weather_display.models.system import BatteryState, BatteryStatus
@@ -184,8 +187,8 @@ class WeatherDisplayServer:
         # Initialize file cache for images
         self.file_cache = FileCache(
             cache_dir=self.cache_dir,
-            max_size_mb=50.0,  # 50MB for image cache
-            ttl_seconds=3600,  # 1 hour TTL for images
+            max_size_mb=SERVER_IMAGE_CACHE_SIZE_MB,
+            ttl_seconds=SERVER_IMAGE_CACHE_TTL_SECONDS,
         )
 
         # Set up routes
@@ -343,7 +346,7 @@ class WeatherDisplayServer:
             memory_profiler.record_snapshot()
 
             # Check for excessive memory growth
-            if memory_profiler.check_memory_growth(threshold_mb=100.0):
+            if memory_profiler.check_memory_growth(threshold_mb=SERVER_MEMORY_GROWTH_THRESHOLD_MB):
                 self.logger.warning("Excessive memory growth detected during rendering")
 
             # Return the image with background task to clean up
