@@ -19,9 +19,42 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Determine what files changed to optimize workflow
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+      docs: ${{ steps.filter.outputs.docs }}
+      docker: ${{ steps.filter.outputs.docker }}
+      workflows: ${{ steps.filter.outputs.workflows }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            code:
+              - 'src/**'
+              - 'tests/**'
+              - 'pyproject.toml'
+              - 'poetry.lock'
+            docs:
+              - '**.md'
+              - 'docs/**'
+              - 'config.example.yaml'
+              - '.gitignore'
+              - 'LICENSE'
+            docker:
+              - 'Dockerfile'
+              - 'deploy/**'
+            workflows:
+              - '.github/workflows/**'
+
   # Separate jobs for parallel execution
   lint:
     runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ needs.changes.outputs.code == 'true' || needs.changes.outputs.workflows == 'true' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -39,7 +72,7 @@ jobs:
           key: poetry-2.1.3-${{ runner.os }}
 
       - name: Install Poetry
-        if: steps.poetry-cache.outputs.cache-hit != 'true'
+        if: ${{ steps.poetry-cache.outputs.cache-hit != 'true' }}
         uses: snok/install-poetry@v1
         with:
           version: 2.1.3
@@ -62,6 +95,8 @@ jobs:
 
   typecheck:
     runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ needs.changes.outputs.code == 'true' || needs.changes.outputs.workflows == 'true' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -78,7 +113,7 @@ jobs:
           key: poetry-2.1.3-${{ runner.os }}
 
       - name: Install Poetry
-        if: steps.poetry-cache.outputs.cache-hit != 'true'
+        if: ${{ steps.poetry-cache.outputs.cache-hit != 'true' }}
         uses: snok/install-poetry@v1
         with:
           version: 2.1.3
@@ -102,6 +137,8 @@ jobs:
 
   code-quality:
     runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ needs.changes.outputs.code == 'true' || needs.changes.outputs.workflows == 'true' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -133,7 +170,8 @@ jobs:
 
   codeql:
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    needs: changes
+    if: ${{ (needs.changes.outputs.code == 'true' || needs.changes.outputs.workflows == 'true') && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) }}
     steps:
       - uses: actions/checkout@v4
 
@@ -151,7 +189,8 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
-    needs: [lint, typecheck]  # Don't wait for security or code-quality
+    needs: [changes, lint, typecheck]  # Don't wait for security or code-quality
+    if: ${{ needs.changes.outputs.code == 'true' || needs.changes.outputs.workflows == 'true' }}
     strategy:
       matrix:
         test-group: [models, client, server, utils]
@@ -174,7 +213,7 @@ jobs:
           key: poetry-2.1.3-${{ runner.os }}
 
       - name: Install Poetry
-        if: steps.poetry-cache.outputs.cache-hit != 'true'
+        if: ${{ steps.poetry-cache.outputs.cache-hit != 'true' }}
         uses: snok/install-poetry@v1
         with:
           version: 2.1.3
@@ -207,7 +246,7 @@ jobs:
         run: poetry install --no-interaction --all-extras
 
       - name: Install Playwright browsers
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        if: ${{ steps.playwright-cache.outputs.cache-hit != 'true' }}
         run: poetry run playwright install chromium --with-deps
 
       - name: Run tests for ${{ matrix.test-group }}
@@ -230,8 +269,8 @@ jobs:
 
   coverage:
     runs-on: ubuntu-latest
-    needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [changes, test]
+    if: ${{ (needs.changes.outputs.code == 'true' || needs.changes.outputs.workflows == 'true') && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -256,7 +295,7 @@ jobs:
           key: poetry-2.1.3-${{ runner.os }}
 
       - name: Install Poetry
-        if: steps.poetry-cache.outputs.cache-hit != 'true'
+        if: ${{ steps.poetry-cache.outputs.cache-hit != 'true' }}
         uses: snok/install-poetry@v1
         with:
           version: 2.1.3
@@ -289,7 +328,7 @@ jobs:
           key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
 
       - name: Install Playwright browsers
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        if: ${{ steps.playwright-cache.outputs.cache-hit != 'true' }}
         run: poetry run playwright install chromium --with-deps
 
       - name: Run all tests with coverage
@@ -323,8 +362,8 @@ jobs:
 
   build-and-push:
     runs-on: ubuntu-latest
-    needs: [lint, typecheck, test]  # Don't wait for coverage, security, or code-quality
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [changes, lint, typecheck, test]  # Don't wait for coverage, security, or code-quality
+    if: ${{ (needs.changes.outputs.code == 'true' || needs.changes.outputs.docker == 'true' || needs.changes.outputs.workflows == 'true') && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -368,10 +407,11 @@ jobs:
 
   deploy:
     runs-on: ubuntu-latest
-    needs: build-and-push
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [changes, build-and-push]
+    if: always() && ${{ (needs.build-and-push.result == 'success' || (needs.build-and-push.result == 'skipped' && needs.changes.outputs.docs == 'true')) }}
     steps:
       - name: Deploy notification
+        if: ${{ needs.build-and-push.result == 'success' }}
         run: |
           echo "::notice title=Deployment Ready::Docker image has been pushed to ghcr.io"
           echo "Image: ghcr.io/${{ github.repository }}/rpi-weather-display:latest"
@@ -379,3 +419,10 @@ jobs:
           echo "1. docker pull ghcr.io/${{ github.repository }}/rpi-weather-display:latest"
           echo "2. docker stop rpi-weather-display"
           echo "3. docker run -d --name rpi-weather-display -p 8000:8000 -v /path/to/config.yaml:/app/config.yaml ghcr.io/${{ github.repository }}/rpi-weather-display:latest"
+
+      - name: Documentation update notification
+        if: ${{ needs.build-and-push.result == 'skipped' && needs.changes.outputs.docs == 'true' }}
+        run: |
+          echo "::notice title=Documentation Updated::Only documentation files were changed"
+          echo "No code changes detected - skipping build and test steps"
+          echo "Changed files are limited to: *.md, docs/**, config.example.yaml, .gitignore, or LICENSE"

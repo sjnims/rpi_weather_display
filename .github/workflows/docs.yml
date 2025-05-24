@@ -1,0 +1,58 @@
+name: Documentation Check
+
+on:
+  pull_request:
+    paths:
+      - '**.md'
+      - 'docs/**'
+      - 'config.example.yaml'
+      - '.gitignore'
+      - 'LICENSE'
+
+permissions:
+  contents: read
+
+jobs:
+  docs-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check documentation formatting
+        run: |
+          echo "::notice title=Documentation Check::Checking documentation files only"
+
+          # Check for broken links in markdown files
+          find . -name "*.md" -type f | while read -r file; do
+            echo "Checking $file for broken links..."
+            # Simple check for relative links that might be broken
+            grep -E '\[.*\]\(((?!http)[^)]+)\)' "$file" | while read -r line; do
+              link=$(echo "$line" | sed -E 's/.*\[.*\]\(([^)]+)\).*/\1/')
+              # Skip anchor links
+              if [[ ! "$link" =~ ^# ]]; then
+                # Check if file exists
+                if [[ ! -e "$link" ]] && [[ ! -e "${file%/*}/$link" ]]; then
+                  echo "::warning file=$file::Possible broken link: $link"
+                fi
+              fi
+            done
+          done
+
+      - name: Validate YAML syntax
+        if: contains(github.event.pull_request.changed_files, 'config.example.yaml')
+        run: |
+          # Simple YAML validation
+          python3 -c "import yaml; yaml.safe_load(open('config.example.yaml'))" || exit 1
+          echo "✅ config.example.yaml is valid YAML"
+
+      - name: Summary
+        run: |
+          echo "## Documentation Check Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Documentation-only changes detected" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Skipping code quality checks, tests, and builds" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Changed Files:" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          git diff --name-only origin/main... | grep -E '\.(md|yaml|yml|txt)$|LICENSE|\.gitignore' >> $GITHUB_STEP_SUMMARY || echo "No documentation files changed" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY

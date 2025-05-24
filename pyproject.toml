@@ -80,6 +80,7 @@ ruff = "^0.5.3"
 pyright = "^1.1.401"
 pre-commit = "^3.5.0"
 freezegun = "^1.2.0"
+yamllint = "^1.37.1"
 
 [tool.poetry.group.docs.dependencies]
 sphinx = "^7.2.6"

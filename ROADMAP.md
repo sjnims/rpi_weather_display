@@ -59,13 +59,23 @@ Priority is indicated as:
 - [x] 🟢 2.4.3 Add memory profiling and reporting [COMPLETED 2025-05-24]
 
 ### 2.5 Code Refactoring
-- [ ] 🔴 2.5.1 Modularize large files (power_manager.py at 1270 lines, renderer.py) [PLANNED]
+- [ ] 🔴 2.5.1 Modularize power_manager.py (1270 lines, maintainability: 19.56) [PLANNED]
   - Split PowerStateManager into: BatteryMonitor, PowerStateController, SystemMetricsCollector, PiJuiceAdapter
+  - Extract complex methods: get_battery_status (C-rated), get_system_metrics (C-rated)
   - Move test-specific methods to separate test utilities module
-- [ ] 🔴 2.5.2 Create custom exception hierarchy for better error handling [PLANNED]
-- [ ] 🟠 2.5.3 Standardize callback patterns across the codebase [PLANNED]
-- [ ] 🟠 2.5.4 Remove test-only methods from production interfaces [PLANNED]
-- [ ] 🟢 2.5.5 Resolve circular import risks in utils module [PLANNED]
+- [ ] 🔴 2.5.2 Refactor renderer.py generate_html method (D-rated complexity) [PLANNED]
+  - Break down into smaller, focused methods: prepare_template_data, format_weather_data, setup_jinja_filters
+  - Extract moon phase logic into separate helper class
+  - Simplify nested conditionals and reduce cyclomatic complexity
+- [ ] 🔴 2.5.3 Simplify renderer._get_daily_max_uvi method (C-rated complexity) [PLANNED]
+  - Extract cache handling logic
+  - Separate UVI calculation from persistence logic
+- [ ] 🟠 2.5.4 Create custom exception hierarchy for better error handling [PLANNED]
+- [ ] 🟠 2.5.5 Refactor complex network and display methods [PLANNED]
+  - Simplify AsyncNetworkManager.set_wifi_power_save_mode
+  - Break down EPaperDisplay.display_pil_image into smaller methods
+- [ ] 🟢 2.5.6 Remove test-only methods from production interfaces [PLANNED]
+- [ ] 🟢 2.5.7 Resolve circular import risks in utils module [PLANNED]
 
 ### 2.6 Hardware Abstractions (New)
 - [ ] 🔴 2.6.1 Create hardware abstraction interfaces for display and power management [PLANNED]
@@ -266,21 +276,39 @@ Priority is indicated as:
 
 ## Recommended Task Prioritization
 
-Based on the code review findings, the following tasks should be prioritized:
+Based on the code complexity analysis, the following tasks should be prioritized:
+
+**Code Quality Metrics Summary:**
+- Average Complexity: C (15.78) - Acceptable but room for improvement
+- Complex Functions (E-F): 0 - Good, no extremely complex functions
+- Lowest Maintainability: power_manager.py (19.56), renderer.py (38.99)
+- Highest Complexity Method: renderer.generate_html (D rating)
+
+*Complexity Ratings: A (simple) → B → C (moderate) → D (complex) → E → F (very complex)*
 
 ### Immediate Priority (Next Sprint)
-1. **Phase 2.5.1** - Modularize power_manager.py
-   - 1270 lines is too large for maintainability
-   - Clear separation needed for different responsibilities
+1. **Phase 2.5.2** - Refactor renderer.py generate_html method
+   - Complexity rating: D (highest in codebase)
+   - Method is doing too many things and needs decomposition
+   - Will improve maintainability score (currently 38.99)
 
-2. **Phase 2.4** - Memory Management
-   - Optimize image processing for memory efficiency
-   - Implement memory-aware caching with size limits
-   - Add memory profiling and reporting
+2. **Phase 2.5.1** - Modularize power_manager.py
+   - Maintainability index: 19.56 (lowest in codebase)
+   - 1270 lines is too large
+   - Contains C-rated complex methods that need extraction
+
+3. **Phase 2.5.3** - Simplify renderer._get_daily_max_uvi
+   - Complexity rating: C
+   - Mixed concerns (calculation + caching + persistence)
 
 ### Short-term Priority (Q1 2025)
-1. **Phase 2.5.4** - Remove test-only methods from production
-2. **Phase 5.5.4-5.5.6** - Security improvements in deployment
+1. **Phase 2.5.5** - Refactor other C-rated complex methods
+   - api.py: get_coordinates, get_weather_data
+   - network.py: set_wifi_power_save_mode
+   - display.py: display_pil_image
+   - client/main.py: run method
+2. **Phase 2.5.4** - Create custom exception hierarchy
+3. **Phase 2.5.6** - Remove test-only methods from production
 
 ### Medium-term Priority (Q2 2025)
 1. **Phase 2.7** - E-Paper display optimization
@@ -292,10 +320,10 @@ Based on the code review findings, the following tasks should be prioritized:
 | Phase | Not Started | In Progress | Completed | Total |
 |-------|------------|-------------|-----------|-------|
 | 1     | 0          | 0           | 14        | 14    |
-| 2     | 14         | 0           | 18        | 32    |
+| 2     | 16         | 0           | 18        | 34    |
 | 3     | 12         | 0           | 0         | 12    |
 | 4     | 12         | 0           | 0         | 12    |
 | 5     | 17         | 0           | 2         | 19    |
 | 6     | 21         | 0           | 0         | 21    |
 | 7     | 18         | 0           | 0         | 18    |
-| Total | 94         | 0           | 34        | 128   |
+| Total | 96         | 0           | 34        | 130   |

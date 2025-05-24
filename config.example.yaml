@@ -1,82 +1,366 @@
+# Raspberry Pi Weather Display Configuration
+# ==========================================
+#
+# This is a complete example configuration file showing all available options.
+# Most parameters have sensible defaults built into the application, so you only
+# need to specify the values you want to change.
+#
+# MINIMUM REQUIRED CONFIGURATION:
+# ------------------------------
+# To get started, you only need:
+#   1. weather.api_key - Your OpenWeatherMap API key
+#   2. Either weather.location (lat/lon) OR weather.city_name
+#   3. server.url - The address of your weather server
+#
+# Everything else will use built-in defaults optimized for battery life.
+#
+# Example minimal config:
+#
+# weather:
+#   api_key: "your-api-key-here"
+#   city_name: "London"
+# server:
+#   url: "http://192.168.1.100"
+#
+
 weather:
+  # REQUIRED: Your OpenWeatherMap API key
+  # Get one free at: https://openweathermap.org/api
   api_key: "YOUR_OPENWEATHERMAP_API_KEY"
-  location: {"lat": 51.5072, "lon": -0.1276}  # Precise lat/lon coordinates for London
-  city_name: "London"  # Used for display and when lat/lon not provided
+
+  # REQUIRED (one of these):
+  # Option 1: Precise coordinates (more accurate weather data)
+  location: {"lat": 51.5072, "lon": -0.1276}  # London coordinates
+  # Option 2: City name (will be geocoded to coordinates)
+  city_name: "London"  # Also used for display purposes
+
+  # Temperature units: "metric" (°C), "imperial" (°F), or "standard" (K)
+  # Default: "metric"
   units: "metric"
+
+  # Language code for weather descriptions (en, es, fr, de, etc.)
+  # See: https://openweathermap.org/api/one-call-3#multi
+  # Default: "en"
   language: "en"
+
+  # How often to fetch new weather data from the API (in minutes)
+  # Lower values = more API calls = higher battery drain
+  # Default: 30
   update_interval_minutes: 30
+
+  # Number of days to show in the forecast (max 7)
+  # Default: 5
   forecast_days: 5
+
+  # Number of hourly forecast entries to display (max 48)
+  # Default: 24
   hourly_forecast_count: 24
 
 display:
+  # Display resolution - must match your e-paper display specifications
+  # For Waveshare 10.3": 1872x1404
+  # Default: 1872x1404
   width: 1872
   height: 1404
+
+  # Display rotation in degrees: 0, 90, 180, or 270
+  # Use this to orient the display correctly in your frame
+  # Default: 0
   rotate: 0
-  vcom: -2.06  # VCOM value specific to e-paper display hardware
-  # Refresh rate configuration
+
+  # VCOM voltage setting for your specific e-paper display
+  # This value is written on a sticker on your display's flex cable
+  # Typical range: -3.0 to -0.5 (more negative = darker blacks)
+  # Default: -2.06
+  vcom: -2.06
+
+  # === Refresh Rate Configuration ===
+  # All values in minutes. Lower = more frequent updates = higher battery drain
+
+  # Normal refresh interval when battery is healthy (>30%)
+  # Default: 30
   refresh_interval_minutes: 30
-  refresh_interval_low_battery_minutes: 60  # Interval when battery is low
-  refresh_interval_critical_battery_minutes: 120  # Interval when battery is critical
-  refresh_interval_charging_minutes: 15  # Interval when charging
-  battery_aware_refresh: true  # Whether to adjust refresh intervals based on battery
+
+  # Refresh interval when battery is low (20-30%)
+  # Default: 60 (doubles to save power)
+  refresh_interval_low_battery_minutes: 60
+
+  # Refresh interval when battery is critical (<20%)
+  # Default: 120 (quadruples to maximize battery life)
+  refresh_interval_critical_battery_minutes: 120
+
+  # Refresh interval when charging (can be more frequent)
+  # Default: 15
+  refresh_interval_charging_minutes: 15
+
+  # Enable battery-aware refresh intervals
+  # When true, automatically adjusts refresh rate based on battery level
+  # Default: true
+  battery_aware_refresh: true
+
+  # Use partial refresh when possible (faster, less power, may ghost)
+  # Full refresh is still done periodically to clear ghosting
+  # Default: true
   partial_refresh: true
-  # Image difference configuration
-  pixel_diff_threshold: 10  # Threshold for considering a pixel changed
-  pixel_diff_threshold_low_battery: 20  # Threshold when battery is low
-  pixel_diff_threshold_critical_battery: 30  # Threshold when battery is critical
-  min_changed_pixels: 100  # Minimum number of changed pixels to trigger refresh
-  min_changed_pixels_low_battery: 250  # Minimum when battery is low
-  min_changed_pixels_critical_battery: 500  # Minimum when battery is critical
-  battery_aware_threshold: true  # Whether to adjust thresholds based on battery
-  # Display formatting
+
+  # === Image Difference Detection ===
+  # These settings prevent unnecessary refreshes when content hasn't changed much
+
+  # Pixel difference threshold (0-255) to consider a pixel "changed"
+  # Higher values = less sensitive = fewer refreshes
+  # Default: 10
+  pixel_diff_threshold: 10
+  pixel_diff_threshold_low_battery: 20      # When battery is low
+  pixel_diff_threshold_critical_battery: 30  # When battery is critical
+
+  # Minimum number of changed pixels required to trigger a refresh
+  # Higher values = fewer refreshes for minor changes
+  # Default: 100
+  min_changed_pixels: 100
+  min_changed_pixels_low_battery: 250      # When battery is low
+  min_changed_pixels_critical_battery: 500  # When battery is critical
+
+  # Enable battery-aware image difference thresholds
+  # Default: true
+  battery_aware_threshold: true
+
+  # === Display Formatting ===
+  # How to format dates and times on the display
+
+  # Timestamp format for "last updated" display
+  # Uses Python strftime format codes
+  # Default: "%Y-%m-%d %H:%M"
   timestamp_format: "%Y-%m-%d %H:%M"
+
+  # Time format for sunrise/sunset and other time displays
+  # null = use 12-hour format with AM/PM
+  # Examples: "%H:%M" (24-hour), "%I:%M %p" (12-hour with AM/PM)
+  # Default: null
   time_format: null
-  pressure_units: "hPa"  # Options: "hPa", "mmHg", "inHg"
-  display_datetime_format: null  # Options: null (default to MM/DD/YYYY HH:MM AM/PM) or custom strftime format like "%m/%d/%Y %I:%M %p"
+
+  # Pressure unit display: "hPa", "mmHg", or "inHg"
+  # Default: "hPa"
+  pressure_units: "hPa"
+
+  # Main date/time format for the display
+  # null = use default "MM/DD/YYYY HH:MM AM/PM" format
+  # Example: "%d/%m/%Y %H:%M" for "DD/MM/YYYY HH:MM" format
+  # Default: null
+  display_datetime_format: null
 
 power:
+  # === Quiet Hours Configuration ===
+  # During quiet hours, the display won't update to save power and reduce disturbance
+
+  # Start time for quiet hours (24-hour format)
+  # Default: "23:00"
   quiet_hours_start: "23:00"
+
+  # End time for quiet hours (24-hour format)
+  # Default: "06:00"
   quiet_hours_end: "06:00"
+
+  # === Battery Thresholds ===
+  # These trigger different power-saving behaviors
+
+  # Battery level (%) below which to enter low power mode
+  # Default: 20
   low_battery_threshold: 20
+
+  # Battery level (%) below which to enter critical power mode
+  # Default: 10
   critical_battery_threshold: 10
-  battery_capacity_mah: 12000  # Battery capacity in milliamp-hours
+
+  # Your battery capacity in milliamp-hours (mAh)
+  # Used for time remaining calculations
+  # PiJuice Zero default battery: 1200 mAh
+  # Default: 12000 (for 12,000 mAh battery)
+  battery_capacity_mah: 12000
+
+  # === Power Management Intervals ===
+
+  # How long to sleep between wake cycles (minutes)
+  # This is the base interval - actual sleep time may be longer based on battery
+  # Default: 60
   wake_up_interval_minutes: 60
+
+  # WiFi connection timeout (seconds)
+  # If WiFi doesn't connect within this time, give up to save power
+  # Default: 30
   wifi_timeout_seconds: 30
+
+  # === WiFi Power Management ===
+
+  # Automatically manage WiFi power based on battery level
+  # Default: true
   enable_battery_aware_wifi: true
-  wifi_power_save_mode: "auto"  # Options: "auto", "off", "on", "aggressive"
+
+  # WiFi power save mode:
+  # - "auto": Let the system decide based on battery
+  # - "off": Maximum performance, highest power consumption
+  # - "on": Balanced power saving
+  # - "aggressive": Maximum power saving, may affect connection stability
+  # Default: "auto"
+  wifi_power_save_mode: "auto"
+
+  # === Network Retry Configuration ===
+  # Exponential backoff settings for network failures
+
+  # Initial delay between retries (seconds)
+  # Default: 1.0
   retry_initial_delay_seconds: 1.0
-  retry_max_delay_seconds: 300.0  # 5 minutes max delay
+
+  # Maximum delay between retries (seconds)
+  # Default: 300.0 (5 minutes)
+  retry_max_delay_seconds: 300.0
+
+  # Multiplier for exponential backoff (delay = previous_delay * factor)
+  # Default: 2.0
   retry_backoff_factor: 2.0
-  retry_jitter_factor: 0.1  # 10% jitter
+
+  # Random jitter to add to delays (0.0-1.0)
+  # Helps prevent synchronized retries across multiple devices
+  # Default: 0.1 (10% jitter)
+  retry_jitter_factor: 0.1
+
+  # Maximum number of retry attempts before giving up
+  # Default: 5
   retry_max_attempts: 5
+
+  # === Hardware Power Optimization ===
+  # These significantly reduce power consumption but may affect functionality
+
+  # Disable HDMI output (saves ~25mA)
+  # Default: true
   disable_hdmi: true
+
+  # Disable Bluetooth (saves ~10mA)
+  # Default: true
   disable_bluetooth: true
+
+  # Disable activity/power LEDs (saves ~5mA)
+  # Default: true
   disable_leds: true
+
+  # Use RAM for temporary files instead of SD card
+  # Reduces SD card wear and saves small amount of power
+  # Default: true
   enable_temp_fs: true
+
+  # CPU frequency governor: "powersave", "ondemand", "performance"
+  # "powersave" locks CPU at minimum frequency for best battery life
+  # Default: "powersave"
   cpu_governor: "powersave"
+
+  # Maximum CPU frequency in MHz (Pi Zero 2 W: 600-1000)
+  # Lower = better battery life, slower performance
+  # Default: 700
   cpu_max_freq_mhz: 700
+
+  # === PiJuice Power Management ===
+  # Only applies if you have a PiJuice HAT
+
+  # Enable PiJuice event handling
+  # Default: true
   enable_pijuice_events: true
-  low_charge_action: "SYSTEM_HALT"  # Options: "NO_ACTION", "SYSTEM_HALT", "SYSTEM_HALT_POW_OFF", "SYSTEM_POWER_OFF", "SYSTEM_POWER_ON", "SYSTEM_REBOOT", "SYSTEM_WAKEUP"
-  low_charge_delay: 5  # Delay in seconds before taking action
-  button_press_action: "SYSDOWN"  # Action for button press (SW1)
-  button_press_delay: 180  # Delay in seconds for button press (SW1)
+
+  # Action when battery reaches critical level
+  # Options:
+  # - "NO_ACTION": Do nothing
+  # - "SYSTEM_HALT": Graceful shutdown (recommended)
+  # - "SYSTEM_HALT_POW_OFF": Shutdown and cut power
+  # - "SYSTEM_POWER_OFF": Immediate power cut (may corrupt SD)
+  # - "SYSTEM_REBOOT": Reboot the system
+  # Default: "SYSTEM_HALT"
+  low_charge_action: "SYSTEM_HALT"
+
+  # Delay (seconds) before executing low_charge_action
+  # Gives time to save data and clean shutdown
+  # Default: 5
+  low_charge_delay: 5
+
+  # Action for PiJuice button press (SW1)
+  # Options: Same as low_charge_action plus:
+  # - "SYSDOWN": Toggle between running and halt
+  # - "SYSUP": Power on if halted
+  # Default: "SYSDOWN"
+  button_press_action: "SYSDOWN"
+
+  # How long button must be held (seconds) to trigger action
+  # Default: 180 (3 minutes - prevents accidental presses)
+  button_press_delay: 180
 
 server:
+  # REQUIRED: URL of your weather display server
+  # This should be the IP address or hostname of your Unraid/Docker server
+  # Examples: "http://192.168.1.100", "http://weather-server.local"
   url: "http://your-unraid-server-ip"
+
+  # Server port number
+  # Default: 8000
   port: 8000
+
+  # HTTP request timeout (seconds)
+  # How long to wait for server response before giving up
+  # Default: 10
   timeout_seconds: 10
+
+  # Number of times to retry failed requests
+  # Default: 3
   retry_attempts: 3
+
+  # Delay between retry attempts (seconds)
+  # Default: 5
   retry_delay_seconds: 5
-  cache_dir: "/tmp/weather-cache-1000"  # Uses gettempdir() and user ID by default
+
+  # Directory for caching rendered images
+  # Default: System temp directory + user ID (e.g., "/tmp/weather-cache-1000")
+  cache_dir: "/tmp/weather-cache-1000"
+
+  # Server-side logging level
+  # Options: "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"
+  # Default: "INFO"
   log_level: "INFO"
+
+  # Image format for rendered weather display
+  # Options: "PNG", "JPEG"
+  # PNG recommended for e-paper (better quality, slightly larger)
+  # Default: "PNG"
   image_format: "PNG"
 
 logging:
+  # Logging level for the client
+  # Options: "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"
+  # Default: "INFO"
   level: "INFO"
-  file: null  # Optional log file path, null uses stdout/stderr
+
+  # Log file path (absolute or relative)
+  # null = log to stdout/stderr only
+  # Example: "/var/log/weather-display.log"
+  # Default: null
+  file: null
+
+  # Log format
+  # Options: "json" (structured), "text" (human-readable)
+  # Default: "json"
   format: "json"
+
+  # Maximum log file size in MB (when file logging is enabled)
+  # Default: 5
   max_size_mb: 5
+
+  # Number of old log files to keep (when file logging is enabled)
+  # Default: 3
   backup_count: 3
 
+# === Development Settings ===
+# These should be false in production for best battery life
+
+# Enable debug mode (verbose logging, stack traces)
+# Default: false
 debug: false
+
+# Enable development mode (disables deep sleep for easier testing)
+# WARNING: This will significantly reduce battery life!
+# Default: false
 development_mode: true
