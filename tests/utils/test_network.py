@@ -11,6 +11,7 @@ import pytest
 from rpi_weather_display.constants import (
     GOOGLE_DNS,
     GOOGLE_DNS_PORT,
+    WIFI_INTERFACE_NAME,
 )
 from rpi_weather_display.models.config import (
     AppConfig,
@@ -548,7 +549,7 @@ wlan0     IEEE 802.11  ESSID:"TestNetwork"
                     args = mock_run.call_args[0][0]
                     assert "sudo" in args[0]
                     assert "ifconfig" in args[1]
-                    assert "wlan0" in args[2]
+                    assert WIFI_INTERFACE_NAME in args[2]
                     assert "up" in args[3]
 
     @pytest.mark.asyncio()
@@ -590,7 +591,7 @@ wlan0     IEEE 802.11  ESSID:"TestNetwork"
                 args = mock_run.call_args[0][0]
                 assert "sudo" in args[0]
                 assert "ifconfig" in args[1]
-                assert "wlan0" in args[2]
+                assert WIFI_INTERFACE_NAME in args[2]
                 assert "down" in args[3]
 
     @pytest.mark.asyncio()

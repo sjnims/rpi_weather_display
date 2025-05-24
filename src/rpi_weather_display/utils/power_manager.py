@@ -14,18 +14,36 @@ from typing import TypedDict, cast
 
 from rpi_weather_display.constants import (
     ABNORMAL_SLEEP_FACTOR,
+    AMPS_PER_MILLIAMP,
     BATTERY_CHARGING_FACTOR,
     BATTERY_CHARGING_MIN,
     BATTERY_HISTORY_SIZE,
+    BUTTON_PRESS_DELAY,
+    BYTES_PER_KILOBYTE,
     CONSERVING_MAX_FACTOR,
     CONSERVING_MIN_FACTOR,
+    CONSERVING_SLEEP_MULTIPLIER,
     CRITICAL_SLEEP_FACTOR,
+    CRITICAL_SLEEP_MULTIPLIER,
     DEFAULT_DRAIN_RATE,
+    DEFAULT_MOCK_SLEEP_TIME,
     DRAIN_WEIGHT_NEW,
     DRAIN_WEIGHT_PREV,
     MAX_BATTERY_PERCENTAGE_SLEEP,
     MAX_SLEEP_MINUTES,
+    MILLIAMPS_PER_AMP,
     MIN_SLEEP_MINUTES,
+    MINIMUM_MOCK_SLEEP_TIME,
+    MOCK_BATTERY_CAPACITY,
+    MOCK_BATTERY_CURRENT,
+    MOCK_BATTERY_LEVEL,
+    MOCK_BATTERY_TEMPERATURE,
+    MOCK_BATTERY_VOLTAGE,
+    PERCENT_MAX,
+    PIJUICE_STATUS_OK,
+    PIJUICE_YEAR_OFFSET,
+    SECONDS_PER_MINUTE,
+    SYSTEM_HALT_DELAY,
     TWELVE_HOURS_IN_MINUTES,
 )
 from rpi_weather_display.models.config import AppConfig
@@ -145,27 +163,27 @@ class PiJuiceInterface:
         @staticmethod
         def GetStatus() -> PiJuiceStatus:  # noqa: N802  # Name matches PiJuice API
             """Get PiJuice status."""
-            return {"error": "NO_ERROR", "data": {}}
+            return {"error": PIJUICE_STATUS_OK, "data": {}}
 
         @staticmethod
         def GetChargeLevel() -> PiJuiceResponse:  # noqa: N802  # Name matches PiJuice API
             """Get battery charge level."""
-            return {"error": "NO_ERROR", "data": 0}
+            return {"error": PIJUICE_STATUS_OK, "data": 0}
 
         @staticmethod
         def GetBatteryVoltage() -> PiJuiceResponse:  # noqa: N802  # Name matches PiJuice API
             """Get battery voltage."""
-            return {"error": "NO_ERROR", "data": 0}
+            return {"error": PIJUICE_STATUS_OK, "data": 0}
 
         @staticmethod
         def GetBatteryCurrent() -> PiJuiceResponse:  # noqa: N802  # Name matches PiJuice API
             """Get battery current."""
-            return {"error": "NO_ERROR", "data": 0}
+            return {"error": PIJUICE_STATUS_OK, "data": 0}
 
         @staticmethod
         def GetBatteryTemperature() -> PiJuiceResponse:  # noqa: N802  # Name matches PiJuice API
             """Get battery temperature."""
-            return {"error": "NO_ERROR", "data": 0}
+            return {"error": PIJUICE_STATUS_OK, "data": 0}
 
     class rtcAlarm:  # noqa: N801  # Name matches PiJuice API
         """PiJuice RTC alarm interface."""
@@ -198,7 +216,7 @@ class PiJuiceInterface:
             Args:
                 state: Power switch state (0=off, 1=on)
             """
-            return {"error": "NO_ERROR", "data": {}}
+            return {"error": PIJUICE_STATUS_OK, "data": {}}
 
     class config:  # noqa: N801  # Name matches PiJuice API
         """PiJuice configuration interface."""
@@ -214,7 +232,7 @@ class PiJuiceInterface:
                 param1: Action to perform (e.g., 'SYSTEM_HALT')
                 param2: Delay in seconds before action
             """
-            return {"error": "NO_ERROR", "data": {}}
+            return {"error": PIJUICE_STATUS_OK, "data": {}}
 
         @staticmethod
         def GetSystemTaskParameters(  # noqa: N802
@@ -225,8 +243,8 @@ class PiJuiceInterface:
             Args:
                 task: Task name to query
             """
-            data: PiJuiceEventData = {"function": "SYSTEM_HALT", "delay": 5}
-            return {"error": "NO_ERROR", "data": data}
+            data: PiJuiceEventData = {"function": "SYSTEM_HALT", "delay": SYSTEM_HALT_DELAY}
+            return {"error": PIJUICE_STATUS_OK, "data": data}
 
         @staticmethod
         def SetButtonConfiguration(  # noqa: N802
@@ -240,7 +258,7 @@ class PiJuiceInterface:
                 parameter: Action delay in seconds or configuration dict
             """
             data: PiJuiceEventData = {}
-            return {"error": "NO_ERROR", "data": data}
+            return {"error": PIJUICE_STATUS_OK, "data": data}
 
         @staticmethod
         def GetButtonConfiguration(  # noqa: N802
@@ -252,8 +270,8 @@ class PiJuiceInterface:
                 button: Button name
                 function: Event type
             """
-            data: PiJuiceEventData = {"function": "SYSDOWN", "parameter": 180}
-            return {"error": "NO_ERROR", "data": data}
+            data: PiJuiceEventData = {"function": "SYSDOWN", "parameter": BUTTON_PRESS_DELAY}
+            return {"error": PIJUICE_STATUS_OK, "data": data}
 
     class wakeupalarm:  # noqa: N801  # Name matches PiJuice API
         """PiJuice wakeup alarm interface."""
@@ -265,7 +283,7 @@ class PiJuiceInterface:
             Args:
                 enabled: Whether to enable wakeup
             """
-            return {"error": "NO_ERROR", "data": {}}
+            return {"error": PIJUICE_STATUS_OK, "data": {}}
 
     def get_status(self) -> PiJuiceStatus:
         """Get PiJuice status (convenience method)."""
@@ -274,7 +292,7 @@ class PiJuiceInterface:
     def get_charge_level(self) -> int:
         """Get charge level (convenience method)."""
         response = self.status.GetChargeLevel()
-        if response["error"] == "NO_ERROR" and isinstance(response["data"], int | float):
+        if response["error"] == PIJUICE_STATUS_OK and isinstance(response["data"], int | float):
             return int(response["data"])
         return 0
 
@@ -338,7 +356,7 @@ class PowerStateManager:
             self._pijuice = cast(PiJuiceInterface, PiJuice(1, 0x14))
             status: PiJuiceStatus = self._pijuice.status.GetStatus()
 
-            if status["error"] != "NO_ERROR":
+            if status["error"] != PIJUICE_STATUS_OK:
                 self.logger.error(f"Error initializing PiJuice: {status['error']}")
                 self._initialized = False
             else:
@@ -384,7 +402,7 @@ class PowerStateManager:
                 self.config.power.low_charge_delay,
             )
 
-            if response["error"] != "NO_ERROR":
+            if response["error"] != PIJUICE_STATUS_OK:
                 self.logger.error(f"Error configuring LOW_CHARGE event: {response['error']}")
             else:
                 self.logger.info("LOW_CHARGE event configured successfully")
@@ -404,7 +422,7 @@ class PowerStateManager:
                 },
             )
 
-            if response["error"] != "NO_ERROR":
+            if response["error"] != PIJUICE_STATUS_OK:
                 self.logger.error(f"Error configuring button press event: {response['error']}")
             else:
                 self.logger.info("Button press event configured successfully")
@@ -429,13 +447,13 @@ class PowerStateManager:
             match event_type:
                 case PiJuiceEvent.LOW_CHARGE:
                     response = self._pijuice.config.GetSystemTaskParameters("LOW_CHARGE")
-                    if response["error"] == "NO_ERROR":
+                    if response["error"] == PIJUICE_STATUS_OK:
                         return cast(PiJuiceEventData, response["data"])
                     return {}
                 
                 case PiJuiceEvent.BUTTON_SW1_PRESS:
                     response = self._pijuice.config.GetButtonConfiguration("SW1", "SINGLE_PRESS")
-                    if response["error"] == "NO_ERROR":
+                    if response["error"] == PIJUICE_STATUS_OK:
                         return cast(PiJuiceEventData, response["data"])
                     return {}
                 
@@ -594,12 +612,12 @@ class PowerStateManager:
         if not self._initialized or not self._pijuice:
             # Return mock status when not on a Raspberry Pi
             return BatteryStatus(
-                level=75,
-                voltage=3.7,
-                current=100.0,
-                temperature=25.0,
+                level=MOCK_BATTERY_LEVEL,
+                voltage=MOCK_BATTERY_VOLTAGE,
+                current=MOCK_BATTERY_CURRENT,
+                temperature=MOCK_BATTERY_TEMPERATURE,
                 state=BatteryState.DISCHARGING,
-                time_remaining=1200,  # 20 hours
+                time_remaining=MOCK_BATTERY_CAPACITY,  # Using capacity as time for mock
                 timestamp=datetime.now(),
             )
 
@@ -607,31 +625,31 @@ class PowerStateManager:
             # Get charge level
             charge: PiJuiceResponse = self._pijuice.status.GetChargeLevel()
             level: int = 0
-            if charge["error"] == "NO_ERROR" and isinstance(charge["data"], int | float):
+            if charge["error"] == PIJUICE_STATUS_OK and isinstance(charge["data"], int | float):
                 level = int(charge["data"])
 
             # Get battery voltage
             voltage: PiJuiceResponse = self._pijuice.status.GetBatteryVoltage()
             volts: float = 0.0
-            if voltage["error"] == "NO_ERROR" and isinstance(voltage["data"], int | float):
-                volts = float(voltage["data"]) / 1000.0
+            if voltage["error"] == PIJUICE_STATUS_OK and isinstance(voltage["data"], int | float):
+                volts = float(voltage["data"]) * AMPS_PER_MILLIAMP
 
             # Get battery current
             current: PiJuiceResponse = self._pijuice.status.GetBatteryCurrent()
             amps: float = 0.0
-            if current["error"] == "NO_ERROR" and isinstance(current["data"], int | float):
-                amps = float(current["data"]) / 1000.0
+            if current["error"] == PIJUICE_STATUS_OK and isinstance(current["data"], int | float):
+                amps = float(current["data"]) * AMPS_PER_MILLIAMP
 
             # Get battery temperature
             temp: PiJuiceResponse = self._pijuice.status.GetBatteryTemperature()
             temperature: float = 0.0
-            if temp["error"] == "NO_ERROR" and isinstance(temp["data"], int | float):
+            if temp["error"] == PIJUICE_STATUS_OK and isinstance(temp["data"], int | float):
                 temperature = float(temp["data"])
 
             # Get battery state
             status: PiJuiceStatus = self._pijuice.status.GetStatus()
             state = BatteryState.UNKNOWN
-            if status["error"] == "NO_ERROR":
+            if status["error"] == PIJUICE_STATUS_OK:
                 battery_data = status["data"].get("battery")
                 if battery_data:
                     battery_str = str(battery_data)
@@ -651,12 +669,14 @@ class PowerStateManager:
             if state == BatteryState.DISCHARGING and amps != 0:
                 # Convert mAh to hours and multiply by 60 for minutes
                 battery_capacity = self.config.power.battery_capacity_mah
-                time_remaining = int((level / 100.0 * battery_capacity) / abs(amps) * 60)
+                time_remaining = int(
+                    (level / PERCENT_MAX * battery_capacity) / abs(amps) * SECONDS_PER_MINUTE
+                )
 
             return BatteryStatus(
                 level=level,
                 voltage=volts,
-                current=amps * 1000,  # Convert to mA
+                current=amps * MILLIAMPS_PER_AMP,  # Convert to mA
                 temperature=temperature,
                 state=state,
                 time_remaining=time_remaining,
@@ -800,11 +820,17 @@ class PowerStateManager:
         
         match (current_state, in_quiet_hours):
             case (PowerState.CRITICAL, False):
-                min_update_interval *= 4  # Quadruple interval in critical state
-                self.logger.info("Critical battery state, quadrupling update interval")
+                min_update_interval *= CRITICAL_SLEEP_MULTIPLIER
+                self.logger.info(
+                    "Critical battery state, multiplying update interval by "
+                    f"{CRITICAL_SLEEP_MULTIPLIER}"
+                )
             case (PowerState.CONSERVING, False):
-                min_update_interval *= 2  # Double interval in conserving mode
-                self.logger.info("Power conserving mode, doubling update interval")
+                min_update_interval *= CONSERVING_SLEEP_MULTIPLIER
+                self.logger.info(
+                    "Power conserving mode, multiplying update interval by "
+                    f"{CONSERVING_SLEEP_MULTIPLIER}"
+                )
             case (PowerState.CHARGING, _):
                 # No change to interval when charging
                 pass
@@ -828,15 +854,15 @@ class PowerStateManager:
         Returns:
             Sleep time in seconds
         """
-        # Default sleep time is 60 seconds
-        sleep_time = 60
+        # Default sleep time
+        sleep_time = DEFAULT_MOCK_SLEEP_TIME
 
         current_state = self.get_current_state()
 
         # In quiet hours, use the configured wake up interval
         match current_state:
             case PowerState.QUIET_HOURS:
-                return self.config.power.wake_up_interval_minutes * 60
+                return self.config.power.wake_up_interval_minutes * SECONDS_PER_MINUTE
             case _:
                 pass  # Continue with calculations
 
@@ -879,8 +905,8 @@ class PowerStateManager:
             # (this ensures we don't sleep through a quiet hours start/end time)
             sleep_time = min(sleep_time, int(quiet_change_time))
 
-        # Ensure we don't sleep for too short a time (min 10 seconds)
-        return max(sleep_time, 10)
+        # Ensure we don't sleep for too short a time
+        return max(sleep_time, MINIMUM_MOCK_SLEEP_TIME)
 
     def _time_until_quiet_change(self) -> float:
         """Calculate time until quiet hours start or end.
@@ -1002,7 +1028,7 @@ class PowerStateManager:
                 "hour": wake_time.hour,
                 "day": wake_time.day,
                 "month": wake_time.month,
-                "year": wake_time.year - 2000,  # PiJuice expects 2-digit year
+                "year": wake_time.year - PIJUICE_YEAR_OFFSET,  # PiJuice expects 2-digit year
                 "weekday": 0,  # Not used
             }
 
@@ -1125,7 +1151,7 @@ class PowerStateManager:
             # CPU temperature
             try:
                 temp_content = read_text("/sys/class/thermal/thermal_zone0/temp")
-                temp = int(temp_content.strip()) / 1000.0
+                temp = int(temp_content.strip()) * AMPS_PER_MILLIAMP
                 metrics["cpu_temp"] = temp
             except (FileNotFoundError, ValueError) as e:
                 self.logger.warning(f"Could not read CPU temperature: {e}")
@@ -1146,7 +1172,7 @@ class PowerStateManager:
                             # Break up long line and make more readable
                             cpu_info = line.split(",")[0].split(":")[1].strip()
                             cpu_pct = float(cpu_info.replace("%id", "").strip())
-                            metrics["cpu_usage"] = 100.0 - cpu_pct
+                            metrics["cpu_usage"] = PERCENT_MAX - cpu_pct
                             break
             except (subprocess.SubprocessError, ValueError, IndexError) as e:
                 self.logger.warning(f"Could not get CPU usage: {e}")
@@ -1158,9 +1184,11 @@ class PowerStateManager:
             if top_exists or df_exists:
                 try:
                     meminfo = read_text("/proc/meminfo")
-                    total = int(meminfo.split("MemTotal:")[1].split("kB")[0].strip()) * 1024
-                    free = int(meminfo.split("MemFree:")[1].split("kB")[0].strip()) * 1024
-                    metrics["memory_usage"] = (total - free) / total * 100.0
+                    mem_total = meminfo.split("MemTotal:")[1].split("kB")[0].strip()
+                    mem_free = meminfo.split("MemFree:")[1].split("kB")[0].strip()
+                    total = int(mem_total) * BYTES_PER_KILOBYTE
+                    free = int(mem_free) * BYTES_PER_KILOBYTE
+                    metrics["memory_usage"] = (total - free) / total * PERCENT_MAX
                 except (FileNotFoundError, ValueError, IndexError) as e:
                     self.logger.warning(f"Could not read memory info: {e}")
 

@@ -15,10 +15,18 @@ import httpx
 
 from rpi_weather_display.client.display import EPaperDisplay
 from rpi_weather_display.constants import (
+    CONNECTION_TIMEOUT,
     DEFAULT_CONFIG_PATH,
+    DEFAULT_IMAGE_FILENAME,
+    KEEPALIVE_EXPIRY,
+    MAX_CONCURRENT_OPERATIONS,
+    MAX_CONNECTIONS,
+    MAX_KEEPALIVE_CONNECTIONS,
+    POOL_TIMEOUT,
     SLEEP_BEFORE_SHUTDOWN,
     TEN_MINUTES,
     TWELVE_HOURS_IN_MINUTES,
+    WRITE_TIMEOUT,
 )
 from rpi_weather_display.models.config import AppConfig
 from rpi_weather_display.utils import PowerStateManager, path_resolver
@@ -77,13 +85,13 @@ class AsyncWeatherDisplayClient:
 
         # Image cache path using the path resolver
         self.cache_dir = path_resolver.cache_dir
-        self.current_image_path = path_resolver.get_cache_file("current.png")
+        self.current_image_path = path_resolver.get_cache_file(DEFAULT_IMAGE_FILENAME)
 
         # Async HTTP client with connection pooling
         self._http_client: httpx.AsyncClient | None = None
 
-        # Semaphore for limiting concurrent operations (max 2 to prevent resource exhaustion)
-        self._semaphore = asyncio.Semaphore(2)
+        # Semaphore for limiting concurrent operations
+        self._semaphore = asyncio.Semaphore(MAX_CONCURRENT_OPERATIONS)
 
         self.logger.info("Async Weather Display Client initialized")
         self._running = False
@@ -100,17 +108,19 @@ class AsyncWeatherDisplayClient:
         if self._http_client is None:
             # Configure the client with connection pooling and timeouts
             timeout = httpx.Timeout(
-                connect=5.0,  # Connection timeout
-                read=self.config.server.timeout_seconds,  # Read timeout
-                write=5.0,  # Write timeout
-                pool=5.0,  # Connection pool timeout
+                connect=CONNECTION_TIMEOUT,
+                read=self.config.server.timeout_seconds,  # Read timeout from config
+                write=WRITE_TIMEOUT,
+                pool=POOL_TIMEOUT,
             )
 
             # Create client with retry-friendly settings
             self._http_client = httpx.AsyncClient(
                 timeout=timeout,
                 limits=httpx.Limits(
-                    max_keepalive_connections=2, max_connections=5, keepalive_expiry=30.0
+                    max_keepalive_connections=MAX_KEEPALIVE_CONNECTIONS,
+                    max_connections=MAX_CONNECTIONS,
+                    keepalive_expiry=KEEPALIVE_EXPIRY,
                 ),
                 # HTTP/2 is optional - will use HTTP/1.1 if not available
                 http2=False,

@@ -29,6 +29,7 @@ from rpi_weather_display.constants import (
     TITLE_FONT_SIZE_BASE,
     TITLE_FONT_SIZE_MAX,
     TITLE_Y_POSITION_FACTOR,
+    VALID_ROTATION_ANGLES,
 )
 from rpi_weather_display.models.config import DisplayConfig
 from rpi_weather_display.models.system import BatteryState, BatteryStatus
@@ -172,7 +173,7 @@ class EPaperDisplay:
                 self._display.clear()
 
                 # Set rotation
-                if self.config.rotate in [0, 90, 180, 270]:
+                if self.config.rotate in VALID_ROTATION_ANGLES:
                     self._display.epd.set_rotation(self.config.rotate // 90)
 
             self._initialized = True

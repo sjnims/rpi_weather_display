@@ -22,6 +22,9 @@ from rpi_weather_display.constants import (
     BROADCAST_PORT,
     GOOGLE_DNS,
     GOOGLE_DNS_PORT,
+    NETWORK_RETRY_DELAY,
+    WIFI_INTERFACE_NAME,
+    WIFI_POWER_TIMEOUT,
     WIFI_SLEEP_SCRIPT,
 )
 from rpi_weather_display.models.config import AppConfig, PowerConfig
@@ -302,7 +305,7 @@ class AsyncNetworkManager:
                 self.logger.warning(f"Command not found: {cmd_path}")
                 return None
 
-            result = await self._run_subprocess([str(cmd_path), "wlan0"])
+            result = await self._run_subprocess([str(cmd_path), WIFI_INTERFACE_NAME])
 
             match result.returncode:
                 case 0:
@@ -380,7 +383,7 @@ class AsyncNetworkManager:
         while time.time() - start_time < self.config.wifi_timeout_seconds:
             if await self._check_connectivity():
                 return True
-            await asyncio.sleep(1)
+            await asyncio.sleep(NETWORK_RETRY_DELAY)
 
         # If we reach here, connection failed
         raise ConnectionError("Failed to establish network connection")
@@ -423,7 +426,9 @@ class AsyncNetworkManager:
                 self.logger.warning("Commands not found for enabling WiFi")
                 return
 
-            await self._run_subprocess([str(sudo_path), str(ifconfig_path), "wlan0", "up"])
+            await self._run_subprocess(
+                [str(sudo_path), str(ifconfig_path), WIFI_INTERFACE_NAME, "up"]
+            )
             self.logger.info("WiFi interface enabled (legacy method)")
 
             # Apply battery-aware power save mode if enabled
@@ -470,7 +475,9 @@ class AsyncNetworkManager:
                 self.logger.warning("Commands not found for disabling WiFi")
                 return
 
-            await self._run_subprocess([str(sudo_path), str(ifconfig_path), "wlan0", "down"])
+            await self._run_subprocess(
+                [str(sudo_path), str(ifconfig_path), WIFI_INTERFACE_NAME, "down"]
+            )
             self.logger.info("WiFi interface disabled to save power (legacy method)")
         except subprocess.SubprocessError as e:
             self.logger.error(f"Failed to disable WiFi (legacy method): {e}")
@@ -526,7 +533,15 @@ class AsyncNetworkManager:
 
             # Run iw command to set power save mode
             await self._run_subprocess(
-                [str(sudo_path), str(iw_path), "dev", "wlan0", "set", "power_save", mode_arg]
+                [
+                    str(sudo_path),
+                    str(iw_path),
+                    "dev",
+                    WIFI_INTERFACE_NAME,
+                    "set",
+                    "power_save",
+                    mode_arg,
+                ]
             )
 
             # If using aggressive mode, we need additional settings
@@ -534,7 +549,14 @@ class AsyncNetworkManager:
                 # Set beacon interval to maximum to reduce wakeups
                 iwconfig_path = path_resolver.get_bin_path("iwconfig")
                 await self._run_subprocess(
-                    [str(sudo_path), str(iwconfig_path), "wlan0", "power", "timeout", "3600"]
+                    [
+                        str(sudo_path),
+                        str(iwconfig_path),
+                        WIFI_INTERFACE_NAME,
+                        "power",
+                        "timeout",
+                        str(WIFI_POWER_TIMEOUT),
+                    ]
                 )
 
             self.logger.info(f"WiFi power save mode set to '{mode}'")

@@ -10,7 +10,21 @@ from pathlib import Path
 
 import jinja2
 
-from rpi_weather_display.constants import HPA_TO_INHG, HPA_TO_MMHG, UVI_CACHE_FILENAME
+from rpi_weather_display.constants import (
+    AQI_LEVELS,
+    CARDINAL_DIRECTIONS_COUNT,
+    DEGREES_PER_CARDINAL,
+    HPA_TO_INHG,
+    HPA_TO_MMHG,
+    MOON_PHASE_FIRST_QUARTER_MAX,
+    MOON_PHASE_FIRST_QUARTER_MIN,
+    MOON_PHASE_FULL_MAX,
+    MOON_PHASE_FULL_MIN,
+    MOON_PHASE_LAST_QUARTER_MAX,
+    MOON_PHASE_LAST_QUARTER_MIN,
+    MOON_PHASE_NEW_THRESHOLD,
+    UVI_CACHE_FILENAME,
+)
 from rpi_weather_display.models.config import AppConfig
 from rpi_weather_display.models.system import BatteryStatus
 from rpi_weather_display.models.weather import (
@@ -275,18 +289,7 @@ class WeatherRenderer:
             if hasattr(weather_data, "air_pollution") and weather_data.air_pollution is not None:
                 aqi_value = weather_data.air_pollution.aqi
                 # Convert AQI numeric value to descriptive label based on OpenWeatherMap scale
-                if aqi_value == 1:
-                    aqi = "Good"
-                elif aqi_value == 2:
-                    aqi = "Fair"
-                elif aqi_value == 3:
-                    aqi = "Moderate"
-                elif aqi_value == 4:
-                    aqi = "Poor"
-                elif aqi_value == 5:
-                    aqi = "Very Poor"
-                else:
-                    aqi = "Unknown"  # Fallback for unexpected values
+                aqi = AQI_LEVELS.get(aqi_value, "Unknown")
             else:
                 aqi = "Unknown"  # If air pollution data is not available
 
@@ -424,19 +427,19 @@ class WeatherRenderer:
                 ]
 
                 # Get the general phase category
-                if phase == 0 or phase >= 0.97:
+                if phase < MOON_PHASE_NEW_THRESHOLD or phase >= (1 - MOON_PHASE_NEW_THRESHOLD):
                     return labels[0]  # New Moon
-                elif phase < 0.24:
+                elif phase < MOON_PHASE_FIRST_QUARTER_MIN:
                     return labels[1]  # Waxing Crescent
-                elif phase < 0.27:
+                elif phase < MOON_PHASE_FIRST_QUARTER_MAX:
                     return labels[2]  # First Quarter
-                elif phase < 0.49:
+                elif phase < MOON_PHASE_FULL_MIN:
                     return labels[3]  # Waxing Gibbous
-                elif phase < 0.52:
+                elif phase < MOON_PHASE_FULL_MAX:
                     return labels[4]  # Full Moon
-                elif phase < 0.74:
+                elif phase < MOON_PHASE_LAST_QUARTER_MIN:
                     return labels[5]  # Waning Gibbous
-                elif phase < 0.77:
+                elif phase < MOON_PHASE_LAST_QUARTER_MAX:
                     return labels[6]  # Last Quarter
                 else:
                     return labels[7]  # Waning Crescent
@@ -482,13 +485,13 @@ class WeatherRenderer:
                     "NNW",
                 ]
 
-                # Each direction covers 22.5 degrees, starting from N at 0/360 degrees
+                # Each direction covers DEGREES_PER_CARDINAL degrees
                 # Normalize the angle to 0-360 range
                 deg = deg % 360
 
                 # Calculate the index in the directions list
-                # Add 11.25 (half of 22.5) to ensure proper rounding
-                index = int(round(deg / 22.5)) % 16
+                # Add half of DEGREES_PER_CARDINAL to ensure proper rounding
+                index = int(round(deg / DEGREES_PER_CARDINAL)) % CARDINAL_DIRECTIONS_COUNT
 
                 # Return the cardinal direction
                 return directions[index]

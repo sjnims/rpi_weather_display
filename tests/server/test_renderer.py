@@ -18,7 +18,19 @@ from unittest.mock import AsyncMock, MagicMock, mock_open, patch
 import jinja2
 import pytest
 
-from rpi_weather_display.constants import HPA_TO_INHG, HPA_TO_MMHG
+from rpi_weather_display.constants import (
+    DEGREES_PER_CARDINAL,
+    HPA_TO_INHG,
+    HPA_TO_MMHG,
+    MOON_PHASE_FIRST_QUARTER_MAX,
+    MOON_PHASE_FIRST_QUARTER_MIN,
+    MOON_PHASE_FULL_MAX,
+    MOON_PHASE_FULL_MIN,
+    MOON_PHASE_LAST_QUARTER_MAX,
+    MOON_PHASE_LAST_QUARTER_MIN,
+    MOON_PHASE_NEW_THRESHOLD,
+    UVI_CACHE_FILENAME,
+)
 from rpi_weather_display.models.config import (
     AppConfig,
     DisplayConfig,
@@ -501,19 +513,19 @@ class TestWeatherRenderer:
                 ]
 
                 # Get the general phase category
-                if phase == 0 or phase >= 0.97:
+                if phase == 0 or phase >= (1 - MOON_PHASE_NEW_THRESHOLD):
                     return labels[0]  # New Moon
-                elif phase < 0.24:
+                elif phase < MOON_PHASE_FIRST_QUARTER_MIN:
                     return labels[1]  # Waxing Crescent
-                elif phase < 0.27:
+                elif phase < MOON_PHASE_FIRST_QUARTER_MAX:
                     return labels[2]  # First Quarter
-                elif phase < 0.49:
+                elif phase < MOON_PHASE_FULL_MIN:
                     return labels[3]  # Waxing Gibbous
-                elif phase < 0.52:
+                elif phase < MOON_PHASE_FULL_MAX:
                     return labels[4]  # Full Moon
-                elif phase < 0.74:
+                elif phase < MOON_PHASE_LAST_QUARTER_MIN:
                     return labels[5]  # Waning Gibbous
-                elif phase < 0.77:
+                elif phase < MOON_PHASE_LAST_QUARTER_MAX:
                     return labels[6]  # Last Quarter
                 else:
                     return labels[7]  # Waning Crescent
@@ -1347,29 +1359,29 @@ class TestWeatherRenderer:
 
             # Test boundary cases for each branch
             assert moon_phase_label(0) == "New Moon"  # New Moon at 0
-            assert moon_phase_label(0.97) == "New Moon"  # New Moon at >= 0.97
+            assert moon_phase_label(1 - MOON_PHASE_NEW_THRESHOLD) == "New Moon"  # New Moon at >= 0.97
             assert moon_phase_label(0.99) == "New Moon"  # New Moon at >= 0.97
 
-            assert moon_phase_label(0.1) == "Waxing Crescent"  # < 0.24
-            assert moon_phase_label(0.23) == "Waxing Crescent"  # < 0.24
+            assert moon_phase_label(0.1) == "Waxing Crescent"  # < MOON_PHASE_FIRST_QUARTER_MIN
+            assert moon_phase_label(MOON_PHASE_FIRST_QUARTER_MIN - 0.01) == "Waxing Crescent"  # < 0.24
 
-            assert moon_phase_label(0.25) == "First Quarter"  # 0.24-0.27
-            assert moon_phase_label(0.26) == "First Quarter"  # 0.24-0.27
+            assert moon_phase_label(0.25) == "First Quarter"  # MOON_PHASE_FIRST_QUARTER_MIN-MAX
+            assert moon_phase_label(0.26) == "First Quarter"  # MOON_PHASE_FIRST_QUARTER_MIN-MAX
 
-            assert moon_phase_label(0.3) == "Waxing Gibbous"  # 0.27-0.49
-            assert moon_phase_label(0.48) == "Waxing Gibbous"  # 0.27-0.49
+            assert moon_phase_label(0.3) == "Waxing Gibbous"  # MOON_PHASE_FIRST_QUARTER_MAX-MOON_PHASE_FULL_MIN
+            assert moon_phase_label(MOON_PHASE_FULL_MIN - 0.01) == "Waxing Gibbous"  # < 0.49
 
-            assert moon_phase_label(0.5) == "Full Moon"  # 0.49-0.52
-            assert moon_phase_label(0.51) == "Full Moon"  # 0.49-0.52
+            assert moon_phase_label(0.5) == "Full Moon"  # MOON_PHASE_FULL_MIN-MAX
+            assert moon_phase_label(0.51) == "Full Moon"  # MOON_PHASE_FULL_MIN-MAX
 
-            assert moon_phase_label(0.6) == "Waning Gibbous"  # 0.52-0.74
-            assert moon_phase_label(0.73) == "Waning Gibbous"  # 0.52-0.74
+            assert moon_phase_label(0.6) == "Waning Gibbous"  # MOON_PHASE_FULL_MAX-MOON_PHASE_LAST_QUARTER_MIN
+            assert moon_phase_label(MOON_PHASE_LAST_QUARTER_MIN - 0.01) == "Waning Gibbous"  # < 0.74
 
-            assert moon_phase_label(0.75) == "Last Quarter"  # 0.74-0.77
-            assert moon_phase_label(0.76) == "Last Quarter"  # 0.74-0.77
+            assert moon_phase_label(0.75) == "Last Quarter"  # MOON_PHASE_LAST_QUARTER_MIN-MAX
+            assert moon_phase_label(0.76) == "Last Quarter"  # MOON_PHASE_LAST_QUARTER_MIN-MAX
 
-            assert moon_phase_label(0.8) == "Waning Crescent"  # 0.77-0.97
-            assert moon_phase_label(0.96) == "Waning Crescent"  # 0.77-0.97
+            assert moon_phase_label(0.8) == "Waning Crescent"  # > MOON_PHASE_LAST_QUARTER_MAX
+            assert moon_phase_label(0.96) == "Waning Crescent"  # < 0.97
 
     @pytest.mark.asyncio()
     async def test_wind_direction_angle_filter_comprehensive(
@@ -1507,7 +1519,7 @@ class TestWeatherRenderer:
         # Create a temporary cache file path and ensure it doesn't exist
         temp_dir = create_temp_dir()
         try:
-            cache_file = temp_dir / "uvi_max_cache.json"
+            cache_file = temp_dir / UVI_CACHE_FILENAME
 
             # Patch the cache file path - updated for path_resolver
             with (
@@ -1583,7 +1595,7 @@ class TestWeatherRenderer:
         # Create a temporary cache file path and ensure it doesn't exist
         temp_dir = create_temp_dir()
         try:
-            cache_file = temp_dir / "uvi_max_cache.json"
+            cache_file = temp_dir / UVI_CACHE_FILENAME
 
             # Patch the cache file path - updated for path_resolver
             with (
@@ -2154,13 +2166,13 @@ class TestWeatherRenderer:
             # Test cardinal directions at exact points
             test_cases = [
                 (0, "N"),
-                (22.5, "NNE"),
+                (DEGREES_PER_CARDINAL, "NNE"),  # 22.5 degrees
                 (45, "NE"),
-                (67.5, "ENE"),
+                (DEGREES_PER_CARDINAL * 3, "ENE"),  # 67.5 degrees
                 (90, "E"),
-                (112.5, "ESE"),
+                (DEGREES_PER_CARDINAL * 5, "ESE"),  # 112.5 degrees
                 (135, "SE"),
-                (157.5, "SSE"),
+                (DEGREES_PER_CARDINAL * 7, "SSE"),  # 157.5 degrees
                 (180, "S"),
                 (202.5, "SSW"),
                 (225, "SW"),

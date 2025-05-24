@@ -20,6 +20,9 @@ from pydantic import BaseModel
 from rpi_weather_display.constants import (
     DEFAULT_CONFIG_PATH,
     DEFAULT_SERVER_HOST,
+    DOWNLOAD_FILENAME,
+    IMAGE_FILE_EXTENSION,
+    IMAGE_MEDIA_TYPE,
     PREVIEW_BATTERY_CURRENT,
     PREVIEW_BATTERY_LEVEL,
     PREVIEW_BATTERY_TEMP,
@@ -266,13 +269,13 @@ class WeatherDisplayServer:
             weather_data = await self.api_client.get_weather_data()
 
             # Create a temporary file for the image using path resolver
-            tmp_path = path_resolver.get_temp_file(suffix=".png")
+            tmp_path = path_resolver.get_temp_file(suffix=IMAGE_FILE_EXTENSION)
 
             # Render the image
             await self.renderer.render_weather_image(weather_data, battery_status, tmp_path)
 
             # Return the image
-            return FileResponse(tmp_path, media_type="image/png", filename="weather.png")
+            return FileResponse(tmp_path, media_type=IMAGE_MEDIA_TYPE, filename=DOWNLOAD_FILENAME)
         except Exception as e:
             error_location = get_error_location()
             self.logger.error(f"Error rendering weather image [{error_location}]: {e}")

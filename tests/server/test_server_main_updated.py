@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import FastAPI, Response
 
+from rpi_weather_display.constants import DEFAULT_SERVER_HOST
 from rpi_weather_display.models.config import LoggingConfig
 from rpi_weather_display.models.system import BatteryState
 from rpi_weather_display.server.main import (
@@ -694,7 +695,7 @@ def test_server_run_method() -> None:
     # Create a proper mock config with host and port
     mock_config = MagicMock()
     mock_config.logging = LoggingConfig(level="INFO")
-    mock_config.server.host = "127.0.0.1"
+    mock_config.server.host = DEFAULT_SERVER_HOST
     mock_config.server.port = 8888
 
     # Create a mock logger
@@ -742,7 +743,7 @@ def test_server_run_method() -> None:
 
             # Test run method with default parameters
             server.run()
-            mock_uvicorn.run.assert_called_once_with(mock_app, host="127.0.0.1", port=8888)
+            mock_uvicorn.run.assert_called_once_with(mock_app, host=DEFAULT_SERVER_HOST, port=8888)
             mock_uvicorn.run.reset_mock()
 
             # Test with explicit host and port parameters
@@ -757,7 +758,7 @@ def test_server_run_method() -> None:
 
             # Test with only port parameter
             server.run(port=7777)
-            mock_uvicorn.run.assert_called_once_with(mock_app, host="127.0.0.1", port=7777)
+            mock_uvicorn.run.assert_called_once_with(mock_app, host=DEFAULT_SERVER_HOST, port=7777)
     finally:
         # Cleanup temporary directories
         import shutil

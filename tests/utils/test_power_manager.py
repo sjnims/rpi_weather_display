@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
 
+from rpi_weather_display.constants import BUTTON_PRESS_DELAY, SYSTEM_HALT_DELAY
 from rpi_weather_display.models.config import (
     AppConfig,
     DisplayConfig,
@@ -474,11 +475,11 @@ class TestPowerStateManagerAdvanced:
         # Configure mocks to return valid responses
         mock_pijuice.config.GetSystemTaskParameters.return_value = {
             "error": "NO_ERROR",
-            "data": {"function": "SYSTEM_HALT", "delay": 5},
+            "data": {"function": "SYSTEM_HALT", "delay": SYSTEM_HALT_DELAY},
         }
         mock_pijuice.config.GetButtonConfiguration.return_value = {
             "error": "NO_ERROR",
-            "data": {"function": "SYSDOWN", "parameter": 180},
+            "data": {"function": "SYSDOWN", "parameter": BUTTON_PRESS_DELAY},
         }
 
         # Test LOW_CHARGE event

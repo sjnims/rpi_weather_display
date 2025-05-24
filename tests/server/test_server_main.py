@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.responses import Response
 from fastapi.testclient import TestClient
 
-from rpi_weather_display.constants import CLIENT_CACHE_DIR_NAME
+from rpi_weather_display.constants import CLIENT_CACHE_DIR_NAME, DEFAULT_SERVER_HOST
 from rpi_weather_display.models.config import LoggingConfig
 from rpi_weather_display.models.system import BatteryState
 from rpi_weather_display.models.weather import WeatherData
@@ -368,10 +368,10 @@ def test_run_method(test_server: WeatherDisplayServer) -> None:
     """Test the run method."""
     with patch("uvicorn.run") as mock_run:
         # Call run with custom host/port
-        test_server.run(host="127.0.0.1", port=9000)
+        test_server.run(host=DEFAULT_SERVER_HOST, port=9000)
 
         # Verify uvicorn.run was called with correct args
-        mock_run.assert_called_once_with(test_server.app, host="127.0.0.1", port=9000)
+        mock_run.assert_called_once_with(test_server.app, host=DEFAULT_SERVER_HOST, port=9000)
 
 
 def test_run_method_default_values(test_server: WeatherDisplayServer) -> None:
@@ -400,7 +400,7 @@ def test_main_function() -> None:
         # Configure mock args
         mock_args = MagicMock()
         mock_args.config = Path(f"/etc/{CLIENT_CACHE_DIR_NAME}/config.yaml")
-        mock_args.host = "127.0.0.1"
+        mock_args.host = DEFAULT_SERVER_HOST
         mock_args.port = 9000
         mock_parse_args.return_value = mock_args
 
@@ -415,7 +415,7 @@ def test_main_function() -> None:
 
         # Verify server was created and run
         mock_server.assert_called_once_with(mock_args.config)
-        mock_server_instance.run.assert_called_once_with(host="127.0.0.1", port=9000)
+        mock_server_instance.run.assert_called_once_with(host=DEFAULT_SERVER_HOST, port=9000)
 
 
 def test_main_function_config_not_found() -> None:

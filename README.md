@@ -631,6 +631,13 @@ To update to the latest version:
 - Physical access to the device could allow extraction of this information
 - Consider enabling disk encryption if the device will be in a public area
 
+### Deployment Security
+- Installation scripts verify dependencies before execution
+- Scripts create backups before modifying system files
+- All downloaded content is validated before execution
+- Scripts include proper error handling and rollback mechanisms
+- Use --dry-run options to preview changes before applying
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.

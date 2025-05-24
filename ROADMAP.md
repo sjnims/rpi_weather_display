@@ -85,16 +85,16 @@ Priority is indicated as:
 - [ ] 🟠 2.7.10 Add environmental monitoring (temperature 0-50°C operating range) [PLANNED]
 - [ ] 🟢 2.7.11 Track refresh count to monitor display lifetime (1M refresh limit) [PLANNED]
 
-### 2.8 Deployment Script Security & Quality
-- [ ] 🔴 2.8.1 Add checksum verification for Poetry and other downloaded content [PLANNED]
-- [ ] 🔴 2.8.2 Implement dependency checks in all shell scripts (xmlstarlet, inkscape, etc.) [PLANNED]
-- [ ] 🔴 2.8.3 Add input validation and proper error handling to deployment scripts [PLANNED]
-- [ ] 🔴 2.8.4 Create backup mechanism for system modifications in optimize-power.sh [PLANNED]
-- [ ] 🟠 2.8.5 Replace `|| true` patterns with proper error handling [PLANNED]
-- [ ] 🟠 2.8.6 Implement atomic operations in trim_svgs.sh to prevent data loss [PLANNED]
-- [ ] 🟠 2.8.7 Add rollback capability for failed installations [PLANNED]
-- [ ] 🟢 2.8.8 Add --dry-run options to destructive scripts [PLANNED]
-- [ ] 🟢 2.8.9 Improve shell script quoting and safety (shellcheck compliance) [PLANNED]
+### 2.8 Deployment Script Security & Quality ✅ COMPLETED
+- [x] 🔴 2.8.1 Add checksum verification for Poetry and other downloaded content [COMPLETED 2025-05-24]
+- [x] 🔴 2.8.2 Implement dependency checks in all shell scripts (xmlstarlet, inkscape, etc.) [COMPLETED 2025-05-24]
+- [x] 🔴 2.8.3 Add input validation and proper error handling to deployment scripts [COMPLETED 2025-05-24]
+- [x] 🔴 2.8.4 Create backup mechanism for system modifications in optimize-power.sh [COMPLETED 2025-05-24]
+- [x] 🟠 2.8.5 Replace `|| true` patterns with proper error handling [COMPLETED 2025-05-24]
+- [x] 🟠 2.8.6 Implement atomic operations in trim_svgs.sh to prevent data loss [COMPLETED 2025-05-24]
+- [x] 🟠 2.8.7 Add rollback capability for failed installations [COMPLETED 2025-05-24]
+- [x] 🟢 2.8.8 Add --dry-run options to destructive scripts [COMPLETED 2025-05-24]
+- [x] 🟢 2.8.9 Improve shell script quoting and safety (shellcheck compliance) [COMPLETED 2025-05-24]
 
 ## Phase 3: Telemetry and Monitoring (Target: v0.4.0)
 
@@ -261,14 +261,14 @@ Priority is indicated as:
 Based on the code review findings, the following tasks should be prioritized:
 
 ### Immediate Priority (Next Sprint)
-1. **Phase 2.8** - Deployment Script Security & Quality (NEW)
-   - Critical security issues with curl|python3 pattern
-   - Missing dependency checks causing installation failures
-   - Data loss risks in current scripts
-
-2. **Phase 2.5.1** - Modularize power_manager.py
+1. **Phase 2.5.1** - Modularize power_manager.py
    - 1270 lines is too large for maintainability
    - Clear separation needed for different responsibilities
+
+2. **Phase 2.4** - Memory Management
+   - Optimize image processing for memory efficiency
+   - Implement memory-aware caching with size limits
+   - Add memory profiling and reporting
 
 ### Short-term Priority (Q1 2025)
 1. **Phase 2.5.4** - Remove test-only methods from production
@@ -284,10 +284,10 @@ Based on the code review findings, the following tasks should be prioritized:
 | Phase | Not Started | In Progress | Completed | Total |
 |-------|------------|-------------|-----------|-------|
 | 1     | 0          | 0           | 14        | 14    |
-| 2     | 23         | 0           | 9         | 32    |
+| 2     | 14         | 0           | 18        | 32    |
 | 3     | 12         | 0           | 0         | 12    |
 | 4     | 12         | 0           | 0         | 12    |
 | 5     | 17         | 0           | 2         | 19    |
 | 6     | 15         | 0           | 0         | 15    |
 | 7     | 18         | 0           | 0         | 18    |
-| Total | 97         | 0           | 25        | 122   |
+| Total | 88         | 0           | 34        | 122   |

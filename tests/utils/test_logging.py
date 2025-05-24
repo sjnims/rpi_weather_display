@@ -13,6 +13,7 @@ from unittest.mock import patch
 import pytest
 from structlog.stdlib import ProcessorFormatter
 
+from rpi_weather_display.constants import BYTES_PER_KILOBYTE
 from rpi_weather_display.models.config import LoggingConfig
 from rpi_weather_display.utils.logging import setup_logging
 
@@ -115,7 +116,7 @@ def test_setup_logging_with_file(json_file_config: LoggingConfig) -> None:
     file_handler = logger.handlers[0]
     # RotatingFileHandler has baseFilename as a string, but we created it from Path
     assert file_handler.baseFilename == str(json_file_config.file)
-    assert file_handler.maxBytes == json_file_config.max_size_mb * 1024 * 1024
+    assert file_handler.maxBytes == json_file_config.max_size_mb * BYTES_PER_KILOBYTE * BYTES_PER_KILOBYTE
     assert file_handler.backupCount == json_file_config.backup_count
 
     # Verify log directory was created
