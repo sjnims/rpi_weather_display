@@ -89,12 +89,12 @@ Priority is indicated as:
   - Simplified main method from ~75 lines to 17 lines
   - All tests passing and functionality preserved
 - [ ] 🟠 2.5.5 Create custom exception hierarchy for better error handling [PLANNED]
-- [ ] 🟠 2.5.6 Refactor other complex methods (C-rated) [PLANNED]
-  - Break down EPaperDisplay.display_pil_image (CC: 15)
-  - Simplify renderer._prepare_time_data (CC: 14) - NEW: emerged after generate_html refactoring
-  - Simplify AsyncNetworkManager.set_wifi_power_save_mode (CC: 13)
-  - Refactor client/main.py run method (CC: 13)
-  - Simplify api.py get_coordinates (CC: 12) and get_weather_data (CC: 11)
+- [x] 🟠 2.5.6 Refactor other complex methods (C-rated) [COMPLETED 2025-05-25]
+  - Break down EPaperDisplay.display_pil_image (CC: 15 → 7)
+  - Simplify renderer._prepare_time_data (CC: 14 → 4) - NEW: emerged after generate_html refactoring
+  - Simplify AsyncNetworkManager.set_wifi_power_save_mode (CC: 13 → 4)
+  - Refactor client/main.py run method (CC: 13 → 5)
+  - Simplify api.py get_coordinates (CC: 12 → 2) and get_weather_data (CC: 11 → 4)
 - [ ] 🟢 2.5.7 Remove test-only methods from production interfaces [PLANNED]
 - [ ] 🟢 2.5.8 Resolve circular import risks in utils module [PLANNED]
 
@@ -300,48 +300,42 @@ Priority is indicated as:
 Based on the code complexity analysis, the following tasks should be prioritized:
 
 **Code Quality Metrics Summary (Updated 2025-05-25):**
-- Average Complexity: 13.00 (-3.12 improvement from baseline) - Outstanding progress!
-- Complex Functions (E-F): 0 - Good, no extremely complex functions
-- Lowest Maintainability: All files now above 20 (maintained!)
-- Average Maintainability: 68.13/100 - Good overall maintainability
-- Highest Complexity Methods:
-  - display.display_pil_image: CC 15 (C rating) - Now highest complexity
-  - renderer._prepare_time_data: CC 14 (C rating)
-  - network.set_wifi_power_save_mode: CC 13 (C rating)
-  - client/main.run: CC 13 (C rating)
-  - api.get_coordinates: CC 12 (C rating)
-  - api.get_weather_data: CC 11 (C rating)
-- Successfully Refactored:
+- Average Complexity: 2.87 (down from 13.00) - Exceptional improvement!
+- Complex Functions (CC > 10): 0 - Achieved goal!
+- Lowest Maintainability: All files above 20 (maintained!)
+- Average Maintainability: 67.59/100 - Good overall maintainability
+- Successfully Refactored (All complex methods now below CC 10):
   - renderer.generate_html: CC 27 → 5 (D → A rating) - 81% reduction!
-  - battery_monitor.get_battery_status: CC 22 → <10 (D → A/B rating) - No longer in high complexity list!
-  - renderer._get_daily_max_uvi: CC 19 → <10 (C → A/B rating) - No longer in high complexity list!
-  - power_manager: Modularized and no longer in high complexity list
-- Total Source Lines: 3,984 (+64 from baseline)
-- Comment Ratio: 22.36% - Good documentation coverage
+  - battery_monitor.get_battery_status: CC 22 → <10 (D → A/B rating)
+  - renderer._get_daily_max_uvi: CC 19 → <10 (C → A/B rating)
+  - display.display_pil_image: CC 15 → 7 (C → A rating)
+  - renderer._prepare_time_data: CC 14 → 4 (C → A rating)
+  - network.set_wifi_power_save_mode: CC 13 → 4 (C → A rating)
+  - client/main.run: CC 13 → 5 (C → A rating)
+  - api.get_coordinates: CC 12 → 2 (C → A rating)
+  - api.get_weather_data: CC 11 → 4 (C → A rating)
+  - power_manager: Modularized into smaller, focused components
+- Total Source Lines: 4,093 (+173 from baseline)
+- Comment Ratio: 21.87% - Good documentation coverage
 
 *Complexity Ratings: A (simple) → B → C (moderate) → D (complex) → E → F (very complex)*
 
 ### Immediate Priority (Next Sprint)
-1. **Phase 2.5.6** - Refactor other C-rated complex methods
-   - display.py: display_pil_image (CC: 15) - now highest complexity in codebase
-   - renderer._prepare_time_data (CC: 14) - emerged after generate_html refactoring
-   - network.py: set_wifi_power_save_mode (CC: 13)
-   - client/main.py: run method (CC: 13)
-   - api.py: get_coordinates (CC: 12), get_weather_data (CC: 11)
-
-2. **Phase 2.5.5** - Create custom exception hierarchy
+1. **Phase 2.5.5** - Create custom exception hierarchy
    - Improve error handling across the codebase
    - Standardize error reporting and recovery
 
+2. **Phase 2.7** - E-Paper display optimization
+   - Implement correct refresh modes for Waveshare 10.3"
+   - Add periodic full refresh to prevent ghosting
+   - Enforce manufacturer-specified refresh intervals
+
 ### Short-term Priority (Q1 2025)
-1. **Phase 2.5.6** - Refactor other C-rated complex methods
-   - display.py: display_pil_image (CC: 15)
-   - renderer._prepare_time_data (CC: 14) - emerged after generate_html refactoring
-   - network.py: set_wifi_power_save_mode (CC: 13)
-   - client/main.py: run method (CC: 13)
-   - api.py: get_coordinates (CC: 12), get_weather_data (CC: 11)
-2. **Phase 2.5.5** - Create custom exception hierarchy
-3. **Phase 2.5.7** - Remove test-only methods from production
+1. **Phase 2.5.7** - Remove test-only methods from production
+2. **Phase 2.5.8** - Resolve circular import risks in utils module
+3. **Phase 2.6** - Hardware abstractions
+   - Create hardware abstraction interfaces
+   - Optimize Playwright usage for lower memory footprint
 
 ### Medium-term Priority (Q2 2025)
 1. **Phase 2.7** - E-Paper display optimization
@@ -353,10 +347,10 @@ Based on the code complexity analysis, the following tasks should be prioritized
 | Phase | Not Started | In Progress | Completed | Total |
 |-------|------------|-------------|-----------|-------|
 | 1     | 0          | 0           | 14        | 14    |
-| 2     | 13         | 0           | 23        | 36    |
+| 2     | 12         | 0           | 24        | 36    |
 | 3     | 12         | 0           | 0         | 12    |
 | 4     | 12         | 0           | 0         | 12    |
 | 5     | 17         | 0           | 2         | 19    |
 | 6     | 21         | 0           | 0         | 21    |
 | 7     | 18         | 0           | 0         | 18    |
-| Total | 93         | 0           | 39        | 132   |
+| Total | 92         | 0           | 40        | 132   |
