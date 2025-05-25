@@ -5,32 +5,27 @@ images suitable for display on the e-paper screen using Playwright.
 """
 
 import logging
-from datetime import date, datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
 import jinja2
 
-from rpi_weather_display.constants import (
-    AQI_LEVELS,
-    HPA_TO_INHG,
-    HPA_TO_MMHG,
-    SECONDS_PER_HOUR,
-    SECONDS_PER_MINUTE,
-    UVI_CACHE_FILENAME,
-)
+from rpi_weather_display.constants import AQI_LEVELS
 from rpi_weather_display.models.config import AppConfig
 from rpi_weather_display.models.system import BatteryStatus
 from rpi_weather_display.models.weather import (
-    CurrentWeather,
     DailyWeather,
     HourlyWeather,
-    WeatherCondition,
     WeatherData,
 )
 from rpi_weather_display.server.browser_manager import browser_manager
 from rpi_weather_display.server.moon_phase_helper import MoonPhaseHelper
+from rpi_weather_display.server.template_filter_manager import TemplateFilterManager
+from rpi_weather_display.server.time_formatter import TimeFormatter
+from rpi_weather_display.server.weather_calculator import WeatherCalculator
+from rpi_weather_display.server.weather_icon_mapper import WeatherIconMapper
 from rpi_weather_display.server.wind_helper import WindHelper
-from rpi_weather_display.utils import file_utils, get_battery_icon, path_resolver
+from rpi_weather_display.utils import get_battery_icon
 from rpi_weather_display.utils.error_utils import get_error_location
 
 
@@ -46,36 +41,30 @@ class WeatherRenderer:
         """
         self.config = config
         self.logger = logging.getLogger(__name__)
-        self.last_weather_data = None  # Store the last weather data for icon lookup
+        
+        # Initialize helper components
+        self.time_formatter = TimeFormatter(config.display)
+        self.weather_calculator = WeatherCalculator()
+        self.icon_mapper = WeatherIconMapper()
 
         # Set up Jinja2 environment
         self.jinja_env = jinja2.Environment(
             loader=jinja2.FileSystemLoader(template_dir), autoescape=True
         )
+        
+        # Set up template filters
+        self.filter_manager = TemplateFilterManager(self.jinja_env, self.icon_mapper)
 
-        # Add custom filters
-        self.jinja_env.filters["format_datetime"] = self._format_datetime
+        # Register initial filters
+        self._register_basic_filters()
+
+    def _register_basic_filters(self) -> None:
+        """Register basic Jinja2 filters."""
+        # Time formatting filters
+        self.jinja_env.filters["format_datetime"] = self.time_formatter.format_datetime
         self.jinja_env.filters["format_temp"] = self._format_temp
         self.jinja_env.filters["get_icon"] = self._get_weather_icon
         self.jinja_env.filters["weather_icon"] = self._get_weather_icon
-
-    def _format_datetime(self, dt: datetime | int, format_str: str | None = None) -> str:
-        """Format a datetime object or Unix timestamp.
-
-        Args:
-            dt: Datetime object or Unix timestamp.
-            format_str: Format string to use (or None to use default).
-
-        Returns:
-            Formatted datetime string.
-        """
-        if isinstance(dt, int):
-            dt = datetime.fromtimestamp(dt)
-
-        if format_str is None:
-            format_str = self.config.display.timestamp_format
-
-        return dt.strftime(format_str)
 
     def _format_temp(self, temp: float, units: str | None = None) -> str:
         """Format a temperature value.
@@ -97,81 +86,6 @@ class WeatherRenderer:
         else:
             return f"{int(round(temp))}K"
 
-    def _format_time(self, dt: datetime | int, format_str: str | None = None) -> str:
-        """Format a datetime object or Unix timestamp as a time string.
-
-        Uses AM/PM format without leading zeros for hours by default,
-        or the specified format from config if provided.
-
-        Args:
-            dt: Datetime object or Unix timestamp.
-            format_str: Format string to use (or None to use config's time_format or default).
-                        Should be a valid strftime format string like "%H:%M" or "%I:%M %p".
-
-        Returns:
-            Formatted time string.
-        """
-        if isinstance(dt, int):
-            dt = datetime.fromtimestamp(dt)
-
-            # Use format from config, or default to AM/PM without leading zeros
-        if format_str is None:
-            # Check if config has a time_format setting
-            if (
-                hasattr(self.config.display, "time_format")
-                and self.config.display.time_format is not None
-            ):
-                format_str = self.config.display.time_format
-                return dt.strftime(format_str)
-            else:
-                # Default to AM/PM format without leading zeros
-                hour = dt.hour % 12
-                if hour == 0:
-                    hour = 12  # 12-hour clock shows 12 for noon/midnight, not 0
-                return f"{hour}:{dt.minute:02d} {dt.strftime('%p')}"
-        else:
-            # Use the provided format
-            return dt.strftime(format_str)
-
-    def _format_datetime_display(self, dt: datetime | int, format_str: str | None = None) -> str:
-        """Format a datetime for display using config or a default format without leading zeros.
-
-        Args:
-            dt: Datetime object or Unix timestamp
-            format_str: Optional format string to override config. Should be a valid strftime
-                       format string like "%m/%d/%Y %I:%M %p"
-
-        Returns:
-            Formatted datetime string in the format specified by
-            config.display.display_datetime_format,
-            or if not configured, defaults to "MM/DD/YYYY HH:MM AM/PM" format without leading zeros
-        """
-        if isinstance(dt, int):
-            dt = datetime.fromtimestamp(dt)
-
-        # Check for format in arguments, then config, then use default
-        if format_str is not None:
-            return dt.strftime(format_str)
-
-        # Check for display_datetime_format in config
-        if (
-            hasattr(self.config.display, "display_datetime_format")
-            and self.config.display.display_datetime_format
-        ):
-            return dt.strftime(self.config.display.display_datetime_format)
-
-        # Default format: MM/DD/YYYY HH:MM AM/PM without leading zeros
-        month = dt.month
-        day = dt.day
-        year = dt.year
-        hour = dt.hour % 12
-        if hour == 0:
-            hour = 12  # 12-hour clock shows 12 for noon/midnight, not 0
-        minute = dt.minute
-        am_pm = dt.strftime("%p")
-
-        return f"{month}/{day}/{year} {hour}:{minute:02d} {am_pm}"
-
     def _prepare_time_data(
         self, weather_data: WeatherData, now: datetime
     ) -> tuple[dict[str, str], list[dict[str, str]], list[dict[str, str]]]:
@@ -188,15 +102,15 @@ class WeatherRenderer:
         time_format = self.config.display.time_format
 
         # Prepare all time data
-        current_times = self._prepare_current_times(weather_data.current, time_format or "")
-        daily_times = self._prepare_daily_times(weather_data.daily, time_format or "")
+        current_times = self._prepare_current_times(weather_data.current, time_format)
+        daily_times = self._prepare_daily_times(weather_data.daily, time_format)
         hourly_times = self._prepare_hourly_times(
-            weather_data.hourly, time_format or "", self.config.weather.hourly_forecast_count
+            weather_data.hourly, time_format, self.config.weather.hourly_forecast_count
         )
 
         return current_times, daily_times, hourly_times
 
-    def _prepare_current_times(self, current: object, time_format: str) -> dict[str, str]:
+    def _prepare_current_times(self, current: object, time_format: str | None) -> dict[str, str]:
         """Prepare current weather time data.
         
         Args:
@@ -207,12 +121,16 @@ class WeatherRenderer:
             Dictionary with sunrise and sunset times
         """
         return {
-            "sunrise_local": self._format_timestamp_if_exists(current, "sunrise", time_format),
-            "sunset_local": self._format_timestamp_if_exists(current, "sunset", time_format),
+            "sunrise_local": self.time_formatter.format_timestamp_if_exists(
+                current, "sunrise", time_format
+            ),
+            "sunset_local": self.time_formatter.format_timestamp_if_exists(
+                current, "sunset", time_format
+            ),
         }
 
     def _prepare_daily_times(
-        self, daily_forecast: list[DailyWeather], time_format: str
+        self, daily_forecast: list[DailyWeather], time_format: str | None
     ) -> list[dict[str, str]]:
         """Prepare daily forecast time data.
         
@@ -225,16 +143,24 @@ class WeatherRenderer:
         """
         daily_times: list[dict[str, str]] = []
         for day in daily_forecast:
+            weekday_short = ""
+            if hasattr(day, "dt") and day.dt:
+                weekday_short = self.time_formatter.get_weekday_short(day.dt)
+            
             day_times: dict[str, str] = {
-                "sunrise_local": self._format_timestamp_if_exists(day, "sunrise", time_format),
-                "sunset_local": self._format_timestamp_if_exists(day, "sunset", time_format),
-                "weekday_short": self._get_weekday_short(day),
+                "sunrise_local": self.time_formatter.format_timestamp_if_exists(
+                    day, "sunrise", time_format
+                ),
+                "sunset_local": self.time_formatter.format_timestamp_if_exists(
+                    day, "sunset", time_format
+                ),
+                "weekday_short": weekday_short,
             }
             daily_times.append(day_times)
         return daily_times
 
     def _prepare_hourly_times(
-        self, hourly_forecast: list[HourlyWeather], time_format: str, count: int
+        self, hourly_forecast: list[HourlyWeather], time_format: str | None, count: int
     ) -> list[dict[str, str]]:
         """Prepare hourly forecast time data.
         
@@ -249,57 +175,13 @@ class WeatherRenderer:
         hourly_times: list[dict[str, str]] = []
         for hour in hourly_forecast[:count]:
             hour_dt = datetime.fromtimestamp(hour.dt)
-            hourly_times.append(self._format_hour_data(hour_dt, time_format))
+            hour_12 = hour_dt.hour if hour_dt.hour <= 12 else hour_dt.hour - 12
+            hourly_times.append({
+                "local_time": self.time_formatter.format_time(hour_dt, time_format),
+                "hour": str(hour_12),
+                "ampm": hour_dt.strftime("%p").lower(),
+            })
         return hourly_times
-
-    def _format_timestamp_if_exists(self, obj: object, attr: str, time_format: str) -> str:
-        """Format a timestamp attribute if it exists.
-        
-        Args:
-            obj: Object that may have the timestamp attribute
-            attr: Name of the timestamp attribute
-            time_format: Time format string
-            
-        Returns:
-            Formatted time string or empty string if attribute doesn't exist
-        """
-        if hasattr(obj, attr):
-            timestamp = getattr(obj, attr)
-            if timestamp:
-                dt = datetime.fromtimestamp(timestamp)
-                return self._format_time(dt, time_format)
-        return ""
-
-    def _get_weekday_short(self, day: DailyWeather) -> str:
-        """Get short weekday name from day object.
-        
-        Args:
-            day: Day object with dt attribute
-            
-        Returns:
-            Short weekday name or empty string
-        """
-        if hasattr(day, "dt") and day.dt:
-            day_dt = datetime.fromtimestamp(day.dt)
-            return day_dt.strftime("%a")
-        return ""
-
-    def _format_hour_data(self, hour_dt: datetime, time_format: str) -> dict[str, str]:
-        """Format hour data for display.
-        
-        Args:
-            hour_dt: Hour datetime object
-            time_format: Time format string
-            
-        Returns:
-            Dictionary with formatted hour data
-        """
-        hour_12 = hour_dt.hour if hour_dt.hour <= 12 else hour_dt.hour - 12
-        return {
-            "local_time": self._format_time(hour_dt, time_format),
-            "hour": str(hour_12),
-            "ampm": hour_dt.strftime("%p").lower(),
-        }
 
     def _prepare_units(self) -> dict[str, str | bool]:
         """Prepare unit strings based on configuration.
@@ -307,12 +189,15 @@ class WeatherRenderer:
         Returns:
             Dictionary with unit strings for temperature, wind, precipitation, and pressure
         """
+        # Determine if using metric system based on weather units config
         is_metric = self.config.weather.units == "metric"
+        
         return {
             "is_metric": is_metric,
             "units_temp": "°C" if is_metric else "°F",
             "units_wind": "m/s" if is_metric else "mph",
             "units_precip": "mm" if is_metric else "in",
+            # Pressure units can be independently configured (hPa, mmHg, inHg)
             "units_pressure": self.config.display.pressure_units,
         }
 
@@ -326,10 +211,9 @@ class WeatherRenderer:
             Formatted daylight duration string
         """
         if hasattr(weather_data.current, "sunrise") and hasattr(weather_data.current, "sunset"):
-            daylight_seconds = weather_data.current.sunset - weather_data.current.sunrise
-            daylight_hours = daylight_seconds // SECONDS_PER_HOUR
-            daylight_minutes = (daylight_seconds % SECONDS_PER_HOUR) // SECONDS_PER_MINUTE
-            return f"{daylight_hours}h {daylight_minutes}m"
+            return self.weather_calculator.calculate_daylight_hours(
+                weather_data.current.sunrise, weather_data.current.sunset
+            )
         return "12h 30m"  # Fallback value
 
     def _calculate_max_uvi(self, weather_data: WeatherData, now: datetime) -> tuple[str, str]:
@@ -346,10 +230,12 @@ class WeatherRenderer:
         uvi_time = "N/A"
 
         if weather_data.hourly:
-            max_uvi, max_uvi_timestamp = self._get_daily_max_uvi(weather_data, now)
+            max_uvi, max_uvi_timestamp = self.weather_calculator.get_daily_max_uvi(
+                weather_data, now
+            )
             if max_uvi > 0.0:
                 uvi_max = f"{max_uvi:.1f}"
-                uvi_time = self._format_time(
+                uvi_time = self.time_formatter.format_time(
                     datetime.fromtimestamp(max_uvi_timestamp), self.config.display.time_format
                 )
 
@@ -364,88 +250,144 @@ class WeatherRenderer:
         Returns:
             Air quality label string
         """
+        # Air pollution data is optional and may not be included in the response
         if hasattr(weather_data, "air_pollution") and weather_data.air_pollution is not None:
             aqi_value = weather_data.air_pollution.aqi
+            # AQI_LEVELS maps numeric AQI values (1-5) to descriptive labels
             return AQI_LEVELS.get(aqi_value, "Unknown")
         return "Unknown"
 
+    def _build_template_context(
+        self, weather_data: WeatherData, battery_status: BatteryStatus
+    ) -> dict[str, object]:
+        """Build the complete template context.
+        
+        Args:
+            weather_data: Weather data to display
+            battery_status: Battery status information
+            
+        Returns:
+            Dictionary containing all template variables
+        """
+        # Current date and time
+        now = datetime.now()
+        date_str = now.strftime("%A, %B %d, %Y")
+        last_refresh = self.time_formatter.format_datetime_display(now)
+        
+        # Prepare time data
+        current_times, daily_times, hourly_times = self._prepare_time_data(weather_data, now)
+        
+        # Prepare units
+        units = self._prepare_units()
+        
+        # Calculate weather metrics
+        weather_metrics = self._calculate_weather_metrics(weather_data, now, units)
+        
+        # Get display elements
+        display_elements = self._get_display_elements(weather_data, battery_status)
+        
+        # Build and return complete context
+        hourly_count = self.config.weather.hourly_forecast_count
+        return {
+            # Main data objects
+            "weather": weather_data,
+            "battery": battery_status,
+            "battery_status": battery_status,
+            "battery_icon": display_elements["battery_icon"],
+            "config": self.config,
+            # Date and time
+            "date": date_str,
+            "last_updated": now,
+            "last_refresh": last_refresh,
+            # Units
+            **units,
+            # Location
+            "city": display_elements["city"],
+            # Weather metrics
+            **weather_metrics,
+            # Display elements
+            "moon_phase": display_elements["moon_phase"],
+            # Forecast data
+            "hourly": weather_data.hourly[:hourly_count],
+            "daily": weather_data.daily,
+            # Formatted times
+            "current_times": current_times,
+            "daily_times": daily_times,
+            "hourly_times": hourly_times,
+        }
+    
+    def _calculate_weather_metrics(
+        self, weather_data: WeatherData, now: datetime, units: dict[str, str | bool]
+    ) -> dict[str, object]:
+        """Calculate various weather metrics.
+        
+        Args:
+            weather_data: Weather data
+            now: Current datetime
+            units: Units configuration
+            
+        Returns:
+            Dictionary of calculated metrics
+        """
+        # Calculate Beaufort wind force scale (0-12) from wind speed
+        bft = WindHelper.get_beaufort_scale(weather_data.current.wind_speed)
+        
+        # Calculate total daylight hours for today
+        daylight = self._calculate_daylight(weather_data)
+        
+        # Find maximum UV index for today (cached to persist across API calls)
+        uvi_max, uvi_time = self._calculate_max_uvi(weather_data, now)
+        
+        # Get air quality description from AQI value
+        aqi = self._get_air_quality_label(weather_data)
+        
+        # Convert pressure to user's preferred units
+        raw_pressure = weather_data.current.pressure  # Always in hPa from API
+        pressure_units = units["units_pressure"]
+        if isinstance(pressure_units, str):
+            # Convert from hPa to mmHg or inHg if configured
+            pressure = round(
+                self.weather_calculator.convert_pressure(raw_pressure, pressure_units), 1
+            )
+        else:
+            # Fallback to raw hPa value if units not properly configured
+            pressure = float(raw_pressure)
+            
+        return {
+            "bft": bft,
+            "daylight": daylight,
+            "uvi_max": uvi_max,
+            "uvi_time": uvi_time,
+            "aqi": aqi,
+            "pressure": pressure,
+        }
+    
+    def _get_display_elements(
+        self, weather_data: WeatherData, battery_status: BatteryStatus
+    ) -> dict[str, str]:
+        """Get various display elements.
+        
+        Args:
+            weather_data: Weather data
+            battery_status: Battery status
+            
+        Returns:
+            Dictionary of display elements
+        """
+        return {
+            "battery_icon": self._get_battery_icon(battery_status),
+            "city": self.config.weather.city_name or "Unknown Location",
+            "moon_phase": (
+                MoonPhaseHelper.get_moon_phase_icon(weather_data.daily[0].moon_phase)
+                if weather_data.daily
+                else "wi-moon-new"
+            ),
+        }
+
     def _setup_jinja_filters(self) -> None:
         """Set up custom Jinja2 filters and globals."""
-        # Weather icon filter
-        def weather_icon_filter(weather_item: WeatherCondition) -> str:
-            """Convert weather item to icon."""
-            if hasattr(weather_item, "id") and hasattr(weather_item, "icon"):
-                weather_id = str(weather_item.id)
-                icon_code = weather_item.icon
-
-                # For IDs 800-804, use the day/night variant
-                if weather_id in ["800", "801", "802", "803", "804"]:
-                    is_day = icon_code.endswith("d")
-                    variant = "d" if is_day else "n"
-                    key = f"{weather_id}_{weather_id[0:2]}{variant}"
-                    if key in self._weather_icon_map:
-                        return self._weather_icon_map[key]
-
-                # Try the exact match first
-                key = f"{weather_id}_{icon_code}"
-                if key in self._weather_icon_map:
-                    return self._weather_icon_map[key]
-
-                # Fall back to just the ID
-                if weather_id in self._weather_id_to_icon:
-                    return self._weather_id_to_icon[weather_id]
-
-                # Try the icon code as a last resort
-                if icon_code in self._weather_icon_map:
-                    return self._get_weather_icon(icon_code)
-
-            return "wi-cloud"  # Default fallback
-
-        # Helper functions for precipitation
-        def get_precipitation_amount(weather_item: CurrentWeather | HourlyWeather) -> float | None:
-            """Extract precipitation amount from weather item."""
-            # Check for rain/snow data in the weather item
-            # The API returns rain/snow as dicts with "1h" key for current/hourly
-            if hasattr(weather_item, "rain") and weather_item.rain:
-                return weather_item.rain.get("1h", 0.0)
-            if hasattr(weather_item, "snow") and weather_item.snow:
-                return weather_item.snow.get("1h", 0.0)
-            return None
-
-        def get_hourly_precipitation(hour: HourlyWeather) -> str:
-            """Get precipitation amount for an hourly forecast."""
-            # First try to get actual precipitation amount
-            amount = get_precipitation_amount(hour)
-            if amount is not None:
-                return f"{amount:.1f}"
-            # Fall back to probability of precipitation if available
-            if hasattr(hour, "pop"):
-                return f"{int(hour.pop * 100)}%"
-            return "0"
-
-        # Register filters
-        self.jinja_env.filters["weather_icon"] = weather_icon_filter
-        self.jinja_env.filters["moon_phase_icon"] = MoonPhaseHelper.get_moon_phase_icon
-        self.jinja_env.filters["moon_phase_label"] = MoonPhaseHelper.get_moon_phase_label
-        # Wind helper methods need to be wrapped for Jinja compatibility
-        def wind_direction_angle_filter(degrees: float) -> float:
-            """Wrapper for wind direction angle calculation."""
-            return WindHelper.get_wind_direction_angle(degrees)
-        
-        def wind_direction_cardinal_filter(degrees: float) -> str:
-            """Wrapper for wind direction cardinal calculation."""
-            return WindHelper.get_wind_direction_cardinal(degrees)
-        
-        self.jinja_env.filters["wind_direction_angle"] = wind_direction_angle_filter  # type: ignore[assignment]
-        self.jinja_env.filters["wind_direction_cardinal"] = wind_direction_cardinal_filter  # type: ignore[assignment]
-        # Register precipitation helpers as filters too
-        self.jinja_env.filters["get_precipitation_amount"] = get_precipitation_amount  # type: ignore[assignment]
-        self.jinja_env.filters["get_hourly_precipitation"] = get_hourly_precipitation  # type: ignore[assignment]
-        
-        # Also register as globals for use in template expressions
-        # Type ignore needed due to Jinja2's typing limitations
-        self.jinja_env.globals["get_precipitation_amount"] = get_precipitation_amount  # type: ignore[assignment]
-        self.jinja_env.globals["get_hourly_precipitation"] = get_hourly_precipitation  # type: ignore[assignment]
+        # Delegate to the filter manager
+        self.filter_manager.register_all_filters()
 
     async def generate_html(self, weather_data: WeatherData, battery_status: BatteryStatus) -> str:
         """Generate HTML for the weather display.
@@ -458,92 +400,14 @@ class WeatherRenderer:
             HTML content as a string.
         """
         try:
-            # Store the weather data for icon lookup
-            self.last_weather_data = weather_data
-
-            # Ensure weather icon mappings are loaded
-            self._ensure_weather_icon_map_loaded()
-
             # Set up Jinja filters
             self._setup_jinja_filters()
 
-            # Get battery icon based on status
-            battery_icon = self._get_battery_icon(battery_status)
+            # Build template context
+            context = self._build_template_context(weather_data, battery_status)
 
-            # Calculate current date and time info
-            now = datetime.now()
-            date_str = now.strftime("%A, %B %d, %Y")
-            last_refresh = self._format_datetime_display(now)
-
-            # Prepare time data
-            current_times, daily_times, hourly_times = self._prepare_time_data(weather_data, now)
-
-            # Prepare units
-            units = self._prepare_units()
-
-            # Calculate weather details
-            bft = WindHelper.get_beaufort_scale(weather_data.current.wind_speed)
-            daylight = self._calculate_daylight(weather_data)
-            uvi_max, uvi_time = self._calculate_max_uvi(weather_data, now)
-            aqi = self._get_air_quality_label(weather_data)
-
-            # Convert pressure to the configured units
-            raw_pressure = weather_data.current.pressure
-            # Ensure pressure units is a string
-            pressure_units = units["units_pressure"]
-            if isinstance(pressure_units, str):
-                pressure = round(self._convert_pressure(raw_pressure, pressure_units), 1)
-            else:
-                pressure = float(raw_pressure)  # Default to hPa
-
-            # City name (from config or weather data)
-            city = self.config.weather.city_name or "Unknown Location"
-
-            # Moon phase - using the actual value from the first day's forecast
-            moon_phase = (
-                MoonPhaseHelper.get_moon_phase_icon(weather_data.daily[0].moon_phase)
-                if weather_data.daily
-                else "wi-moon-new"
-            )
-
-            # Get template
+            # Get and render template
             template = self.jinja_env.get_template("dashboard.html.j2")
-
-            # Prepare context with all required variables
-            hourly_count = self.config.weather.hourly_forecast_count
-            context = {
-                # Main data objects
-                "weather": weather_data,
-                "battery": battery_status,  # Pass the full battery status object
-                "battery_status": battery_status,  # Full object if needed
-                "battery_icon": battery_icon,
-                "config": self.config,
-                # Date and time
-                "date": date_str,
-                "last_updated": now,
-                "last_refresh": last_refresh,
-                # Units
-                **units,  # Unpack all unit values
-                # Location
-                "city": city,
-                # Weather details
-                "bft": bft,
-                "daylight": daylight,
-                "uvi_max": uvi_max,
-                "uvi_time": uvi_time,
-                "aqi": aqi,
-                "pressure": pressure,
-                "moon_phase": moon_phase,
-                # Forecast data
-                "hourly": weather_data.hourly[:hourly_count],  # Use config value
-                "daily": weather_data.daily,  # All daily forecasts
-                # Formatted times
-                "current_times": current_times,
-                "daily_times": daily_times,
-                "hourly_times": hourly_times,
-            }
-
-            # Render the template
             html = template.render(**context)
 
             return html
@@ -576,60 +440,7 @@ class WeatherRenderer:
         Returns:
             Icon ID from the sprite file.
         """
-        # Ensure the weather icon mappings are loaded
-        self._ensure_weather_icon_map_loaded()
-
-        # Special handling for conditions with day/night variants (800-804)
-        if hasattr(self, "last_weather_data") and self.last_weather_data:
-            # Get the weather condition ID from the current weather data
-            try:
-                weather_id = str(self.last_weather_data.current.weather[0].id)
-
-                # Determine if it's day or night from the icon code
-                is_day = icon_code.endswith("d")
-                variant = "d" if is_day else "n"
-
-                # For IDs 800-804, use the day/night variant
-                if weather_id in ["800", "801", "802", "803", "804"]:
-                    key = f"{weather_id}_{weather_id[0:2]}{variant}"
-                    if key in self._weather_icon_map:
-                        return self._weather_icon_map[key]
-
-                # Try the exact match first
-                key = f"{weather_id}_{icon_code}"
-                if key in self._weather_icon_map:
-                    return self._weather_icon_map[key]
-
-                # Fall back to just the ID
-                if weather_id in self._weather_id_to_icon:
-                    return self._weather_id_to_icon[weather_id]
-            except (AttributeError, IndexError, KeyError):
-                # Handle cases where the weather data structure doesn't match expectations
-                pass
-
-        # Default mapping as fallback
-        icon_map = {
-            "01d": "wi-day-sunny",  # Clear sky (day)
-            "01n": "wi-night-clear",  # Clear sky (night)
-            "02d": "wi-day-cloudy",  # Few clouds (day)
-            "02n": "wi-night-cloudy",  # Few clouds (night)
-            "03d": "wi-cloud",  # Scattered clouds
-            "03n": "wi-cloud",
-            "04d": "wi-cloudy",  # Broken clouds
-            "04n": "wi-cloudy",
-            "09d": "wi-showers",  # Shower rain
-            "09n": "wi-showers",
-            "10d": "wi-day-rain",  # Rain (day)
-            "10n": "wi-night-rain",  # Rain (night)
-            "11d": "wi-thunderstorm",  # Thunderstorm
-            "11n": "wi-thunderstorm",
-            "13d": "wi-snow",  # Snow
-            "13n": "wi-snow",
-            "50d": "wi-fog",  # Mist
-            "50n": "wi-fog",
-        }
-
-        return icon_map.get(icon_code, "wi-cloud")  # Default to cloud if icon not found
+        return self.icon_mapper.get_icon_for_code(icon_code)
 
     async def render_image(
         self, html: str, width: int, height: int, output_path: Path | None = None
@@ -647,20 +458,21 @@ class WeatherRenderer:
         """
         page = None
         try:
-            # Get a page from the browser manager
+            # Get a page instance from the browser pool (managed for performance)
             page = await browser_manager.get_page(width, height)
 
-            # Set content
+            # Load the HTML content into the page
             await page.set_content(html)
 
-            # Wait for any rendering to complete
+            # Wait for all network resources to load (fonts, images, etc.)
             await page.wait_for_load_state("networkidle")
 
-            # Take screenshot
+            # Capture screenshot - either to file or memory
             if output_path:
                 await page.screenshot(path=str(output_path), type="png")
                 return output_path
             else:
+                # Return raw bytes for direct transmission
                 screenshot: bytes = await page.screenshot(type="png")
                 return screenshot
         except Exception as e:
@@ -668,7 +480,7 @@ class WeatherRenderer:
             self.logger.error(f"Error rendering image [{error_location}]: {e}")
             raise RuntimeError("Failed to render image with Playwright") from e
         finally:
-            # Always close the page to free memory
+            # Critical: Always close the page to prevent memory leaks
             if page:
                 await page.close()
 
@@ -696,197 +508,4 @@ class WeatherRenderer:
             html, self.config.display.width, self.config.display.height, output_path
         )
 
-    def _ensure_weather_icon_map_loaded(self) -> None:
-        """Ensure the weather icon mapping dictionaries are loaded."""
-        # Load and parse the CSV file once
-        if not hasattr(self, "_weather_icon_map"):
-            self._weather_icon_map: dict[str, str] = {}
-            self._weather_id_to_icon: dict[str, str] = {}
 
-            try:
-                import csv
-                from io import StringIO
-
-                # Use path_resolver to find the CSV file consistently
-                csv_path = path_resolver.get_data_file("owm_icon_map.csv")
-
-                # Check if the CSV file exists
-                if not file_utils.file_exists(csv_path):
-                    self.logger.warning("Could not find owm_icon_map.csv file")
-                    # Don't return here, continue to use the fallback mapping
-                else:
-                    try:
-                        # Read the CSV file content
-                        csv_content = file_utils.read_text(csv_path)
-
-                        # Parse using csv reader
-                        reader = csv.DictReader(StringIO(csv_content))
-                        for row in reader:
-                            weather_id = row["API response: id"].strip()
-                            icon_code_from_csv = row["API response: icon"].strip()
-                            weather_icon_class = row["Weather Icons Class"].strip()
-
-                            # Store by ID and icon code
-                            key = f"{weather_id}_{icon_code_from_csv}"
-                            self._weather_icon_map[key] = weather_icon_class
-
-                            # Also store just by ID for fallback
-                            self._weather_id_to_icon[weather_id] = weather_icon_class
-                    except Exception as e:
-                        self.logger.error(f"Error reading weather icon mapping: {e}")
-            except Exception as e:
-                self.logger.error(f"Error loading weather icon mapping: {e}")
-                # Fall back to the default mapping
-                self._weather_icon_map = {}
-                self._weather_id_to_icon = {}
-
-    def _calculate_current_max_uvi(
-        self, weather_data: WeatherData, now: datetime
-    ) -> tuple[float, int]:
-        """Calculate maximum UVI from current and hourly forecast data.
-        
-        Args:
-            weather_data: Weather data containing current and hourly forecasts
-            now: Current datetime
-            
-        Returns:
-            Tuple of (max_uvi, timestamp) for today
-        """
-        # Initialize with current API data
-        max_uvi = 0.0
-        max_uvi_timestamp = 0
-        
-        if hasattr(weather_data.current, "uvi"):
-            max_uvi = weather_data.current.uvi
-            max_uvi_timestamp = int(now.timestamp())
-        
-        # Get today's date range
-        today = now.date()
-        today_start_dt = datetime.combine(today, datetime.min.time())
-        today_end_dt = datetime.combine(today + timedelta(days=1), datetime.min.time()) - timedelta(
-            seconds=1
-        )
-        today_start = int(today_start_dt.timestamp())
-        today_end = int(today_end_dt.timestamp())
-        
-        # Check hourly forecast for today's max UVI
-        for hour in weather_data.hourly:
-            if today_start <= hour.dt <= today_end and hasattr(hour, "uvi") and hour.uvi > max_uvi:
-                max_uvi = hour.uvi
-                max_uvi_timestamp = hour.dt
-                
-        return max_uvi, max_uvi_timestamp
-    
-    def _read_uvi_cache(self, cache_file: Path, today: date) -> tuple[float | None, int | None]:
-        """Read UVI cache file and return values if valid for today.
-        
-        Args:
-            cache_file: Path to the cache file
-            today: Today's date for validation
-            
-        Returns:
-            Tuple of (cached_uvi, cached_timestamp) or (None, None) if invalid
-        """
-        if not file_utils.file_exists(cache_file):
-            return None, None
-            
-        try:
-            cache_data = file_utils.read_json(cache_file)
-            
-            # Validate cache structure
-            if not isinstance(cache_data, dict):
-                return None, None
-                
-            # Check date
-            date_str = cache_data.get("date")
-            if not isinstance(date_str, str):
-                return None, None
-                
-            cache_date = datetime.fromisoformat(date_str).date()
-            if cache_date != today:
-                return None, None
-                
-            # Extract and validate values
-            max_uvi_value = cache_data.get("max_uvi")
-            timestamp_value = cache_data.get("timestamp")
-            
-            if isinstance(max_uvi_value, int | float) and isinstance(timestamp_value, int):
-                return float(max_uvi_value), timestamp_value
-                
-        except Exception as e:
-            self.logger.debug(f"Error reading UVI cache: {e}")
-            
-        return None, None
-    
-    def _write_uvi_cache(
-        self, cache_file: Path, today: date, max_uvi: float, timestamp: int
-    ) -> None:
-        """Write UVI values to cache file.
-        
-        Args:
-            cache_file: Path to the cache file
-            today: Today's date
-            max_uvi: Maximum UVI value to cache
-            timestamp: Timestamp of the maximum UVI
-        """
-        try:
-            cache_data = {
-                "date": today.isoformat(),
-                "max_uvi": max_uvi,
-                "timestamp": timestamp,
-            }
-            file_utils.write_json(cache_file, cache_data)  # type: ignore[arg-type]
-        except Exception as e:
-            self.logger.warning(f"Failed to cache max UVI: {e}")
-
-    def _get_daily_max_uvi(self, weather_data: WeatherData, now: datetime) -> tuple[float, int]:
-        """Calculate the max UVI for today, persisting between API calls.
-
-        Finds the maximum UV index value from hourly forecasts for the current day
-        and persists it in a cache file to maintain the max value between API calls.
-        This ensures we track the highest UV value even as it passes.
-
-        Args:
-            weather_data: Current weather data object containing hourly forecasts
-            now: Current datetime representing the time of the API call
-
-        Returns:
-            Tuple of (max_uvi, max_uvi_timestamp) where max_uvi is the maximum UV index
-            value for today and max_uvi_timestamp is the Unix timestamp when that maximum
-            value is expected
-        """
-        cache_file = path_resolver.get_cache_file(UVI_CACHE_FILENAME)
-        today = now.date()
-        
-        # Calculate current max UVI from API data
-        max_uvi, max_uvi_timestamp = self._calculate_current_max_uvi(weather_data, now)
-        
-        # Read cached UVI values
-        cached_uvi, cached_timestamp = self._read_uvi_cache(cache_file, today)
-        
-        # Use cached value if it's higher
-        if cached_uvi is not None and cached_uvi > max_uvi:
-            return cached_uvi, cached_timestamp or 0
-        
-        # Save the new max value
-        if max_uvi > 0:
-            self._write_uvi_cache(cache_file, today, max_uvi, max_uvi_timestamp)
-        
-        return max_uvi, max_uvi_timestamp
-
-    def _convert_pressure(self, pressure_hpa: float, target_units: str) -> float:
-        """Convert pressure from hPa to the target units.
-
-        Args:
-            pressure_hpa: Pressure in hectopascals (hPa)
-            target_units: Target units ("hPa", "mmHg", or "inHg")
-
-        Returns:
-            Converted pressure value
-        """
-        if target_units == "mmHg":
-            return pressure_hpa * HPA_TO_MMHG
-        elif target_units == "inHg":
-            return pressure_hpa * HPA_TO_INHG
-        else:  # hPa
-            return pressure_hpa

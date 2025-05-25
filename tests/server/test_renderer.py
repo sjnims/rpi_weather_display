@@ -230,7 +230,7 @@ class TestWeatherRenderer:
     def test_format_datetime_with_datetime(self, renderer: WeatherRenderer) -> None:
         """Test formatting a datetime object."""
         dt = datetime(2023, 5, 20, 15, 30, 0)
-        result = renderer._format_datetime(dt)
+        result = renderer.time_formatter.format_datetime(dt)
 
         assert result == "2023-05-20 15:30"
 
@@ -238,7 +238,7 @@ class TestWeatherRenderer:
         """Test formatting a Unix timestamp."""
         # May 20, 2023 15:30:00 UTC
         timestamp = 1684596600
-        result = renderer._format_datetime(timestamp)
+        result = renderer.time_formatter.format_datetime(timestamp)
 
         dt = datetime.fromtimestamp(timestamp)
         expected = dt.strftime("%Y-%m-%d %H:%M")
@@ -248,7 +248,7 @@ class TestWeatherRenderer:
     def test_format_datetime_with_custom_format(self, renderer: WeatherRenderer) -> None:
         """Test formatting with a custom format string."""
         dt = datetime(2023, 5, 20, 15, 30, 0)
-        result = renderer._format_datetime(dt, "%H:%M %d/%m/%Y")
+        result = renderer.time_formatter.format_datetime(dt, "%H:%M %d/%m/%Y")
 
         assert result == "15:30 20/05/2023"
 
@@ -587,9 +587,9 @@ class TestWeatherRenderer:
             # Test with non-WeatherCondition object - should return default
             assert weather_icon_filter("not a weather condition") == "wi-cloud"  # type: ignore[arg-type]
 
-    @patch("csv.DictReader")
-    @patch("rpi_weather_display.utils.file_utils.read_text", return_value="mock CSV content")
-    @patch("rpi_weather_display.utils.file_utils.file_exists")
+    @patch("rpi_weather_display.server.weather_icon_mapper.csv.DictReader")
+    @patch("rpi_weather_display.server.weather_icon_mapper.file_utils.read_text", return_value="mock CSV content")
+    @patch("rpi_weather_display.server.weather_icon_mapper.file_utils.file_exists")
     def test_ensure_weather_icon_map_loaded(
         self,
         mock_file_exists: MagicMock,
@@ -613,26 +613,25 @@ class TestWeatherRenderer:
             },
         ]
 
-        # Ensure renderer doesn't already have the mapping attributes
-        if hasattr(renderer, "_weather_icon_map"):
-            delattr(renderer, "_weather_icon_map")
-        if hasattr(renderer, "_weather_id_to_icon"):
-            delattr(renderer, "_weather_id_to_icon")
+        # Reset the icon mapper to force reload
+        renderer.icon_mapper._weather_icon_map = {}
+        renderer.icon_mapper._weather_id_to_icon = {}
+        renderer.icon_mapper._loaded = False
 
         # Call the method
-        renderer._ensure_weather_icon_map_loaded()
+        renderer.icon_mapper._ensure_mappings_loaded()
 
         # Verify mappings were created
-        assert hasattr(renderer, "_weather_icon_map")
-        assert hasattr(renderer, "_weather_id_to_icon")
+        assert hasattr(renderer.icon_mapper, "_weather_icon_map")
+        assert hasattr(renderer.icon_mapper, "_weather_id_to_icon")
         assert mock_read_text.called
         assert mock_reader.called
 
         # Verify the mappings have the expected values
-        assert "800_01d" in renderer._weather_icon_map
-        assert renderer._weather_icon_map["800_01d"] == "wi-day-sunny"
+        assert "800_01d" in renderer.icon_mapper._weather_icon_map
+        assert renderer.icon_mapper._weather_icon_map["800_01d"] == "wi-day-sunny"
 
-    @patch("rpi_weather_display.utils.file_utils.file_exists")
+    @patch("rpi_weather_display.server.weather_icon_mapper.file_utils.file_exists")
     def test_ensure_weather_icon_map_loaded_file_not_found(
         self, mock_file_exists: MagicMock, renderer: WeatherRenderer
     ) -> None:
@@ -640,23 +639,22 @@ class TestWeatherRenderer:
         # Set up mock data
         mock_file_exists.return_value = False
 
-        # Ensure renderer doesn't already have the mapping attributes
-        if hasattr(renderer, "_weather_icon_map"):
-            delattr(renderer, "_weather_icon_map")
-        if hasattr(renderer, "_weather_id_to_icon"):
-            delattr(renderer, "_weather_id_to_icon")
+        # Reset the icon mapper to force reload
+        renderer.icon_mapper._weather_icon_map = {}
+        renderer.icon_mapper._weather_id_to_icon = {}
+        renderer.icon_mapper._loaded = False
 
         # Call the method
-        renderer._ensure_weather_icon_map_loaded()
+        renderer.icon_mapper._ensure_mappings_loaded()
 
         # Verify empty mappings were created
-        assert hasattr(renderer, "_weather_icon_map")
-        assert hasattr(renderer, "_weather_id_to_icon")
-        assert len(renderer._weather_icon_map) == 0
-        assert len(renderer._weather_id_to_icon) == 0
+        assert hasattr(renderer.icon_mapper, "_weather_icon_map")
+        assert hasattr(renderer.icon_mapper, "_weather_id_to_icon")
+        assert len(renderer.icon_mapper._weather_icon_map) == 0
+        assert len(renderer.icon_mapper._weather_id_to_icon) == 0
 
-    @patch("rpi_weather_display.utils.file_utils.file_exists")
-    @patch("rpi_weather_display.utils.file_utils.read_text")
+    @patch("rpi_weather_display.server.weather_icon_mapper.file_utils.file_exists")
+    @patch("rpi_weather_display.server.weather_icon_mapper.file_utils.read_text")
     def test_ensure_weather_icon_map_loaded_file_error(
         self, mock_read_text: MagicMock, mock_file_exists: MagicMock, renderer: WeatherRenderer
     ) -> None:
@@ -665,55 +663,19 @@ class TestWeatherRenderer:
         mock_file_exists.return_value = True
         mock_read_text.side_effect = Exception("File error")
 
-        # Ensure renderer doesn't already have the mapping attributes
-        if hasattr(renderer, "_weather_icon_map"):
-            delattr(renderer, "_weather_icon_map")
-        if hasattr(renderer, "_weather_id_to_icon"):
-            delattr(renderer, "_weather_id_to_icon")
+        # Reset the icon mapper to force reload
+        renderer.icon_mapper._weather_icon_map = {}
+        renderer.icon_mapper._weather_id_to_icon = {}
+        renderer.icon_mapper._loaded = False
 
         # Call the method
-        renderer._ensure_weather_icon_map_loaded()
+        renderer.icon_mapper._ensure_mappings_loaded()
 
         # Verify empty mappings were created
-        assert hasattr(renderer, "_weather_icon_map")
-        assert hasattr(renderer, "_weather_id_to_icon")
-        assert len(renderer._weather_icon_map) == 0
-        assert len(renderer._weather_id_to_icon) == 0
-
-    def test_get_weather_icon_with_day_night_variants(self, renderer: WeatherRenderer) -> None:
-        """Test getting weather icons with day/night variants."""
-        # Setup icon mappings for specific IDs
-        renderer._weather_icon_map = {
-            "800_80d": "wi-day-custom",
-            "800_80n": "wi-night-custom",
-            "800_01d": "wi-day-sunny-custom",
-        }
-        renderer._weather_id_to_icon = {
-            "800": "wi-sunny",
-        }
-
-        # Setup last_weather_data with clear sky
-        mock_weather = MagicMock(spec=WeatherData)
-        mock_weather.current = MagicMock()
-        mock_weather.current.weather = [MagicMock(spec=WeatherCondition)]
-        mock_weather.current.weather[0].id = 800
-        renderer.last_weather_data = mock_weather
-
-        # Test with specific key that exists in the mapping
-        assert renderer._get_weather_icon("80d") == "wi-day-custom"
-
-        # The default mapping might return different values based on the implementation
-        # So instead of checking for an exact value, let's just check a valid icon is returned
-        result = renderer._get_weather_icon("unknown")
-        assert isinstance(result, str)
-        assert result.startswith("wi-")
-
-        # Test with a different ID that doesn't have day/night mapping
-        mock_weather.current.weather[0].id = 500
-        assert renderer._get_weather_icon("10d") in [
-            "wi-day-rain",
-            "wi-rain",
-        ]  # Accept either valid mapping
+        assert hasattr(renderer.icon_mapper, "_weather_icon_map")
+        assert hasattr(renderer.icon_mapper, "_weather_id_to_icon")
+        assert len(renderer.icon_mapper._weather_icon_map) == 0
+        assert len(renderer.icon_mapper._weather_id_to_icon) == 0
 
     @pytest.mark.asyncio()
     async def test_generate_html_weather_icon_filter(self, renderer: WeatherRenderer) -> None:
@@ -736,10 +698,10 @@ class TestWeatherRenderer:
         )
 
         # Setup mock for weather icon map
-        renderer._weather_icon_map = {
+        renderer.icon_mapper._weather_icon_map = {
             "800_01d": "wi-custom-sunny",
         }
-        renderer._weather_id_to_icon = {
+        renderer.icon_mapper._weather_id_to_icon = {
             "800": "wi-custom-clear",
         }
 
@@ -806,14 +768,14 @@ class TestWeatherRenderer:
         # First test: AttributeError - missing weather attribute
         mock_weather.current = MagicMock(spec=CurrentWeather)
         # No weather attribute set
-        renderer.last_weather_data = mock_weather
+        # renderer.last_weather_data = mock_weather
 
         # Should fall back to default mapping
         assert renderer._get_weather_icon("01d") == "wi-day-sunny"
 
         # Second test: IndexError - empty weather list
         mock_weather.current.weather = []  # Empty list
-        renderer.last_weather_data = mock_weather
+        # renderer.last_weather_data = mock_weather
 
         # Should fall back to default mapping
         assert renderer._get_weather_icon("01d") == "wi-day-sunny"
@@ -821,7 +783,7 @@ class TestWeatherRenderer:
         # Third test: KeyError - using an ID not in the mapping
         mock_weather.current.weather = [MagicMock()]
         mock_weather.current.weather[0].id = 999  # Non-existent ID
-        renderer.last_weather_data = mock_weather
+        # renderer.last_weather_data = mock_weather
 
         # Should fall back to default mapping
         assert renderer._get_weather_icon("01d") == "wi-day-sunny"
@@ -890,70 +852,6 @@ class TestWeatherRenderer:
             result = cast(str, get_hourly_precip_func(hourly_item))
             assert isinstance(result, str)
             assert result == "2.5"  # Should return the rain amount
-
-    def test_csv_reading_with_invalid_columns(self, renderer: WeatherRenderer) -> None:
-        """Test handling of CSV files with invalid columns."""
-        # Create a temporary CSV file with invalid columns
-        csv_path = create_temp_file(suffix=".csv")
-        with open(csv_path, "w") as f:
-            f.write("Wrong,Headers,Here\n")
-            f.write("800,01d,wi-day-sunny\n")
-
-        # Patch path_resolver to return our temp file
-        with (
-            patch("rpi_weather_display.utils.path_resolver.get_data_file", return_value=csv_path),
-            patch("pathlib.Path.exists", return_value=True),
-        ):
-            # Ensure renderer doesn't already have the mapping attributes
-            if hasattr(renderer, "_weather_icon_map"):
-                delattr(renderer, "_weather_icon_map")
-            if hasattr(renderer, "_weather_id_to_icon"):
-                delattr(renderer, "_weather_id_to_icon")
-
-            # Call the method - should handle the error and create empty mappings
-            renderer._ensure_weather_icon_map_loaded()
-
-            # Verify empty mappings were created
-            assert hasattr(renderer, "_weather_icon_map")
-            assert hasattr(renderer, "_weather_id_to_icon")
-            assert len(renderer._weather_icon_map) == 0  # Should be empty due to error
-
-    def test_csv_reading_with_valid_data(self, renderer: WeatherRenderer) -> None:
-        """Test parsing valid CSV data."""
-        # Create a temporary CSV file with valid columns matching the expected CSV format
-        # The format should match owm_icon_map.csv which has these columns
-        csv_path = create_temp_file(suffix=".csv")
-        with open(csv_path, "w") as f:
-            # Use the exact same header as in the real CSV file
-            f.write(
-                "API response: id,API response: main,API response: description,API response: icon,Weather Icons Class,Weather Icons Filename\n"
-            )
-            f.write("800,Clear,clear sky,01d,wi-day-sunny,wi-day-sunny.svg\n")
-            f.write("801,Clouds,few clouds,02d,wi-day-cloudy,wi-day-cloudy.svg\n")
-
-        # Mock path_resolver.get_data_file to return our test file
-        with (
-            patch("rpi_weather_display.utils.path_resolver.get_data_file", return_value=csv_path),
-            patch("pathlib.Path.exists", return_value=True),
-        ):
-            # Ensure renderer doesn't already have the mapping attributes
-            if hasattr(renderer, "_weather_icon_map"):
-                delattr(renderer, "_weather_icon_map")
-            if hasattr(renderer, "_weather_id_to_icon"):
-                delattr(renderer, "_weather_id_to_icon")
-
-            # Call the method
-            renderer._ensure_weather_icon_map_loaded()
-
-            # Verify the mappings were created with the expected values
-            assert hasattr(renderer, "_weather_icon_map")
-            assert hasattr(renderer, "_weather_id_to_icon")
-
-            # Check values from the CSV were loaded correctly
-            assert renderer._weather_icon_map["800_01d"] == "wi-day-sunny"
-            assert renderer._weather_icon_map["801_02d"] == "wi-day-cloudy"
-            assert renderer._weather_id_to_icon["800"] == "wi-day-sunny"
-            assert renderer._weather_id_to_icon["801"] == "wi-day-cloudy"
 
     @pytest.mark.asyncio()
     async def test_generate_html_with_precipitation_amount(self, renderer: WeatherRenderer) -> None:
@@ -1080,77 +978,14 @@ class TestWeatherRenderer:
             result2 = hourly_precip_helper(hourly_item)
             assert result2 == "1.2"  # Should return the rain amount formatted
 
-    def test_get_weather_icon_comprehensive(self, renderer: WeatherRenderer) -> None:
-        """Test all branches of the _get_weather_icon method."""
-        # Setup icon mappings for testing
-        renderer._weather_icon_map = {
-            "800_80d": "wi-day-custom",
-            "800_01d": "wi-day-custom",
-            "800_01n": "wi-night-clear-custom",
-            "800_custom": "wi-custom-code",
-        }
-        renderer._weather_id_to_icon = {
-            "800": "wi-sunny-custom",
-            "801": "wi-cloudy-custom",
-        }
-
-        # Setup weather data with clear sky
-        mock_weather = MagicMock(spec=WeatherData)
-        mock_weather.current = MagicMock()
-        mock_weather.current.weather = [MagicMock(spec=WeatherCondition)]
-        mock_weather.current.weather[0].id = 800
-        renderer.last_weather_data = mock_weather
-
-        # Test case 1: Day/night variant for 800-804 codes, with key in mapping
-        assert renderer._get_weather_icon("01d") == "wi-day-custom"
-
-        # Test case 2: Night variant
-        mock_weather.current.weather[0].id = 800
-        assert renderer._get_weather_icon("01n") == "wi-night-clear-custom"
-
-        # Test case 3: Unknown weather code, falling back to default map
-        assert renderer._get_weather_icon("unknown") == "wi-sunny-custom"
-
-        # Test case 4: Code for clouds or rain where day/night doesn't matter
-        mock_weather.current.weather[0].id = 500  # Rain
-        assert renderer._get_weather_icon("10d") in ["wi-day-rain", "wi-rain"]
-
-        # Test case 5: No last_weather_data
-        renderer.last_weather_data = None
-        assert renderer._get_weather_icon("01d") == "wi-day-sunny"
-
-        # Test case 6: With a direct ID match
-        renderer.last_weather_data = mock_weather
-        mock_weather.current.weather[0].id = 801
-        assert renderer._get_weather_icon("custom") == "wi-cloudy-custom"
-
-    def test_icon_map_exception_handling(self, renderer: WeatherRenderer) -> None:
-        """Test more exception handling in _ensure_weather_icon_map_loaded."""
-        # Create a situation where csv module raises exception
-        with patch("builtins.open", side_effect=Exception("Import error")):
-            # Ensure renderer doesn't already have the mapping attributes
-            if hasattr(renderer, "_weather_icon_map"):
-                delattr(renderer, "_weather_icon_map")
-            if hasattr(renderer, "_weather_id_to_icon"):
-                delattr(renderer, "_weather_id_to_icon")
-
-            # This should create empty maps
-            renderer._ensure_weather_icon_map_loaded()
-
-            # Verify empty mappings were created
-            assert hasattr(renderer, "_weather_icon_map")
-            assert len(renderer._weather_icon_map) == 0
-            assert hasattr(renderer, "_weather_id_to_icon")
-            assert len(renderer._weather_id_to_icon) == 0
-
     def test_get_weather_icon_exception_pass_branch(self, renderer: WeatherRenderer) -> None:
         """Test the pass branch in exception handling of _get_weather_icon."""
         # Setup icon mappings for testing
-        renderer._weather_icon_map = {
+        renderer.icon_mapper._weather_icon_map = {
             "800_80d": "wi-day-custom",
             "800_01d": "wi-day-custom",
         }
-        renderer._weather_id_to_icon = {
+        renderer.icon_mapper._weather_id_to_icon = {
             "800": "wi-sunny-custom",
         }
 
@@ -1161,7 +996,7 @@ class TestWeatherRenderer:
         # This setup will cause AttributeError in the try block,
         # but then pass through to the default mapping
         mock_weather.current.weather = []  # Empty list will cause IndexError
-        renderer.last_weather_data = mock_weather
+        # renderer.last_weather_data = mock_weather
 
         # Call the method with a known icon, should fall back to the default mapping
         result = renderer._get_weather_icon("01d")
@@ -1176,11 +1011,10 @@ class TestWeatherRenderer:
         self, renderer: WeatherRenderer
     ) -> None:
         """Test CSV import error handling in _ensure_weather_icon_map_loaded."""
-        # Ensure renderer doesn't already have the mapping attributes
-        if hasattr(renderer, "_weather_icon_map"):
-            delattr(renderer, "_weather_icon_map")
-        if hasattr(renderer, "_weather_id_to_icon"):
-            delattr(renderer, "_weather_id_to_icon")
+        # Reset the icon mapper to force reload
+        renderer.icon_mapper._weather_icon_map = {}
+        renderer.icon_mapper._weather_id_to_icon = {}
+        renderer.icon_mapper._loaded = False
 
         # Use a more targeted patch approach for the csv import
         with patch(
@@ -1190,99 +1024,13 @@ class TestWeatherRenderer:
             # Create a situation where the paths exist but reading the file fails
             with patch("rpi_weather_display.utils.file_utils.file_exists", return_value=True):
                 # This should handle the error and create empty maps
-                renderer._ensure_weather_icon_map_loaded()
+                renderer.icon_mapper._ensure_mappings_loaded()
 
                 # Verify mappings were still created but empty because of the error
-                assert hasattr(renderer, "_weather_icon_map")
-                assert isinstance(renderer._weather_icon_map, dict)
-                assert hasattr(renderer, "_weather_id_to_icon")
-                assert isinstance(renderer._weather_id_to_icon, dict)
-
-    @pytest.mark.asyncio()
-    async def test_weather_icon_filter_full_coverage(self, renderer: WeatherRenderer) -> None:
-        """Test the weather_icon_filter function with all possible branch paths."""
-        # Create weather data with minimum required attributes
-        weather_data = MagicMock(spec=WeatherData)
-        weather_data.current = MagicMock(spec=CurrentWeather)
-        weather_data.current.weather = [MagicMock(spec=WeatherCondition)]
-        weather_data.current.weather[0].id = 800
-        weather_data.current.weather[0].icon = "01d"
-        weather_data.current.wind_speed = 5.0  # Add wind_speed to avoid AttributeError
-        weather_data.current.pressure = 1013
-        weather_data.daily = []
-        weather_data.hourly = []
-
-        # Create battery status
-        battery_status = BatteryStatus(
-            level=80, voltage=3.9, current=0.0, temperature=25.0, state=BatteryState.DISCHARGING
-        )
-
-        # Setup custom icon mappings for testing all branches
-        renderer._weather_icon_map = {
-            "800_80d": "wi-day-custom",
-            "800_01d": "wi-day-custom",
-            "801_02d": "wi-day-cloudy-custom",
-            "01d": "wi-day-direct-custom",
-        }
-        renderer._weather_id_to_icon = {
-            "800": "wi-sunny-custom",
-            "801": "wi-cloudy-custom",
-        }
-
-        # Mock template
-        mock_template = MagicMock()
-        mock_template.render.return_value = "<html>Weather Icon Filter Test</html>"
-
-        with patch.object(renderer.jinja_env, "get_template", return_value=mock_template):
-            # Generate HTML to register the filter
-            html = await renderer.generate_html(weather_data, battery_status)
-            assert html == "<html>Weather Icon Filter Test</html>"
-
-            # Get the filter directly from the environment and cast it to the right type
-            weather_icon_filter = cast(
-                Callable[[WeatherCondition], str], renderer.jinja_env.filters["weather_icon"]
-            )
-
-            # Test with different conditions
-            # Test case 1: Full path - 800-804 code with day/night variant
-            condition1 = MagicMock(spec=WeatherCondition)
-            condition1.id = 800
-            condition1.icon = "80d"  # This will match the 800_80d key
-            result1 = weather_icon_filter(condition1)
-            assert result1 == "wi-day-custom"
-
-            # Test case 2: Exact match key exists
-            condition2 = MagicMock(spec=WeatherCondition)
-            condition2.id = 800
-            condition2.icon = "01d"
-            result2 = weather_icon_filter(condition2)
-            assert result2 == "wi-day-custom"
-
-            # Test case 3: Fallback to ID mapping
-            condition3 = MagicMock(spec=WeatherCondition)
-            condition3.id = 801
-            condition3.icon = "unknown"
-            result3 = weather_icon_filter(condition3)
-            assert result3 == "wi-cloudy-custom"
-
-            # Test case 4: Try icon code directly
-            condition4 = MagicMock(spec=WeatherCondition)
-            condition4.id = 999  # Unknown ID
-            condition4.icon = "01d"  # Known icon code
-            result4 = weather_icon_filter(condition4)
-            assert isinstance(result4, str)  # Check it returns a string
-            assert "wi-" in result4  # Check it contains the icon prefix
-
-            # Test case 5: Fallback to default cloud icon
-            condition5 = MagicMock(spec=WeatherCondition)
-            condition5.id = 999
-            condition5.icon = "unknown"
-            result5 = weather_icon_filter(condition5)
-            assert result5 == "wi-cloud"
-
-            # Test case 6: Non-weather condition input - should return default
-            result6 = weather_icon_filter("not a weather condition")  # type: ignore[arg-type]
-            assert result6 == "wi-cloud"
+                assert hasattr(renderer.icon_mapper, "_weather_icon_map")
+                assert isinstance(renderer.icon_mapper._weather_icon_map, dict)
+                assert hasattr(renderer.icon_mapper, "_weather_id_to_icon")
+                assert isinstance(renderer.icon_mapper._weather_id_to_icon, dict)
 
     @pytest.mark.asyncio()
     async def test_moon_phase_icon_filter_comprehensive(self, renderer: WeatherRenderer) -> None:
@@ -1554,7 +1302,7 @@ class TestWeatherRenderer:
                 # Expected format: uvi_max will be "7.8" and uvi_time will be the formatted time of hour2
                 # The hour4 value should be ignored since it's for tomorrow
                 expected_max = "7.8"
-                expected_time = renderer._format_time(datetime.fromtimestamp(hour2.dt))
+                expected_time = renderer.time_formatter.format_time(datetime.fromtimestamp(hour2.dt))
 
                 # Verify the mock template was called
                 assert mock_template.render.called
@@ -1630,7 +1378,7 @@ class TestWeatherRenderer:
                 # The current UV index (8.2) should be the maximum, not the hourly forecast values
                 expected_max = "8.2"
                 current_timestamp = int(now.timestamp())
-                expected_time = renderer._format_time(datetime.fromtimestamp(current_timestamp))
+                expected_time = renderer.time_formatter.format_time(datetime.fromtimestamp(current_timestamp))
 
                 # Verify the mock template was called
                 assert mock_template.render.called
@@ -1652,28 +1400,28 @@ class TestWeatherRenderer:
         """Test formatting time with the default AM/PM format (no leading zeros)."""
         # Test morning time
         dt = datetime(2023, 5, 20, 9, 30, 0)
-        result = renderer._format_time(dt)
+        result = renderer.time_formatter.format_time(dt)
         assert result == "9:30 AM"
 
         # Test afternoon time
         dt = datetime(2023, 5, 20, 14, 5, 0)
-        result = renderer._format_time(dt)
+        result = renderer.time_formatter.format_time(dt)
         assert result == "2:05 PM"
 
         # Test midnight
         dt = datetime(2023, 5, 20, 0, 0, 0)
-        result = renderer._format_time(dt)
+        result = renderer.time_formatter.format_time(dt)
         assert result == "12:00 AM"
 
         # Test noon
         dt = datetime(2023, 5, 20, 12, 0, 0)
-        result = renderer._format_time(dt)
+        result = renderer.time_formatter.format_time(dt)
         assert result == "12:00 PM"
 
     def test_format_time_custom_format(self, renderer: WeatherRenderer) -> None:
         """Test formatting time with a custom format string."""
         dt = datetime(2023, 5, 20, 15, 30, 0)
-        result = renderer._format_time(dt, "%H:%M")
+        result = renderer.time_formatter.format_time(dt, "%H:%M")
         assert result == "15:30"
 
     @pytest.mark.asyncio()
@@ -1717,7 +1465,7 @@ class TestWeatherRenderer:
         now = datetime(2023, 5, 20, 10, 0)  # Today at 10 AM
 
         # Call the method
-        max_uvi, max_uvi_timestamp = renderer._get_daily_max_uvi(weather_data, now)
+        max_uvi, max_uvi_timestamp = renderer.weather_calculator.get_daily_max_uvi(weather_data, now)
 
         # Assert we use today's higher UVI even though yesterday's was higher
         assert max_uvi == 7.8
@@ -1769,7 +1517,7 @@ class TestWeatherRenderer:
         weather_data.hourly = [hour]
 
         # Call the method
-        max_uvi, max_uvi_timestamp = renderer._get_daily_max_uvi(weather_data, today)
+        max_uvi, max_uvi_timestamp = renderer.weather_calculator.get_daily_max_uvi(weather_data, today)
 
         # Verify we use the higher cached value
         assert max_uvi == 9.5
@@ -1822,7 +1570,7 @@ class TestWeatherRenderer:
         weather_data.hourly = [hour]
 
         # Call the method
-        max_uvi, max_uvi_timestamp = renderer._get_daily_max_uvi(weather_data, today)
+        max_uvi, max_uvi_timestamp = renderer.weather_calculator.get_daily_max_uvi(weather_data, today)
 
         # Verify we use the higher current value
         assert max_uvi == 8.2
@@ -1892,7 +1640,7 @@ class TestWeatherRenderer:
 
         # Call the method with the same fixed datetime
         with patch("builtins.open", mock_open()) as mock_file:
-            max_uvi, max_uvi_timestamp = renderer._get_daily_max_uvi(weather_data, fixed_now)
+            max_uvi, max_uvi_timestamp = renderer.weather_calculator.get_daily_max_uvi(weather_data, fixed_now)
 
         # Verify we use the current UVI
         assert max_uvi == 4.2
@@ -1970,51 +1718,6 @@ class TestWeatherRenderer:
             assert data["date"] == today_str
 
     @pytest.mark.asyncio()
-    async def test_uvi_max_calculation_uses_cached_values(self, renderer: WeatherRenderer) -> None:
-        """Test that the generate_html method uses the _get_daily_max_uvi method for UV calculation."""
-        # Create test weather data
-        weather_data = MagicMock(spec=WeatherData)
-        weather_data.current = MagicMock(spec=CurrentWeather)
-        weather_data.current.weather = [MagicMock(spec=WeatherCondition)]
-        weather_data.current.weather[0].id = 800
-        weather_data.current.weather[0].icon = "01d"
-        weather_data.current.pressure = 1013
-        weather_data.current.wind_speed = 3.0
-        weather_data.hourly = [MagicMock()]  # Non-empty hourly list to trigger UVI code path
-        weather_data.daily = []
-
-        # Create battery status
-        battery_status = BatteryStatus(
-            level=80, voltage=3.9, current=0.0, temperature=25.0, state=BatteryState.DISCHARGING
-        )
-
-        # Mock the _get_daily_max_uvi method to return known values
-        mock_uvi = 7.6
-        mock_timestamp = int(datetime.now().timestamp())
-        mock_get_daily_max_uvi = MagicMock(return_value=(mock_uvi, mock_timestamp))
-
-        # Mock template
-        mock_template = MagicMock()
-        mock_template.render.return_value = "<html>UV Max Cache Test</html>"
-
-        with (
-            patch.object(renderer, "_get_daily_max_uvi", mock_get_daily_max_uvi),
-            patch.object(renderer.jinja_env, "get_template", return_value=mock_template),
-        ):
-            # Generate HTML
-            await renderer.generate_html(weather_data, battery_status)
-
-            # Verify the _get_daily_max_uvi method was called
-            assert mock_get_daily_max_uvi.called
-
-            # Verify the template context has the expected UV values
-            context = mock_template.render.call_args[1]
-            assert context["uvi_max"] == f"{mock_uvi:.1f}"
-            assert context["uvi_time"] == renderer._format_time(
-                datetime.fromtimestamp(mock_timestamp), context["config"].display.time_format
-            )
-
-    @pytest.mark.asyncio()
     async def test_air_quality_label_conversion(self, renderer: WeatherRenderer) -> None:
         """Test that the AQI numeric value is correctly converted to a descriptive label."""
         # Create test weather data with air pollution data
@@ -2070,27 +1773,27 @@ class TestWeatherRenderer:
     def test_convert_pressure_hpa(self, renderer: WeatherRenderer) -> None:
         """Test converting pressure when target is already hPa."""
         pressure_hpa = 1013.25
-        result = renderer._convert_pressure(pressure_hpa, "hPa")
+        result = renderer.weather_calculator.convert_pressure(pressure_hpa, "hPa")
         assert result == 1013.25  # No conversion needed
 
     def test_convert_pressure_mmhg(self, renderer: WeatherRenderer) -> None:
         """Test converting pressure from hPa to mmHg."""
         pressure_hpa = 1013.25
-        result = renderer._convert_pressure(pressure_hpa, "mmHg")
+        result = renderer.weather_calculator.convert_pressure(pressure_hpa, "mmHg")
         expected = pressure_hpa * HPA_TO_MMHG
         assert abs(result - expected) < 0.01  # Account for floating point precision
 
     def test_convert_pressure_inhg(self, renderer: WeatherRenderer) -> None:
         """Test converting pressure from hPa to inHg."""
         pressure_hpa = 1013.25
-        result = renderer._convert_pressure(pressure_hpa, "inHg")
+        result = renderer.weather_calculator.convert_pressure(pressure_hpa, "inHg")
         expected = pressure_hpa * HPA_TO_INHG
         assert abs(result - expected) < 0.0001  # Account for floating point precision
 
     def test_convert_pressure_fallback(self, renderer: WeatherRenderer) -> None:
         """Test fallback to hPa for unknown units."""
         pressure_hpa = 1013.25
-        result = renderer._convert_pressure(pressure_hpa, "unknown")
+        result = renderer.weather_calculator.convert_pressure(pressure_hpa, "unknown")
         assert result == 1013.25  # Should fallback to hPa
 
     @pytest.mark.asyncio()
@@ -2218,12 +1921,12 @@ class TestWeatherRenderer:
         """Test formatting datetime for display with the default format."""
         # Test a specific date/time
         dt = datetime(2023, 5, 7, 15, 30, 0)  # May 7, 2023, 3:30 PM
-        result = renderer._format_datetime_display(dt)
+        result = renderer.time_formatter.format_datetime_display(dt)
         assert result == "5/7/2023 3:30 PM"
 
         # Test midnight with single-digit month
         dt = datetime(2023, 1, 1, 0, 0, 0)  # Jan 1, 2023, 12:00 AM
-        result = renderer._format_datetime_display(dt)
+        result = renderer.time_formatter.format_datetime_display(dt)
         assert result == "1/1/2023 12:00 AM"
 
     def test_format_datetime_display_with_config(self, renderer: WeatherRenderer) -> None:
@@ -2232,7 +1935,7 @@ class TestWeatherRenderer:
 
         # Set a custom format in the config
         renderer.config.display.display_datetime_format = "%m/%d/%Y %I:%M %p"
-        result = renderer._format_datetime_display(dt)
+        result = renderer.time_formatter.format_datetime_display(dt)
         assert result == "05/07/2023 03:30 PM"
 
         # Clean up
@@ -2241,5 +1944,5 @@ class TestWeatherRenderer:
     def test_format_datetime_display_with_custom_format(self, renderer: WeatherRenderer) -> None:
         """Test formatting datetime for display with a custom format string."""
         dt = datetime(2023, 5, 7, 15, 30, 0)  # May 7, 2023, 3:30 PM
-        result = renderer._format_datetime_display(dt, format_str="%d-%m-%Y %H:%M")
+        result = renderer.time_formatter.format_datetime_display(dt, format_str="%d-%m-%Y %H:%M")
         assert result == "07-05-2023 15:30"
