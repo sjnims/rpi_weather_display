@@ -372,68 +372,21 @@ class AsyncWeatherDisplayClient:
         display_sleeping = False
 
         try:
-            # Initialize hardware
-            self.initialize()
-
-            # Initial update (async)
-            await self.update_weather()
-
-            # Initial display refresh
-            self.refresh_display()
+            # Initialize and perform initial update
+            await self._initialize_and_update()
 
             # Main loop using PowerStateManager for scheduling
             while self._running:
-                # Check current power state for quiet hours
-                current_state = self.power_manager.get_current_state()
-                battery_status = self.power_manager.get_battery_status()
-                is_in_quiet_hours = current_state == PowerState.QUIET_HOURS
+                # Handle display sleep state based on quiet hours and charging status
+                display_sleeping = await self._handle_display_sleep_state(display_sleeping)
 
-                # Handle display sleep during quiet hours using pattern matching
-                match (is_in_quiet_hours, is_charging(battery_status), display_sleeping):
-                    case (True, False, False):
-                        # Quiet hours active, not charging, display awake -> sleep display
-                        self.logger.info("Quiet hours active and not charging - display sleeping")
-                        self.display.sleep()
-                        display_sleeping = True
-                    case (False, _, True) | (_, True, True):
-                        # Quiet hours ended OR charging while display sleeping -> wake display
-                        self.logger.info("Quiet hours ended or charging - waking display")
-                        self.refresh_display()
-                        display_sleeping = False
-                    case _:
-                        # No change needed
-                        pass
+                # Perform periodic updates
+                await self._perform_periodic_updates(display_sleeping)
 
-                # Check if we should update weather (async)
-                if self.power_manager.should_update_weather():
-                    await self.update_weather()
-
-                # Check if we should refresh display (but skip if display is sleeping)
-                if self.power_manager.should_refresh_display() and not display_sleeping:
-                    self.refresh_display()
-
-                # Periodic memory status logging (every 10 updates)
-                if hasattr(self, "_update_count"):
-                    self._update_count += 1
-                else:
-                    self._update_count = 1
-
-                if self._update_count % 10 == 0:
-                    memory_profiler.log_memory_status()
-
-                # Calculate sleep time
-                sleep_time = self.power_manager.calculate_sleep_time()
-
-                # If sleep time is long, consider deep sleep
-                if sleep_time > TEN_MINUTES:  # More than 10 minutes
-                    minutes = sleep_time // 60
-                    if self._handle_sleep(minutes):
-                        break  # Exit loop if we're doing deep sleep
-
-                # Async sleep (allows other coroutines to run)
-                self.logger.info(f"Sleeping for {sleep_time} seconds")
-                await asyncio.sleep(sleep_time)
-
+                # Handle sleep scheduling
+                if await self._handle_sleep_scheduling():
+                    break  # Exit loop if we're doing deep sleep
+                    
         except KeyboardInterrupt:
             self.logger.info("Client interrupted by user")
             self._running = False
@@ -443,6 +396,95 @@ class AsyncWeatherDisplayClient:
         finally:
             # Clean up
             await self.shutdown()
+    
+    async def _initialize_and_update(self) -> None:
+        """Initialize hardware and perform initial update."""
+        # Initialize hardware
+        self.initialize()
+        
+        # Initial update (async)
+        await self.update_weather()
+        
+        # Initial display refresh
+        self.refresh_display()
+    
+    async def _handle_display_sleep_state(self, display_sleeping: bool) -> bool:
+        """Handle display sleep state based on quiet hours and charging status.
+        
+        Args:
+            display_sleeping: Current display sleep state
+            
+        Returns:
+            Updated display sleep state
+        """
+        # Check current power state for quiet hours
+        current_state = self.power_manager.get_current_state()
+        battery_status = self.power_manager.get_battery_status()
+        is_in_quiet_hours = current_state == PowerState.QUIET_HOURS
+
+        # Handle display sleep during quiet hours using pattern matching
+        match (is_in_quiet_hours, is_charging(battery_status), display_sleeping):
+            case (True, False, False):
+                # Quiet hours active, not charging, display awake -> sleep display
+                self.logger.info("Quiet hours active and not charging - display sleeping")
+                self.display.sleep()
+                return True
+            case (False, _, True) | (_, True, True):
+                # Quiet hours ended OR charging while display sleeping -> wake display
+                self.logger.info("Quiet hours ended or charging - waking display")
+                self.refresh_display()
+                return False
+            case _:
+                # No change needed
+                return display_sleeping
+    
+    async def _perform_periodic_updates(self, display_sleeping: bool) -> None:
+        """Perform periodic weather and display updates.
+        
+        Args:
+            display_sleeping: Whether display is currently sleeping
+        """
+        # Check if we should update weather (async)
+        if self.power_manager.should_update_weather():
+            await self.update_weather()
+
+        # Check if we should refresh display (but skip if display is sleeping)
+        if self.power_manager.should_refresh_display() and not display_sleeping:
+            self.refresh_display()
+
+        # Periodic memory status logging
+        self._update_memory_logging()
+    
+    def _update_memory_logging(self) -> None:
+        """Update memory logging counter and log status periodically."""
+        # Initialize or increment update counter
+        if not hasattr(self, "_update_count"):
+            self._update_count = 0
+        self._update_count += 1
+
+        # Log memory status every 10 updates
+        if self._update_count % 10 == 0:
+            memory_profiler.log_memory_status()
+    
+    async def _handle_sleep_scheduling(self) -> bool:
+        """Handle sleep scheduling including deep sleep consideration.
+        
+        Returns:
+            True if entering deep sleep (should exit main loop), False otherwise
+        """
+        # Calculate sleep time
+        sleep_time = self.power_manager.calculate_sleep_time()
+
+        # If sleep time is long, consider deep sleep
+        if sleep_time > TEN_MINUTES:  # More than 10 minutes
+            minutes = sleep_time // 60
+            if self._handle_sleep(minutes):
+                return True  # Exit loop if we're doing deep sleep
+
+        # Async sleep (allows other coroutines to run)
+        self.logger.info(f"Sleeping for {sleep_time} seconds")
+        await asyncio.sleep(sleep_time)
+        return False
 
     def _handle_sleep(self, minutes: int) -> bool:
         """Handle deep sleep request for extended idle periods.
