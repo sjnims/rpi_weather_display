@@ -80,10 +80,14 @@ Priority is indicated as:
   - NOTE: Successfully reduced complexity from CC: 22 to below 10 (no longer in high complexity list)
   - Extracted 6 helper methods: _get_development_battery_status, _get_default_battery_status, _extract_pijuice_value, _get_pijuice_data, _determine_battery_state, _update_battery_history
   - All tests passing and functionality preserved
-- [ ] 🔴 2.5.4 Simplify renderer._get_daily_max_uvi method (C-rated, CC: 19) [PLANNED]
+- [x] 🔴 2.5.4 Simplify renderer._get_daily_max_uvi method (C-rated, CC: 19) [COMPLETED 2025-05-25]
   - Extract cache handling logic
   - Separate UVI calculation from persistence logic
   - NOTE: Complexity increased to CC: 19 after generate_html refactoring
+  - Successfully reduced complexity from CC: 19 to below 10 (no longer in high complexity list)
+  - Extracted 3 helper methods: _calculate_current_max_uvi, _read_uvi_cache, _write_uvi_cache
+  - Simplified main method from ~75 lines to 17 lines
+  - All tests passing and functionality preserved
 - [ ] 🟠 2.5.5 Create custom exception hierarchy for better error handling [PLANNED]
 - [ ] 🟠 2.5.6 Refactor other complex methods (C-rated) [PLANNED]
   - Break down EPaperDisplay.display_pil_image (CC: 15)
@@ -296,13 +300,12 @@ Priority is indicated as:
 Based on the code complexity analysis, the following tasks should be prioritized:
 
 **Code Quality Metrics Summary (Updated 2025-05-25):**
-- Average Complexity: 13.86 (-2.26 improvement from baseline) - Excellent progress!
+- Average Complexity: 13.00 (-3.12 improvement from baseline) - Outstanding progress!
 - Complex Functions (E-F): 0 - Good, no extremely complex functions
 - Lowest Maintainability: All files now above 20 (maintained!)
-- Average Maintainability: 68.14/100 - Good overall maintainability
+- Average Maintainability: 68.13/100 - Good overall maintainability
 - Highest Complexity Methods:
-  - renderer._get_daily_max_uvi: CC 19 (C rating) - Now highest complexity
-  - display.display_pil_image: CC 15 (C rating)
+  - display.display_pil_image: CC 15 (C rating) - Now highest complexity
   - renderer._prepare_time_data: CC 14 (C rating)
   - network.set_wifi_power_save_mode: CC 13 (C rating)
   - client/main.run: CC 13 (C rating)
@@ -311,23 +314,24 @@ Based on the code complexity analysis, the following tasks should be prioritized
 - Successfully Refactored:
   - renderer.generate_html: CC 27 → 5 (D → A rating) - 81% reduction!
   - battery_monitor.get_battery_status: CC 22 → <10 (D → A/B rating) - No longer in high complexity list!
+  - renderer._get_daily_max_uvi: CC 19 → <10 (C → A/B rating) - No longer in high complexity list!
   - power_manager: Modularized and no longer in high complexity list
-- Total Source Lines: 3,977 (+57 from baseline)
-- Comment Ratio: 22.43% - Good documentation coverage
+- Total Source Lines: 3,984 (+64 from baseline)
+- Comment Ratio: 22.36% - Good documentation coverage
 
 *Complexity Ratings: A (simple) → B → C (moderate) → D (complex) → E → F (very complex)*
 
 ### Immediate Priority (Next Sprint)
-1. **Phase 2.5.4** - Simplify renderer._get_daily_max_uvi
-   - Complexity rating: C (CC: 19) - now highest complexity in codebase
-   - Mixed concerns (calculation + caching + persistence)
-   - Cache handling logic became more complex with type guards after generate_html refactoring
-
-2. **Phase 2.5.6** - Refactor other C-rated complex methods
-   - display.py: display_pil_image (CC: 15)
+1. **Phase 2.5.6** - Refactor other C-rated complex methods
+   - display.py: display_pil_image (CC: 15) - now highest complexity in codebase
    - renderer._prepare_time_data (CC: 14) - emerged after generate_html refactoring
    - network.py: set_wifi_power_save_mode (CC: 13)
    - client/main.py: run method (CC: 13)
+   - api.py: get_coordinates (CC: 12), get_weather_data (CC: 11)
+
+2. **Phase 2.5.5** - Create custom exception hierarchy
+   - Improve error handling across the codebase
+   - Standardize error reporting and recovery
 
 ### Short-term Priority (Q1 2025)
 1. **Phase 2.5.6** - Refactor other C-rated complex methods
@@ -349,10 +353,10 @@ Based on the code complexity analysis, the following tasks should be prioritized
 | Phase | Not Started | In Progress | Completed | Total |
 |-------|------------|-------------|-----------|-------|
 | 1     | 0          | 0           | 14        | 14    |
-| 2     | 14         | 0           | 22        | 36    |
+| 2     | 13         | 0           | 23        | 36    |
 | 3     | 12         | 0           | 0         | 12    |
 | 4     | 12         | 0           | 0         | 12    |
 | 5     | 17         | 0           | 2         | 19    |
 | 6     | 21         | 0           | 0         | 21    |
 | 7     | 18         | 0           | 0         | 18    |
-| Total | 94         | 0           | 38        | 132   |
+| Total | 93         | 0           | 39        | 132   |
