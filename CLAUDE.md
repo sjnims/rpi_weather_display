@@ -493,6 +493,36 @@ When encountering `RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call'
    - Test pollution can make warnings appear in unrelated tests
    - When mocking async methods that won't be awaited (because asyncio.run is mocked), use Mock instead of AsyncMock
 
+### Type Stubs for External Libraries
+
+When working with external libraries that lack proper type annotations (like PiJuice), create type stubs to resolve pyright warnings properly:
+
+1. **Create stub directory structure**:
+   ```
+   stubs/
+   └── pijuice/
+       ├── __init__.pyi
+       └── py.typed
+   ```
+
+2. **Write type stubs** (`__init__.pyi`):
+   - Match the external library's API exactly (including non-PEP8 names)
+   - Add `# ruff: noqa: N802, N803, N815` to ignore naming conventions
+   - Use modern type annotations (`dict[str, int]` instead of `Dict[str, int]`)
+   - Make TypedDict classes flexible with `total=False` when needed
+
+3. **Configure pyright** in `pyproject.toml`:
+   ```toml
+   [tool.pyright]
+   stubPath = "stubs"
+   ```
+
+4. **Benefits**:
+   - Proper type checking without blanket ignore statements
+   - Better IDE support and autocompletion
+   - Catches real type errors in our code
+   - Documents the external API we're using
+
 ## Code Review
 
 - Provide constructive feedback

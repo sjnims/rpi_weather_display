@@ -18,6 +18,26 @@ class BatteryState(str, Enum):
     FULL = "full"
     UNKNOWN = "unknown"
 
+    @classmethod
+    def from_string(cls, value: str) -> "BatteryState":
+        """Create BatteryState from string value.
+
+        Args:
+            value: String representation of battery state
+
+        Returns:
+            BatteryState enum value
+        """
+        value_upper = value.upper()
+        if "CHARGING" in value_upper:
+            return cls.CHARGING
+        elif "NORMAL" in value_upper or "DISCHARGING" in value_upper:
+            return cls.DISCHARGING
+        elif "CHARGED" in value_upper or "FULL" in value_upper:
+            return cls.FULL
+        else:
+            return cls.UNKNOWN
+
 
 class BatteryStatus(BaseModel):
     """Battery status information."""
@@ -33,10 +53,10 @@ class BatteryStatus(BaseModel):
     @property
     def is_low(self) -> bool:
         """Check if battery level is low.
-        
+
         This property determines if the battery level is considered low (below 20%)
         and the device is currently discharging.
-        
+
         Returns:
             True if battery level is below 20% and discharging, False otherwise.
         """
@@ -45,10 +65,10 @@ class BatteryStatus(BaseModel):
     @property
     def is_critical(self) -> bool:
         """Check if battery level is critical.
-        
-        This property determines if the battery level is considered critically low 
+
+        This property determines if the battery level is considered critically low
         (below 10%) and the device is currently discharging.
-        
+
         Returns:
             True if battery level is below 10% and discharging, False otherwise.
         """

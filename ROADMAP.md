@@ -59,7 +59,7 @@ Priority is indicated as:
 - [x] 🟢 2.4.3 Add memory profiling and reporting [COMPLETED 2025-05-24]
 
 ### 2.5 Code Refactoring
-- [ ] 🔴 2.5.1 Modularize power_manager.py (1270 lines, maintainability: 19.56) [PLANNED]
+- [x] 🔴 2.5.1 Modularize power_manager.py (1270 lines, maintainability: 19.56) [COMPLETED 2025-05-24]
   - Split PowerStateManager into: BatteryMonitor, PowerStateController, SystemMetricsCollector, PiJuiceAdapter
   - Extract complex methods: get_battery_status (C-rated), get_system_metrics (C-rated)
   - Move test-specific methods to separate test utilities module
@@ -320,10 +320,10 @@ Based on the code complexity analysis, the following tasks should be prioritized
 | Phase | Not Started | In Progress | Completed | Total |
 |-------|------------|-------------|-----------|-------|
 | 1     | 0          | 0           | 14        | 14    |
-| 2     | 16         | 0           | 18        | 34    |
+| 2     | 15         | 0           | 19        | 34    |
 | 3     | 12         | 0           | 0         | 12    |
 | 4     | 12         | 0           | 0         | 12    |
 | 5     | 17         | 0           | 2         | 19    |
 | 6     | 21         | 0           | 0         | 21    |
 | 7     | 18         | 0           | 0         | 18    |
-| Total | 96         | 0           | 34        | 130   |
+| Total | 95         | 0           | 35        | 130   |

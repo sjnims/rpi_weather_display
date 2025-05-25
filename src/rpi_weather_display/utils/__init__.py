@@ -13,11 +13,8 @@ from rpi_weather_display.utils.battery_utils import (
     should_double_intervals,
 )
 from rpi_weather_display.utils.path_utils import PathResolver, path_resolver
-from rpi_weather_display.utils.power_manager import (
-    PowerState,
-    PowerStateCallback,
-    PowerStateManager,
-)
+from rpi_weather_display.utils.power_manager import PowerStateManager
+from rpi_weather_display.utils.power_state_controller import PowerState, PowerStateCallback
 from rpi_weather_display.utils.time_utils import is_quiet_hours
 
 __all__ = [
