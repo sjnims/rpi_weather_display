@@ -63,22 +63,29 @@ Priority is indicated as:
   - Split PowerStateManager into: BatteryMonitor, PowerStateController, SystemMetricsCollector, PiJuiceAdapter
   - Extract complex methods: get_battery_status (C-rated), get_system_metrics (C-rated)
   - Move test-specific methods to separate test utilities module
-- [ ] 🔴 2.5.2 Refactor renderer.py generate_html method (D-rated, CC: 27) [PLANNED]
+- [x] 🔴 2.5.2 Refactor renderer.py generate_html method (D-rated, CC: 27) [COMPLETED 2025-05-25]
   - Break down into smaller, focused methods: prepare_template_data, format_weather_data, setup_jinja_filters
   - Extract moon phase logic into separate helper class
   - Simplify nested conditionals and reduce cyclomatic complexity
+  - NOTE: Successfully reduced complexity from CC: 27 to CC: 5 (81% reduction!)
+  - Extracted logic into MoonPhaseHelper and WindHelper classes
+  - Created 6 helper methods: _get_template_data, _add_weather_icons, _add_daily_forecast_icons, _add_hourly_forecast_icons, _add_wind_icons, _get_moon_icon
+  - Fixed weather models to correctly match OpenWeatherMap API structure
+  - All tests passing and preview functionality confirmed working
 - [ ] 🔴 2.5.3 Refactor battery_monitor.py get_battery_status method (D-rated, CC: 22) [PLANNED]
   - NEW: Emerged as high complexity after power_manager modularization
   - Break down battery status determination logic
   - Extract voltage-based calculations into separate methods
   - Simplify nested conditionals for different battery states
-- [ ] 🔴 2.5.4 Simplify renderer._get_daily_max_uvi method (C-rated, CC: 16) [PLANNED]
+- [ ] 🔴 2.5.4 Simplify renderer._get_daily_max_uvi method (C-rated, CC: 19) [PLANNED]
   - Extract cache handling logic
   - Separate UVI calculation from persistence logic
+  - NOTE: Complexity increased to CC: 19 after generate_html refactoring
 - [ ] 🟠 2.5.5 Create custom exception hierarchy for better error handling [PLANNED]
 - [ ] 🟠 2.5.6 Refactor other complex methods (C-rated) [PLANNED]
-  - Simplify AsyncNetworkManager.set_wifi_power_save_mode (CC: 13)
   - Break down EPaperDisplay.display_pil_image (CC: 15)
+  - Simplify renderer._prepare_time_data (CC: 14) - NEW: emerged after generate_html refactoring
+  - Simplify AsyncNetworkManager.set_wifi_power_save_mode (CC: 13)
   - Refactor client/main.py run method (CC: 13)
   - Simplify api.py get_coordinates (CC: 12) and get_weather_data (CC: 11)
 - [ ] 🟢 2.5.7 Remove test-only methods from production interfaces [PLANNED]
@@ -286,41 +293,47 @@ Priority is indicated as:
 Based on the code complexity analysis, the following tasks should be prioritized:
 
 **Code Quality Metrics Summary (Updated 2025-05-25):**
-- Average Complexity: 16.12 - Slightly increased but still acceptable
+- Average Complexity: 14.88 (-1.24 improvement from baseline) - Good progress!
 - Complex Functions (E-F): 0 - Good, no extremely complex functions
-- Lowest Maintainability: All files now above 20 (improved!)
-- Average Maintainability: 67.25/100 - Good overall maintainability
+- Lowest Maintainability: All files now above 20 (maintained!)
+- Average Maintainability: 68.06/100 - Good overall maintainability
 - Highest Complexity Methods:
-  - renderer.generate_html: CC 27 (D rating) - Still needs refactoring
-  - battery_monitor.get_battery_status: CC 22 (D rating) - New complexity hotspot
-- Total Source Lines: 3,920
-- Comment Ratio: 22.76% - Good documentation coverage
+  - battery_monitor.get_battery_status: CC 22 (D rating) - Currently highest complexity
+  - renderer._get_daily_max_uvi: CC 19 (C rating) - Increased from CC 12
+  - display.display_pil_image: CC 15 (C rating)
+  - renderer._prepare_time_data: CC 14 (C rating)
+  - network.set_wifi_power_save_mode: CC 13 (C rating)
+  - client/main.run: CC 13 (C rating)
+  - api.get_coordinates: CC 12 (C rating)
+  - api.get_weather_data: CC 11 (C rating)
+- Successfully Refactored:
+  - renderer.generate_html: CC 27 → 5 (D → A rating) - 81% reduction!
+  - power_manager: Modularized and no longer in high complexity list
+- Total Source Lines: 3,974 (+35)
+- Comment Ratio: 22.42% - Good documentation coverage
 
 *Complexity Ratings: A (simple) → B → C (moderate) → D (complex) → E → F (very complex)*
 
 ### Immediate Priority (Next Sprint)
-1. **Phase 2.5.2** - Refactor renderer.py generate_html method
-   - Complexity rating: D (CC: 27) - highest in codebase
-   - Method is doing too many things and needs decomposition
-   - Already has good maintainability but complexity needs reduction
-
-2. **NEW: Refactor battery_monitor.py get_battery_status method**
-   - Complexity rating: D (CC: 22) - second highest complexity
+1. **Phase 2.5.3** - Refactor battery_monitor.py get_battery_status method
+   - Complexity rating: D (CC: 22) - now highest complexity in codebase
    - Created during power_manager modularization
    - Needs to be broken down into smaller, focused methods
 
-3. **Phase 2.5.3** - Simplify renderer._get_daily_max_uvi
-   - Complexity rating: C (CC: 16)
+2. **Phase 2.5.4** - Simplify renderer._get_daily_max_uvi
+   - Complexity rating: C (CC: 19) - increased complexity after generate_html refactoring
    - Mixed concerns (calculation + caching + persistence)
+   - Cache handling logic became more complex with type guards
 
 ### Short-term Priority (Q1 2025)
-1. **Phase 2.5.5** - Refactor other C-rated complex methods
-   - api.py: get_coordinates, get_weather_data
-   - network.py: set_wifi_power_save_mode
-   - display.py: display_pil_image
-   - client/main.py: run method
-2. **Phase 2.5.4** - Create custom exception hierarchy
-3. **Phase 2.5.6** - Remove test-only methods from production
+1. **Phase 2.5.6** - Refactor other C-rated complex methods
+   - display.py: display_pil_image (CC: 15)
+   - renderer._prepare_time_data (CC: 14) - emerged after generate_html refactoring
+   - network.py: set_wifi_power_save_mode (CC: 13)
+   - client/main.py: run method (CC: 13)
+   - api.py: get_coordinates (CC: 12), get_weather_data (CC: 11)
+2. **Phase 2.5.5** - Create custom exception hierarchy
+3. **Phase 2.5.7** - Remove test-only methods from production
 
 ### Medium-term Priority (Q2 2025)
 1. **Phase 2.7** - E-Paper display optimization
@@ -332,10 +345,10 @@ Based on the code complexity analysis, the following tasks should be prioritized
 | Phase | Not Started | In Progress | Completed | Total |
 |-------|------------|-------------|-----------|-------|
 | 1     | 0          | 0           | 14        | 14    |
-| 2     | 15         | 0           | 20        | 35    |
+| 2     | 15         | 0           | 21        | 36    |
 | 3     | 12         | 0           | 0         | 12    |
 | 4     | 12         | 0           | 0         | 12    |
 | 5     | 17         | 0           | 2         | 19    |
 | 6     | 21         | 0           | 0         | 21    |
 | 7     | 18         | 0           | 0         | 18    |
-| Total | 95         | 0           | 36        | 131   |
+| Total | 95         | 0           | 37        | 132   |

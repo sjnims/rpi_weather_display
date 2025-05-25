@@ -889,7 +889,7 @@ class TestWeatherRenderer:
             # Test the helper using cast to handle unknown return type
             result = cast(str, get_hourly_precip_func(hourly_item))
             assert isinstance(result, str)
-            assert result == "0"  # Current implementation returns "0"
+            assert result == "2.5"  # Should return the rain amount
 
     def test_csv_reading_with_invalid_columns(self, renderer: WeatherRenderer) -> None:
         """Test handling of CSV files with invalid columns."""
@@ -996,7 +996,7 @@ class TestWeatherRenderer:
 
             # Get the helpers from jinja globals with proper typing
             precip_amount_helper = cast(
-                Callable[[CurrentWeather], None],
+                Callable[[CurrentWeather | HourlyWeather], float | None],
                 renderer.jinja_env.globals["get_precipitation_amount"],
             )
             hourly_precip_helper = cast(
@@ -1006,11 +1006,11 @@ class TestWeatherRenderer:
 
             # Test precipitation amount helper with fixed typing
             result1 = precip_amount_helper(weather_data.current)
-            assert result1 is None
+            assert result1 == 2.5  # Should return the rain amount
 
             # Test hourly precipitation helper with fixed typing
             result2 = hourly_precip_helper(hourly_item)
-            assert result2 == "0"
+            assert result2 == "1.2"  # Should return the rain amount formatted
 
     @pytest.mark.asyncio()
     async def test_precipitation_helpers(self, renderer: WeatherRenderer) -> None:
@@ -1055,7 +1055,7 @@ class TestWeatherRenderer:
 
             # Get the helpers with proper typing - explicitly cast to correct function types
             precip_helper = cast(
-                Callable[[CurrentWeather], None],
+                Callable[[CurrentWeather | HourlyWeather], float | None],
                 renderer.jinja_env.globals["get_precipitation_amount"],
             )
             hourly_precip_helper = cast(
@@ -1065,12 +1065,12 @@ class TestWeatherRenderer:
 
             # Test precipitation amount helper - proper typing with the cast above
             result1 = precip_helper(weather_data.current)
-            assert result1 is None
+            assert result1 == 2.5  # Should return the rain amount
 
             # Test with snow but no rain
             del weather_data.current.rain
             weather_data.current.snow = {"1h": 1.5}  # 1.5mm snow
-            assert precip_helper(weather_data.current) is None
+            assert precip_helper(weather_data.current) == 1.5
 
             # Test with no precipitation data
             del weather_data.current.snow
@@ -1078,7 +1078,7 @@ class TestWeatherRenderer:
 
             # Test hourly precipitation helper - proper typing with the cast above
             result2 = hourly_precip_helper(hourly_item)
-            assert result2 == "0"
+            assert result2 == "1.2"  # Should return the rain amount formatted
 
     def test_get_weather_icon_comprehensive(self, renderer: WeatherRenderer) -> None:
         """Test all branches of the _get_weather_icon method."""

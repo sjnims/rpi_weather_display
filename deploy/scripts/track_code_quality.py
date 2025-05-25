@@ -369,7 +369,7 @@ Generated: {metrics['timestamp']}
 
 def main() -> None:
     """Main entry point."""
-    project_root = Path(__file__).parent.parent
+    project_root = Path(__file__).parent.parent.parent
     tracker = CodeQualityTracker(project_root)
     tracker.run()
 

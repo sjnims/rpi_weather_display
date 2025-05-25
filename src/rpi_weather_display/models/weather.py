@@ -36,6 +36,8 @@ class CurrentWeather(BaseModel):
     wind_deg: int
     wind_gust: float | None = None
     weather: list[WeatherCondition]
+    rain: dict[str, float] | None = None  # {"1h": mm}
+    snow: dict[str, float] | None = None  # {"1h": mm}
 
     @property
     def timestamp(self) -> datetime:
@@ -114,7 +116,8 @@ class DailyWeather(BaseModel):
     weather: list[WeatherCondition]
     clouds: int
     pop: float  # Probability of precipitation
-    rain: float | None = None
+    rain: float | None = None  # Total mm for the day
+    snow: float | None = None  # Total mm for the day
     uvi: float
 
     @property
@@ -147,6 +150,8 @@ class HourlyWeather(BaseModel):
     wind_gust: float | None = None
     weather: list[WeatherCondition]
     pop: float  # Probability of precipitation
+    rain: dict[str, float] | None = None  # {"1h": mm}
+    snow: dict[str, float] | None = None  # {"1h": mm}
 
     @property
     def timestamp(self) -> datetime:
