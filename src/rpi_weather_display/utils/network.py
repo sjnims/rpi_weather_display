@@ -15,6 +15,7 @@ import time
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import datetime
+from pathlib import Path
 from typing import TypeVar
 
 from rpi_weather_display.constants import (
@@ -409,7 +410,7 @@ class AsyncNetworkManager:
             self.logger.info("WiFi interface enabled with power saving")
 
             # Apply battery-aware power save mode if enabled
-            await self._apply_power_save_mode()
+            await self._apply_battery_aware_power_save()
 
         except subprocess.SubprocessError as e:
             self.logger.error(f"Failed to enable WiFi: {e}")
@@ -432,12 +433,12 @@ class AsyncNetworkManager:
             self.logger.info("WiFi interface enabled (legacy method)")
 
             # Apply battery-aware power save mode if enabled
-            await self._apply_power_save_mode()
+            await self._apply_battery_aware_power_save()
 
         except subprocess.SubprocessError as e:
             self.logger.error(f"Failed to enable WiFi (legacy method): {e}")
 
-    async def _apply_power_save_mode(self) -> None:
+    async def _apply_battery_aware_power_save(self) -> None:
         """Apply battery-aware power save mode if enabled (async)."""
         if self.config.enable_battery_aware_wifi:
             await self.set_wifi_power_save_mode()
@@ -491,77 +492,150 @@ class AsyncNetworkManager:
         Returns:
             True if power save mode was set successfully, False otherwise
         """
-        # Default to config if not specified
-        if mode is None:
-            mode = self.config.wifi_power_save_mode
+        # Determine the effective mode to use
+        effective_mode = self._determine_power_save_mode(mode)
+        
+        # Validate the mode
+        if not self._is_valid_power_save_mode(effective_mode):
+            self.logger.error(f"Invalid power save mode: {effective_mode}")
+            return False
 
-        # If mode is "auto", select appropriate mode based on battery status
-        if mode == "auto" and self.config.enable_battery_aware_wifi:
-            match self.current_battery_status:
-                case None:
-                    # Default to "on" if battery status is not available
-                    mode = "on"
-                case status if status.level <= self.config.critical_battery_threshold:
-                    # Use aggressive power saving when battery is critically low
-                    mode = "aggressive"
-                case status if status.level <= self.config.low_battery_threshold:
-                    # Use regular power saving when battery is low
-                    mode = "on"
-                case _:
-                    # Disable power saving when battery is good
-                    mode = "off"
-
-        # Ensure mode is valid
-        if mode not in ["off", "on", "aggressive"]:
-            self.logger.error(f"Invalid power save mode: {mode}")
+        # Check command availability
+        if not self._check_wifi_commands_available():
             return False
 
         try:
-            # Check if iw command is available
-            iw_path = path_resolver.get_bin_path("iw")
-            sudo_path = path_resolver.get_bin_path("sudo")
-
-            if not file_exists(iw_path) or not file_exists(sudo_path):
-                self.logger.warning(
-                    f"Required commands not found: sudo={file_exists(sudo_path)}, "
-                    f"iw={file_exists(iw_path)}"
-                )
-                return False
-
-            # Map modes to iw command arguments
-            mode_arg = "off" if mode == "off" else "on"
-
-            # Run iw command to set power save mode
-            await self._run_subprocess(
-                [
-                    str(sudo_path),
-                    str(iw_path),
-                    "dev",
-                    WIFI_INTERFACE_NAME,
-                    "set",
-                    "power_save",
-                    mode_arg,
-                ]
-            )
-
-            # If using aggressive mode, we need additional settings
-            if mode == "aggressive":
-                # Set beacon interval to maximum to reduce wakeups
-                iwconfig_path = path_resolver.get_bin_path("iwconfig")
-                await self._run_subprocess(
-                    [
-                        str(sudo_path),
-                        str(iwconfig_path),
-                        WIFI_INTERFACE_NAME,
-                        "power",
-                        "timeout",
-                        str(WIFI_POWER_TIMEOUT),
-                    ]
-                )
-
-            self.logger.info(f"WiFi power save mode set to '{mode}'")
+            # Apply the power save mode
+            await self._apply_power_save_mode(effective_mode)
+            self.logger.info(f"WiFi power save mode set to '{effective_mode}'")
             return True
 
         except subprocess.SubprocessError as e:
             self.logger.error(f"Failed to set WiFi power save mode: {e}")
             return False
+    
+    def _determine_power_save_mode(self, mode: str | None) -> str:
+        """Determine the effective power save mode to use.
+        
+        Args:
+            mode: Requested mode or None to use default
+            
+        Returns:
+            The effective power save mode string
+        """
+        # Default to config if not specified
+        if mode is None:
+            mode = self.config.wifi_power_save_mode
+
+        # If mode is "auto", select based on battery status
+        if mode == "auto" and self.config.enable_battery_aware_wifi:
+            return self._get_battery_aware_mode()
+            
+        return mode
+    
+    def _get_battery_aware_mode(self) -> str:
+        """Get power save mode based on battery status.
+        
+        Returns:
+            Appropriate power save mode for current battery level
+        """
+        if self.current_battery_status is None:
+            # Default to "on" if battery status is not available
+            return "on"
+            
+        battery_level = self.current_battery_status.level
+        
+        if battery_level <= self.config.critical_battery_threshold:
+            # Use aggressive power saving when battery is critically low
+            return "aggressive"
+        elif battery_level <= self.config.low_battery_threshold:
+            # Use regular power saving when battery is low
+            return "on"
+        else:
+            # Disable power saving when battery is good
+            return "off"
+    
+    @staticmethod
+    def _is_valid_power_save_mode(mode: str) -> bool:
+        """Check if power save mode is valid.
+        
+        Args:
+            mode: Mode to validate
+            
+        Returns:
+            True if mode is valid
+        """
+        return mode in ["off", "on", "aggressive"]
+    
+    def _check_wifi_commands_available(self) -> bool:
+        """Check if required WiFi commands are available.
+        
+        Returns:
+            True if all required commands are available
+        """
+        iw_path = path_resolver.get_bin_path("iw")
+        sudo_path = path_resolver.get_bin_path("sudo")
+
+        if not file_exists(iw_path) or not file_exists(sudo_path):
+            self.logger.warning(
+                f"Required commands not found: sudo={file_exists(sudo_path)}, "
+                f"iw={file_exists(iw_path)}"
+            )
+            return False
+            
+        return True
+    
+    async def _apply_power_save_mode(self, mode: str) -> None:
+        """Apply the power save mode settings.
+        
+        Args:
+            mode: Power save mode to apply
+            
+        Raises:
+            subprocess.SubprocessError: If command execution fails
+        """
+        # Get command paths
+        iw_path = path_resolver.get_bin_path("iw")
+        sudo_path = path_resolver.get_bin_path("sudo")
+        
+        # Map modes to iw command arguments
+        mode_arg = "off" if mode == "off" else "on"
+
+        # Run iw command to set power save mode
+        await self._run_subprocess(
+            [
+                str(sudo_path),
+                str(iw_path),
+                "dev",
+                WIFI_INTERFACE_NAME,
+                "set",
+                "power_save",
+                mode_arg,
+            ]
+        )
+
+        # Apply additional settings for aggressive mode
+        if mode == "aggressive":
+            await self._apply_aggressive_power_settings(Path(sudo_path))
+    
+    async def _apply_aggressive_power_settings(self, sudo_path: Path) -> None:
+        """Apply additional power settings for aggressive mode.
+        
+        Args:
+            sudo_path: Path to sudo command
+            
+        Raises:
+            subprocess.SubprocessError: If command execution fails
+        """
+        # Set beacon interval to maximum to reduce wakeups
+        iwconfig_path = path_resolver.get_bin_path("iwconfig")
+        await self._run_subprocess(
+            [
+                str(sudo_path),
+                str(iwconfig_path),
+                WIFI_INTERFACE_NAME,
+                "power",
+                "timeout",
+                str(WIFI_POWER_TIMEOUT),
+            ]
+        )

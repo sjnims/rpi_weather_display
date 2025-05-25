@@ -560,7 +560,7 @@ wlan0     IEEE 802.11  ESSID:"TestNetwork"
         with patch.object(
             network_manager, "set_wifi_power_save_mode", new_callable=AsyncMock
         ) as mock_set:
-            await network_manager._apply_power_save_mode()
+            await network_manager._apply_battery_aware_power_save()
             mock_set.assert_called_once()
 
     @pytest.mark.asyncio()
