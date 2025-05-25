@@ -241,59 +241,131 @@ class EPaperDisplay:
             Exception: If there is an error during image display.
         """
         if not self._initialized:
-            print(f"Mock display: would display image of size {image.size}")
-            # Create a copy to avoid holding reference to external image
-            self._last_image = image.copy() if image else None
+            self._handle_mock_display(image)
             return
 
         processed_image = None
         try:
-            # Process image efficiently - work on a copy to avoid modifying the original
-            processed_image = image
+            # Process image for display
+            processed_image = self._preprocess_image(image)
 
-            # Resize image if necessary
-            if image.size != (self.config.width, self.config.height):
-                # Handle LANCZOS resampling which might have different names in different PIL
-                # versions
-                resampling = getattr(Image, "LANCZOS", getattr(Image, "ANTIALIAS", 1))
-                processed_image = image.resize((self.config.width, self.config.height), resampling)
-
-            # Convert to grayscale if not already
-            if processed_image.mode != "L":
-                processed_image = processed_image.convert("L")
-
-            # Check if we can use partial refresh
-            if self.config.partial_refresh and self._last_image is not None:
-                # Calculate the bounding box of differences
-                bbox = self._calculate_diff_bbox(self._last_image, processed_image)
-
-                # If there's a significant difference, update the display
-                if bbox:
-                    # Display the image with partial refresh
-                    if self._display:
-                        self._display.display_partial(processed_image, bbox)
-                else:
-                    # No significant difference, no need to update
-                    # Clean up processed image if it's different from original
-                    if processed_image is not image:
-                        processed_image.close()
-                    return
+            # Determine refresh strategy and update display
+            if self._should_update_display(processed_image):
+                self._update_last_image(processed_image)
             else:
-                # Full refresh
-                if self._display:
-                    self._display.display(processed_image)
+                # Clean up if not updating
+                if processed_image is not image:
+                    processed_image.close()
 
-            # Clean up old image before storing new one
-            if self._last_image is not None:
-                self._last_image.close()
-
-            # Save the current image for future partial refreshes
-            self._last_image = processed_image
         except Exception as e:
             print(f"Error displaying image: {e}")
             # Clean up on error
             if processed_image is not None and processed_image is not image:
                 processed_image.close()
+
+    def _handle_mock_display(self, image: Image.Image) -> None:
+        """Handle display operations when running without hardware.
+        
+        Args:
+            image: PIL Image object to mock display.
+        """
+        print(f"Mock display: would display image of size {image.size}")
+        # Create a copy to avoid holding reference to external image
+        self._last_image = image.copy() if image else None
+
+    def _preprocess_image(self, image: Image.Image) -> Image.Image:
+        """Preprocess image for e-paper display.
+        
+        Resizes image to display dimensions and converts to grayscale.
+        
+        Args:
+            image: Original PIL Image object.
+            
+        Returns:
+            Processed PIL Image ready for display.
+        """
+        processed_image = image
+
+        # Resize image if necessary
+        if image.size != (self.config.width, self.config.height):
+            # Handle LANCZOS resampling which might have different names in different PIL versions
+            resampling = getattr(Image, "LANCZOS", getattr(Image, "ANTIALIAS", 1))
+            processed_image = image.resize((self.config.width, self.config.height), resampling)
+
+        # Convert to grayscale if not already
+        if processed_image.mode != "L":
+            processed_image = processed_image.convert("L")
+
+        return processed_image
+
+    def _should_update_display(self, processed_image: Image.Image) -> bool:
+        """Determine if display should be updated and perform the update.
+        
+        Handles both partial and full refresh strategies.
+        
+        Args:
+            processed_image: Preprocessed image ready for display.
+            
+        Returns:
+            True if display was updated, False otherwise.
+        """
+        if self.config.partial_refresh and self._last_image is not None:
+            return self._handle_partial_refresh(processed_image)
+        else:
+            return self._handle_full_refresh(processed_image)
+
+    def _handle_partial_refresh(self, processed_image: Image.Image) -> bool:
+        """Handle partial refresh logic.
+        
+        Args:
+            processed_image: Image to display.
+            
+        Returns:
+            True if display was updated, False if no update needed.
+        """
+        if self._last_image is None:
+            # Should not happen due to calling logic, but handle gracefully
+            return self._handle_full_refresh(processed_image)
+            
+        # Calculate the bounding box of differences
+        bbox = self._calculate_diff_bbox(self._last_image, processed_image)
+
+        if bbox:
+            # Display the image with partial refresh
+            if self._display:
+                self._display.display_partial(processed_image, bbox)
+            return True
+        
+        # No significant difference, no need to update
+        return False
+
+    def _handle_full_refresh(self, processed_image: Image.Image) -> bool:
+        """Handle full refresh logic.
+        
+        Args:
+            processed_image: Image to display.
+            
+        Returns:
+            True if display was updated.
+        """
+        if self._display:
+            self._display.display(processed_image)
+        return True
+
+    def _update_last_image(self, new_image: Image.Image) -> None:
+        """Update the stored last image reference.
+        
+        Handles cleanup of previous image.
+        
+        Args:
+            new_image: New image to store as last displayed.
+        """
+        # Clean up old image before storing new one
+        if self._last_image is not None:
+            self._last_image.close()
+
+        # Save the current image for future partial refreshes
+        self._last_image = new_image
 
     def _get_bbox_dimensions(
         self, non_zero: tuple[list[int], list[int]], diff_shape: tuple[int, int]

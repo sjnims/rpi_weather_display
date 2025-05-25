@@ -22,6 +22,7 @@ from rpi_weather_display.models.config import AppConfig
 from rpi_weather_display.models.system import BatteryStatus
 from rpi_weather_display.models.weather import (
     CurrentWeather,
+    DailyWeather,
     HourlyWeather,
     WeatherCondition,
     WeatherData,
@@ -186,44 +187,119 @@ class WeatherRenderer:
         _ = now  # Mark as intentionally unused
         time_format = self.config.display.time_format
 
-        # Current times (sunrise/sunset)
-        current_times = {"sunrise_local": "", "sunset_local": ""}
-        if hasattr(weather_data.current, "sunrise") and weather_data.current.sunrise:
-            sunrise_dt = datetime.fromtimestamp(weather_data.current.sunrise)
-            current_times["sunrise_local"] = self._format_time(sunrise_dt, time_format)
-        if hasattr(weather_data.current, "sunset") and weather_data.current.sunset:
-            sunset_dt = datetime.fromtimestamp(weather_data.current.sunset)
-            current_times["sunset_local"] = self._format_time(sunset_dt, time_format)
-
-        # Daily forecast times
-        daily_times: list[dict[str, str]] = []
-        for day in weather_data.daily:
-            day_times = {"sunrise_local": "", "sunset_local": "", "weekday_short": ""}
-            if hasattr(day, "sunrise") and day.sunrise:
-                sunrise_dt = datetime.fromtimestamp(day.sunrise)
-                day_times["sunrise_local"] = self._format_time(sunrise_dt, time_format)
-            if hasattr(day, "sunset") and day.sunset:
-                sunset_dt = datetime.fromtimestamp(day.sunset)
-                day_times["sunset_local"] = self._format_time(sunset_dt, time_format)
-            if hasattr(day, "dt") and day.dt:
-                day_dt = datetime.fromtimestamp(day.dt)
-                day_times["weekday_short"] = day_dt.strftime("%a")
-            daily_times.append(day_times)
-
-        # Hourly forecast times
-        hourly_times: list[dict[str, str]] = []
-        hourly_count = self.config.weather.hourly_forecast_count
-        for hour in weather_data.hourly[:hourly_count]:
-            hour_dt = datetime.fromtimestamp(hour.dt)
-            hourly_times.append(
-                {
-                    "local_time": self._format_time(hour_dt, time_format),
-                    "hour": str(hour_dt.hour if hour_dt.hour <= 12 else hour_dt.hour - 12),
-                    "ampm": hour_dt.strftime("%p").lower(),
-                }
-            )
+        # Prepare all time data
+        current_times = self._prepare_current_times(weather_data.current, time_format or "")
+        daily_times = self._prepare_daily_times(weather_data.daily, time_format or "")
+        hourly_times = self._prepare_hourly_times(
+            weather_data.hourly, time_format or "", self.config.weather.hourly_forecast_count
+        )
 
         return current_times, daily_times, hourly_times
+
+    def _prepare_current_times(self, current: object, time_format: str) -> dict[str, str]:
+        """Prepare current weather time data.
+        
+        Args:
+            current: Current weather data object
+            time_format: Time format string
+            
+        Returns:
+            Dictionary with sunrise and sunset times
+        """
+        return {
+            "sunrise_local": self._format_timestamp_if_exists(current, "sunrise", time_format),
+            "sunset_local": self._format_timestamp_if_exists(current, "sunset", time_format),
+        }
+
+    def _prepare_daily_times(
+        self, daily_forecast: list[DailyWeather], time_format: str
+    ) -> list[dict[str, str]]:
+        """Prepare daily forecast time data.
+        
+        Args:
+            daily_forecast: List of daily forecast objects
+            time_format: Time format string
+            
+        Returns:
+            List of dictionaries with daily time data
+        """
+        daily_times: list[dict[str, str]] = []
+        for day in daily_forecast:
+            day_times: dict[str, str] = {
+                "sunrise_local": self._format_timestamp_if_exists(day, "sunrise", time_format),
+                "sunset_local": self._format_timestamp_if_exists(day, "sunset", time_format),
+                "weekday_short": self._get_weekday_short(day),
+            }
+            daily_times.append(day_times)
+        return daily_times
+
+    def _prepare_hourly_times(
+        self, hourly_forecast: list[HourlyWeather], time_format: str, count: int
+    ) -> list[dict[str, str]]:
+        """Prepare hourly forecast time data.
+        
+        Args:
+            hourly_forecast: List of hourly forecast objects
+            time_format: Time format string
+            count: Number of hours to include
+            
+        Returns:
+            List of dictionaries with hourly time data
+        """
+        hourly_times: list[dict[str, str]] = []
+        for hour in hourly_forecast[:count]:
+            hour_dt = datetime.fromtimestamp(hour.dt)
+            hourly_times.append(self._format_hour_data(hour_dt, time_format))
+        return hourly_times
+
+    def _format_timestamp_if_exists(self, obj: object, attr: str, time_format: str) -> str:
+        """Format a timestamp attribute if it exists.
+        
+        Args:
+            obj: Object that may have the timestamp attribute
+            attr: Name of the timestamp attribute
+            time_format: Time format string
+            
+        Returns:
+            Formatted time string or empty string if attribute doesn't exist
+        """
+        if hasattr(obj, attr):
+            timestamp = getattr(obj, attr)
+            if timestamp:
+                dt = datetime.fromtimestamp(timestamp)
+                return self._format_time(dt, time_format)
+        return ""
+
+    def _get_weekday_short(self, day: DailyWeather) -> str:
+        """Get short weekday name from day object.
+        
+        Args:
+            day: Day object with dt attribute
+            
+        Returns:
+            Short weekday name or empty string
+        """
+        if hasattr(day, "dt") and day.dt:
+            day_dt = datetime.fromtimestamp(day.dt)
+            return day_dt.strftime("%a")
+        return ""
+
+    def _format_hour_data(self, hour_dt: datetime, time_format: str) -> dict[str, str]:
+        """Format hour data for display.
+        
+        Args:
+            hour_dt: Hour datetime object
+            time_format: Time format string
+            
+        Returns:
+            Dictionary with formatted hour data
+        """
+        hour_12 = hour_dt.hour if hour_dt.hour <= 12 else hour_dt.hour - 12
+        return {
+            "local_time": self._format_time(hour_dt, time_format),
+            "hour": str(hour_12),
+            "ampm": hour_dt.strftime("%p").lower(),
+        }
 
     def _prepare_units(self) -> dict[str, str | bool]:
         """Prepare unit strings based on configuration.
