@@ -104,6 +104,30 @@ class TestPowerStateController:
         # Should configure events
         assert mock_pijuice.configure_event.called
 
+    def test_initialize_with_configuration_error(
+        self, mock_config: AppConfig, mock_battery_monitor: MagicMock, mock_pijuice: MagicMock
+    ) -> None:
+        """Test initialization fails when PiJuice configuration fails."""
+        # Make configure_pijuice_events raise an exception
+        mock_pijuice.configure_event.side_effect = Exception("PiJuice configuration error")
+        
+        controller = PowerStateController(mock_config, mock_battery_monitor, mock_pijuice)
+        result = controller.initialize()
+        assert result is False
+        assert controller._initialized is False
+
+    def test_initialize_with_battery_monitor_error(
+        self, mock_config: AppConfig, mock_battery_monitor: MagicMock
+    ) -> None:
+        """Test initialization fails when battery monitor fails."""
+        # Make _update_power_state fail by having get_battery_status raise an exception
+        mock_battery_monitor.get_battery_status.side_effect = Exception("Battery monitor error")
+        
+        controller = PowerStateController(mock_config, mock_battery_monitor)
+        result = controller.initialize()
+        assert result is False
+        assert controller._initialized is False
+
     def test_get_current_state(
         self, mock_config: AppConfig, mock_battery_monitor: MagicMock
     ) -> None:

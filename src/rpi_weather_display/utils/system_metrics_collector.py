@@ -5,7 +5,7 @@ disk space, and temperature.
 """
 
 import logging
-import subprocess
+import subprocess  # nosec B404 - subprocess usage has been security reviewed
 
 from rpi_weather_display.constants import BYTES_PER_KILOBYTE
 from rpi_weather_display.utils.file_utils import file_exists, read_text
@@ -74,11 +74,12 @@ class SystemMetricsCollector:
         try:
             # Use top command in batch mode
             # Security: Using hardcoded paths and arguments to prevent injection
-            result = subprocess.run(  # noqa: S603
+            result = subprocess.run(  # nosec B603 - hardcoded command with no user input  # noqa: S603
                 ["/usr/bin/top", "-bn1"],
                 capture_output=True,
                 text=True,
                 timeout=5,
+                check=False,  # We handle errors ourselves
             )
 
             if result.returncode == 0:
@@ -139,11 +140,12 @@ class SystemMetricsCollector:
         try:
             # Use df command for disk usage
             # Security: Using hardcoded paths and arguments to prevent injection
-            result = subprocess.run(  # noqa: S603
+            result = subprocess.run(  # nosec B603 - hardcoded command with no user input  # noqa: S603
                 ["/bin/df", "-h", "/"],
                 capture_output=True,
                 text=True,
                 timeout=5,
+                check=False,  # We handle errors ourselves
             )
 
             if result.returncode == 0:

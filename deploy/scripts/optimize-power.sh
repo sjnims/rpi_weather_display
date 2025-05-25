@@ -35,7 +35,8 @@ if [[ $EUID -ne 0 ]]; then
    exit 1
 fi
 
-# Define backup directory
+# Define configuration constants
+CONFIG="/boot/config.txt"
 BACKUP_DIR="/opt/power-optimize-backup-$(date +%Y%m%d_%H%M%S)"
 
 # Logging functions
@@ -110,17 +111,16 @@ execute() {
 # Apply setting to boot config once
 apply_once() {
     local setting="$1"
-    local config="/boot/config.txt"
     
     if [[ "$DRY_RUN" == "true" ]]; then
-        if ! grep -qF "$setting" "$config" 2>/dev/null; then
-            info "[DRY RUN] Would add to $config: $setting"
+        if ! grep -qF "$setting" "$CONFIG" 2>/dev/null; then
+            info "[DRY RUN] Would add to $CONFIG: $setting"
         fi
         return
     fi
     
-    if ! grep -qF "$setting" "$config"; then
-        echo "$setting" | tee -a "$config" >/dev/null
+    if ! grep -qF "$setting" "$CONFIG"; then
+        echo "$setting" | tee -a "$CONFIG" >/dev/null
         info "Added to boot config: $setting"
     fi
 }
@@ -167,8 +167,6 @@ if command -v cpufrequtils &>/dev/null; then
 fi
 
 # Apply boot config changes for permanent effect
-CONFIG=/boot/config.txt
-
 apply_once "# Weather display power optimization settings"
 apply_once "arm_freq=700"              # Limit ARM CPU frequency
 apply_once "arm_freq_min=700"          # Set minimum to same as max to prevent scaling

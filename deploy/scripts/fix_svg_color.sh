@@ -74,7 +74,8 @@ add_fill_attr () {
     
     if [[ "$DRY_RUN" == "true" ]]; then
         # In dry-run mode, just check if changes would be made
-        local needs_fill=$(xmlstarlet sel -t -c 'count(//*[not(@fill) and not(contains(@style,"fill"))])' "$file" 2>/dev/null || echo "0")
+        local needs_fill
+        needs_fill=$(xmlstarlet sel -t -c 'count(//*[not(@fill) and not(contains(@style,"fill"))])' "$file" 2>/dev/null || echo "0")
         if [[ "$needs_fill" != "0" ]]; then
             echo "    Would add fill=\"currentColor\" to $needs_fill elements"
         fi

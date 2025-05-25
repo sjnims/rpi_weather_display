@@ -98,7 +98,11 @@ find "$SRC_DIR" -maxdepth 1 -name '*.svg' -type f -print0 | while IFS= read -r -
 done
 
 # Check if any files were processed successfully
-if [[ ! -f "$TMP_DIR"/*.svg ]] 2>/dev/null; then
+shopt -s nullglob
+svg_files=("$TMP_DIR"/*.svg)
+shopt -u nullglob
+
+if [[ ${#svg_files[@]} -eq 0 ]]; then
     echo "Error: No files were processed successfully"
     rm -rf "$TMP_DIR"
     exit 1

@@ -15,11 +15,12 @@ set -euo pipefail
 readonly REPO="sjnims/rpi_weather_display"
 readonly VERSION="${VERSION:-latest}"
 readonly INSTALL_DIR="/opt/rpiweather"
-readonly VENV_DIR="${INSTALL_DIR}/venv"
+readonly VENV_DIR="${INSTALL_DIR}/.venv"
 readonly SERVICE_FILE="/etc/systemd/system/rpi-weather-display.service"
 readonly POETRY_URL="https://install.python-poetry.org"
 readonly POETRY_CHECKSUM_URL="https://install.python-poetry.org/checksum.txt"
-readonly BACKUP_DIR="/opt/rpiweather-backup-$(date +%Y%m%d_%H%M%S)"
+readonly BACKUP_DIR
+BACKUP_DIR="/opt/rpiweather-backup-$(date +%Y%m%d_%H%M%S)"
 
 info()  { echo -e "\e[32m[install]\e[0m $1"; }
 warn()  { echo -e "\e[33m[install]\e[0m $1"; }
@@ -106,8 +107,24 @@ if [[ ! -d "$INSTALL_DIR/.venv" ]]; then
     exit 1
   fi
   
-  # TODO: Add checksum verification when Poetry provides official checksums
-  # For now, at least verify the script is not empty and contains expected content
+  # Download and verify checksum if available
+  if curl -sSL "$POETRY_CHECKSUM_URL" -o "$TEMP_CHECKSUM" 2>/dev/null; then
+    info "Verifying Poetry installer checksum"
+    # Extract the checksum for the installer script
+    EXPECTED_CHECKSUM=$(grep "install.python-poetry.org" "$TEMP_CHECKSUM" | awk '{print $1}')
+    if [[ -n "$EXPECTED_CHECKSUM" ]]; then
+      ACTUAL_CHECKSUM=$(sha256sum "$TEMP_SCRIPT" | awk '{print $1}')
+      if [[ "$EXPECTED_CHECKSUM" != "$ACTUAL_CHECKSUM" ]]; then
+        error "Poetry installer checksum mismatch"
+        rm -f "$TEMP_SCRIPT" "$TEMP_CHECKSUM"
+        exit 1
+      fi
+    fi
+  else
+    warn "Could not download checksum file, skipping verification"
+  fi
+  
+  # Verify the script is not empty and contains expected content
   if [[ ! -s "$TEMP_SCRIPT" ]] || ! grep -q "poetry" "$TEMP_SCRIPT"; then
     error "Downloaded Poetry installer appears to be invalid"
     rm -f "$TEMP_SCRIPT" "$TEMP_CHECKSUM"
@@ -162,7 +179,7 @@ After=network-online.target
 [Service]
 Type=simple
 User=rpiweather
-ExecStart=$INSTALL_DIR/.venv/bin/weather run --config /home/rpiweather/config.yaml
+ExecStart=$VENV_DIR/bin/weather run --config /home/rpiweather/config.yaml
 Restart=on-failure
 Environment=PYTHONUNBUFFERED=1
 

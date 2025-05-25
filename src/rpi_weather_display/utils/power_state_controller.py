@@ -94,16 +94,21 @@ class PowerStateController:
         if self._initialized:
             return True
 
-        # Configure PiJuice events if available
-        if self.pijuice and self.pijuice.is_initialized():
-            self._configure_pijuice_events()
+        try:
+            # Configure PiJuice events if available
+            if self.pijuice and self.pijuice.is_initialized():
+                self._configure_pijuice_events()
 
-        # Update initial power state
-        self._update_power_state()
+            # Update initial power state
+            self._update_power_state()
 
-        self._initialized = True
-        logger.info("Power state controller initialized")
-        return True
+            self._initialized = True
+            logger.info("Power state controller initialized")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to initialize power state controller: {e}")
+            self._initialized = False
+            return False
 
     def _configure_pijuice_events(self) -> None:
         """Configure PiJuice events for power management."""
