@@ -95,8 +95,16 @@ Priority is indicated as:
   - Simplify AsyncNetworkManager.set_wifi_power_save_mode (CC: 13 → 4)
   - Refactor client/main.py run method (CC: 13 → 5)
   - Simplify api.py get_coordinates (CC: 12 → 2) and get_weather_data (CC: 11 → 4)
-- [ ] 🟢 2.5.7 Remove test-only methods from production interfaces [PLANNED]
-- [ ] 🟢 2.5.8 Resolve circular import risks in utils module [PLANNED]
+- [x] 🟠 2.5.7 Improve renderer.py maintainability through modularization [COMPLETED 2025-05-25]
+  - NOTE: Maintainability Index improved from 36.81 to 57.66 (+56.6%)
+  - Extracted template filter management to template_filter_manager.py (MI: 76.81)
+  - Extracted time/date formatting to time_formatter.py (MI: 69.53)
+  - Extracted weather calculations to weather_calculator.py (MI: 64.53)
+  - Extracted icon mapping to weather_icon_mapper.py (MI: 74.02)
+  - Added comprehensive tests for all new modules (>96% coverage each)
+  - All new modules achieved "A" rank maintainability
+- [ ] 🟢 2.5.8 Remove test-only methods from production interfaces [PLANNED]
+- [ ] 🟢 2.5.9 Resolve circular import risks in utils module [PLANNED]
 
 ### 2.6 Hardware Abstractions (New)
 - [ ] 🔴 2.6.1 Create hardware abstraction interfaces for display and power management [PLANNED]
