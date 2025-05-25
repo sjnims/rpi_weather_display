@@ -63,3 +63,6 @@ Thumbs.db
 
 # Claude
 .claude/
+
+# Code quality metrics (local tracking)
+metrics/
