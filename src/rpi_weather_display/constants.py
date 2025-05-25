@@ -56,6 +56,7 @@ DEFAULT_DRAIN_RATE = 1.0  # Initial drain rate estimate (% per hour)
 BATTERY_FULL_THRESHOLD = 90  # Percentage considered "full" for battery status
 BATTERY_HIGH_THRESHOLD = 60  # Percentage considered "high" for battery status
 BATTERY_LOW_THRESHOLD = 30  # Percentage considered "low" for battery status
+BATTERY_WARNING_THRESHOLD = 20  # Percentage considered "warning" for battery status
 BATTERY_EMPTY_THRESHOLD = 10  # Percentage considered "empty" for battery status
 BATTERY_CHARGING_FACTOR = 0.8  # Factor for reducing sleep time while charging
 BATTERY_CHARGING_MIN = 30  # Minimum minutes for charging sleep duration
@@ -66,7 +67,6 @@ MOCK_BATTERY_LEVEL = 75  # Mock battery level percentage
 MOCK_BATTERY_VOLTAGE = 3.7  # Mock battery voltage in volts
 MOCK_BATTERY_TEMPERATURE = 25.0  # Mock battery temperature in Celsius
 MOCK_BATTERY_CURRENT = 100.0  # Mock battery current in milliamps
-MOCK_BATTERY_CAPACITY = 1200  # Mock battery capacity in mAh
 
 # Power management constants
 CRITICAL_SLEEP_FACTOR = 8.0  # Factor to extend sleep for critical battery level
@@ -111,11 +111,9 @@ HPA_TO_MMHG = 0.75006  # Conversion factor from hectopascals to millimeters of m
 HPA_TO_INHG = 0.02953  # Conversion factor from hectopascals to inches of mercury
 SECONDS_PER_MINUTE = 60  # Seconds in a minute
 SECONDS_PER_HOUR = 3600  # Seconds in an hour
-MILLIAMPS_PER_AMP = 1000  # Milliamps in an amp
-AMPS_PER_MILLIAMP = 0.001  # Conversion from milliamps to amps
 BYTES_PER_KILOBYTE = 1024  # Bytes in a kilobyte
+KILOBYTES_PER_MEGABYTE = 1024  # Kilobytes in a megabyte
 BYTES_PER_MEGABYTE = 1024 * 1024  # Bytes in a megabyte
-PERCENT_MAX = 100.0  # Maximum percentage value
 
 # Cache constants
 UVI_CACHE_FILENAME = "uvi_max_cache.json"  # Filename for UV index cache

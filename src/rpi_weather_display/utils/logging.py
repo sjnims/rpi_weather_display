@@ -11,6 +11,7 @@ from logging.handlers import RotatingFileHandler
 import structlog
 from structlog.stdlib import ProcessorFormatter
 
+from rpi_weather_display.constants import BYTES_PER_MEGABYTE
 from rpi_weather_display.models.config import LoggingConfig
 from rpi_weather_display.utils.path_utils import path_resolver
 
@@ -88,7 +89,7 @@ def setup_logging(config: LoggingConfig, name: str) -> logging.Logger:
             # Create file handler
             file_handler = RotatingFileHandler(
                 config.file,
-                maxBytes=config.max_size_mb * 1024 * 1024,
+                maxBytes=config.max_size_mb * BYTES_PER_MEGABYTE,
                 backupCount=config.backup_count,
             )
             file_handler.setFormatter(formatter)

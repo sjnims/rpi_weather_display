@@ -7,7 +7,7 @@ disk space, and temperature.
 import logging
 import subprocess  # nosec B404 - subprocess usage has been security reviewed
 
-from rpi_weather_display.constants import BYTES_PER_KILOBYTE
+from rpi_weather_display.constants import KILOBYTES_PER_MEGABYTE
 from rpi_weather_display.utils.file_utils import file_exists, read_text
 
 logger = logging.getLogger(__name__)
@@ -119,7 +119,7 @@ class SystemMetricsCollector:
 
                 if mem_total > 0:
                     mem_used_kb = mem_total - mem_available
-                    mem_used_mb = mem_used_kb / BYTES_PER_KILOBYTE
+                    mem_used_mb = mem_used_kb / KILOBYTES_PER_MEGABYTE
                     mem_percent = (mem_used_kb / mem_total) * 100
 
                     return {

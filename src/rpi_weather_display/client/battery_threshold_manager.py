@@ -6,6 +6,7 @@ optimize power consumption during display updates.
 
 from typing import TYPE_CHECKING
 
+from rpi_weather_display.constants import BATTERY_EMPTY_THRESHOLD, BATTERY_WARNING_THRESHOLD
 from rpi_weather_display.models.system import BatteryState, BatteryStatus
 
 if TYPE_CHECKING:
@@ -68,9 +69,15 @@ class BatteryThresholdManager:
         # Determine threshold based on battery state and level
         if battery.state == BatteryState.CHARGING:
             return self.config.pixel_diff_threshold
-        elif battery.state == BatteryState.DISCHARGING and battery.level <= 10:
+        elif (
+            battery.state == BatteryState.DISCHARGING 
+            and battery.level <= BATTERY_EMPTY_THRESHOLD
+        ):
             return self.config.pixel_diff_threshold_critical_battery
-        elif battery.state == BatteryState.DISCHARGING and battery.level <= 20:
+        elif (
+            battery.state == BatteryState.DISCHARGING 
+            and battery.level <= BATTERY_WARNING_THRESHOLD
+        ):
             return self.config.pixel_diff_threshold_low_battery
         else:
             return self.config.pixel_diff_threshold
@@ -101,9 +108,15 @@ class BatteryThresholdManager:
         # Determine minimum based on battery state and level
         if battery.state == BatteryState.CHARGING:
             return self.config.min_changed_pixels
-        elif battery.state == BatteryState.DISCHARGING and battery.level <= 10:
+        elif (
+            battery.state == BatteryState.DISCHARGING 
+            and battery.level <= BATTERY_EMPTY_THRESHOLD
+        ):
             return self.config.min_changed_pixels_critical_battery
-        elif battery.state == BatteryState.DISCHARGING and battery.level <= 20:
+        elif (
+            battery.state == BatteryState.DISCHARGING 
+            and battery.level <= BATTERY_WARNING_THRESHOLD
+        ):
             return self.config.min_changed_pixels_low_battery
         else:
             return self.config.min_changed_pixels
