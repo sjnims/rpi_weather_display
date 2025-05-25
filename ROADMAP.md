@@ -63,19 +63,26 @@ Priority is indicated as:
   - Split PowerStateManager into: BatteryMonitor, PowerStateController, SystemMetricsCollector, PiJuiceAdapter
   - Extract complex methods: get_battery_status (C-rated), get_system_metrics (C-rated)
   - Move test-specific methods to separate test utilities module
-- [ ] 🔴 2.5.2 Refactor renderer.py generate_html method (D-rated complexity) [PLANNED]
+- [ ] 🔴 2.5.2 Refactor renderer.py generate_html method (D-rated, CC: 27) [PLANNED]
   - Break down into smaller, focused methods: prepare_template_data, format_weather_data, setup_jinja_filters
   - Extract moon phase logic into separate helper class
   - Simplify nested conditionals and reduce cyclomatic complexity
-- [ ] 🔴 2.5.3 Simplify renderer._get_daily_max_uvi method (C-rated complexity) [PLANNED]
+- [ ] 🔴 2.5.3 Refactor battery_monitor.py get_battery_status method (D-rated, CC: 22) [PLANNED]
+  - NEW: Emerged as high complexity after power_manager modularization
+  - Break down battery status determination logic
+  - Extract voltage-based calculations into separate methods
+  - Simplify nested conditionals for different battery states
+- [ ] 🔴 2.5.4 Simplify renderer._get_daily_max_uvi method (C-rated, CC: 16) [PLANNED]
   - Extract cache handling logic
   - Separate UVI calculation from persistence logic
-- [ ] 🟠 2.5.4 Create custom exception hierarchy for better error handling [PLANNED]
-- [ ] 🟠 2.5.5 Refactor complex network and display methods [PLANNED]
-  - Simplify AsyncNetworkManager.set_wifi_power_save_mode
-  - Break down EPaperDisplay.display_pil_image into smaller methods
-- [ ] 🟢 2.5.6 Remove test-only methods from production interfaces [PLANNED]
-- [ ] 🟢 2.5.7 Resolve circular import risks in utils module [PLANNED]
+- [ ] 🟠 2.5.5 Create custom exception hierarchy for better error handling [PLANNED]
+- [ ] 🟠 2.5.6 Refactor other complex methods (C-rated) [PLANNED]
+  - Simplify AsyncNetworkManager.set_wifi_power_save_mode (CC: 13)
+  - Break down EPaperDisplay.display_pil_image (CC: 15)
+  - Refactor client/main.py run method (CC: 13)
+  - Simplify api.py get_coordinates (CC: 12) and get_weather_data (CC: 11)
+- [ ] 🟢 2.5.7 Remove test-only methods from production interfaces [PLANNED]
+- [ ] 🟢 2.5.8 Resolve circular import risks in utils module [PLANNED]
 
 ### 2.6 Hardware Abstractions (New)
 - [ ] 🔴 2.6.1 Create hardware abstraction interfaces for display and power management [PLANNED]
@@ -278,27 +285,32 @@ Priority is indicated as:
 
 Based on the code complexity analysis, the following tasks should be prioritized:
 
-**Code Quality Metrics Summary:**
-- Average Complexity: C (15.78) - Acceptable but room for improvement
+**Code Quality Metrics Summary (Updated 2025-05-25):**
+- Average Complexity: 16.12 - Slightly increased but still acceptable
 - Complex Functions (E-F): 0 - Good, no extremely complex functions
-- Lowest Maintainability: power_manager.py (19.56), renderer.py (38.99)
-- Highest Complexity Method: renderer.generate_html (D rating)
+- Lowest Maintainability: All files now above 20 (improved!)
+- Average Maintainability: 67.25/100 - Good overall maintainability
+- Highest Complexity Methods:
+  - renderer.generate_html: CC 27 (D rating) - Still needs refactoring
+  - battery_monitor.get_battery_status: CC 22 (D rating) - New complexity hotspot
+- Total Source Lines: 3,920
+- Comment Ratio: 22.76% - Good documentation coverage
 
 *Complexity Ratings: A (simple) → B → C (moderate) → D (complex) → E → F (very complex)*
 
 ### Immediate Priority (Next Sprint)
 1. **Phase 2.5.2** - Refactor renderer.py generate_html method
-   - Complexity rating: D (highest in codebase)
+   - Complexity rating: D (CC: 27) - highest in codebase
    - Method is doing too many things and needs decomposition
-   - Will improve maintainability score (currently 38.99)
+   - Already has good maintainability but complexity needs reduction
 
-2. **Phase 2.5.1** - Modularize power_manager.py
-   - Maintainability index: 19.56 (lowest in codebase)
-   - 1270 lines is too large
-   - Contains C-rated complex methods that need extraction
+2. **NEW: Refactor battery_monitor.py get_battery_status method**
+   - Complexity rating: D (CC: 22) - second highest complexity
+   - Created during power_manager modularization
+   - Needs to be broken down into smaller, focused methods
 
 3. **Phase 2.5.3** - Simplify renderer._get_daily_max_uvi
-   - Complexity rating: C
+   - Complexity rating: C (CC: 16)
    - Mixed concerns (calculation + caching + persistence)
 
 ### Short-term Priority (Q1 2025)
@@ -320,10 +332,10 @@ Based on the code complexity analysis, the following tasks should be prioritized
 | Phase | Not Started | In Progress | Completed | Total |
 |-------|------------|-------------|-----------|-------|
 | 1     | 0          | 0           | 14        | 14    |
-| 2     | 15         | 0           | 19        | 34    |
+| 2     | 15         | 0           | 20        | 35    |
 | 3     | 12         | 0           | 0         | 12    |
 | 4     | 12         | 0           | 0         | 12    |
 | 5     | 17         | 0           | 2         | 19    |
 | 6     | 21         | 0           | 0         | 21    |
 | 7     | 18         | 0           | 0         | 18    |
-| Total | 95         | 0           | 35        | 130   |
+| Total | 95         | 0           | 36        | 131   |
