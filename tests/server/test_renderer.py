@@ -1882,14 +1882,17 @@ class TestWeatherRenderer:
         weather_data = MagicMock(spec=WeatherData)
         weather_data.current = MagicMock(spec=CurrentWeather)
         weather_data.current.uvi = 4.2
-        current_timestamp = int(datetime.now().timestamp())
+        
+        # Use a fixed datetime to avoid timing issues
+        fixed_now = datetime.now()
+        current_timestamp = int(fixed_now.timestamp())
 
         # No hourly forecast (use current only)
         weather_data.hourly = []
 
-        # Call the method
+        # Call the method with the same fixed datetime
         with patch("builtins.open", mock_open()) as mock_file:
-            max_uvi, max_uvi_timestamp = renderer._get_daily_max_uvi(weather_data, datetime.now())
+            max_uvi, max_uvi_timestamp = renderer._get_daily_max_uvi(weather_data, fixed_now)
 
         # Verify we use the current UVI
         assert max_uvi == 4.2
