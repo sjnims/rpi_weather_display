@@ -12,27 +12,17 @@ handling image rendering, partial refreshes, and power management.
 
 from collections.abc import Callable
 from io import BytesIO
-from types import ModuleType
 from typing import TYPE_CHECKING, Protocol, TypeVar
 
 from PIL import Image
 
-from rpi_weather_display.constants import (
-    DEFAULT_MESSAGE_FONT,
-    DEFAULT_TITLE_FONT,
-    DISPLAY_MARGIN,
-    FONT_SIZE_DIVIDER,
-    FONT_SIZE_MESSAGE_DIVIDER,
-    MESSAGE_FONT_SIZE_BASE,
-    MESSAGE_FONT_SIZE_MAX,
-    MESSAGE_Y_POSITION_FACTOR,
-    TITLE_FONT_SIZE_BASE,
-    TITLE_FONT_SIZE_MAX,
-    TITLE_Y_POSITION_FACTOR,
-    VALID_ROTATION_ANGLES,
-)
+from rpi_weather_display.client.battery_threshold_manager import BatteryThresholdManager
+from rpi_weather_display.client.image_processor import ImageProcessor
+from rpi_weather_display.client.partial_refresh_manager import PartialRefreshManager
+from rpi_weather_display.client.text_renderer import TextRenderer
+from rpi_weather_display.constants import VALID_ROTATION_ANGLES
 from rpi_weather_display.models.config import DisplayConfig
-from rpi_weather_display.models.system import BatteryState, BatteryStatus
+from rpi_weather_display.models.system import BatteryStatus
 from rpi_weather_display.utils.file_utils import PathLike, read_bytes
 
 # Type checking imports
@@ -86,13 +76,8 @@ AutoEPDDisplayType = TypeVar("AutoEPDDisplayType", bound=EPDDisplayProtocol)
 def _import_it8951() -> Callable[..., EPDDisplayProtocol] | None:
     """Import IT8951 library or return None if not available.
 
-    The IT8951 library provides the driver interface for the Waveshare e-paper display.
-    This function uses conditional import to handle environments where the library
-    might not be available (such as development machines without the hardware).
-
     Returns:
-        The AutoEPDDisplay class from the IT8951.display module if available,
-        or None if the library cannot be imported.
+        The AutoEPDDisplay class or None if unavailable
     """
     try:
         from IT8951.display import AutoEPDDisplay  # type: ignore
@@ -102,551 +87,166 @@ def _import_it8951() -> Callable[..., EPDDisplayProtocol] | None:
         return None
 
 
-def _import_numpy() -> ModuleType | None:
-    """Import numpy or return None if not available.
-
-    NumPy is used for efficient image processing operations, particularly when
-    calculating differences between images for partial refresh. This function
-    uses conditional import to handle environments where NumPy might not be
-    available.
-
-    Returns:
-        The numpy module if available, or None if the library cannot be imported.
-    """
-    try:
-        import numpy as np  # type: ignore
-
-        return np
-    except ImportError:
-        return None
-
-
 class EPaperDisplay:
     """Interface for the Waveshare e-paper display.
 
     This class provides a high-level interface for controlling the e-paper display,
-    including image display, text rendering, power management, and partial refresh
-    functionality with battery-aware optimizations.
+    coordinating between various specialized components for optimal functionality.
 
     Attributes:
         config: Display configuration parameters
+        battery_threshold_manager: Manages battery-aware thresholds
+        image_processor: Handles image preprocessing
+        partial_refresh_manager: Manages partial refresh operations
+        text_renderer: Handles text rendering
         _display: The underlying IT8951 display driver instance
-        _last_image: Previously displayed image for partial refresh comparison
         _initialized: Whether the display has been successfully initialized
-        _current_battery_status: Current battery status for power-aware refresh
     """
 
     def __init__(self, config: DisplayConfig) -> None:
         """Initialize the display driver.
 
         Args:
-            config: Display configuration including dimensions, rotation, and refresh settings.
+            config: Display configuration including dimensions and settings
         """
         self.config = config
         self._display: EPDDisplayProtocol | None = None
-        self._last_image: Image.Image | None = None
         self._initialized = False
-        self._current_battery_status: BatteryStatus | None = None
+        
+        # Initialize component managers
+        self.battery_threshold_manager = BatteryThresholdManager(config)
+        self.image_processor = ImageProcessor(config)
+        self.partial_refresh_manager = PartialRefreshManager(
+            config, 
+            self.image_processor,
+            self.battery_threshold_manager
+        )
+        self.text_renderer = TextRenderer(config)
 
     def initialize(self) -> None:
         """Initialize the e-paper display hardware.
 
-        This is separated from __init__ so that the display can be mocked for testing.
-        Attempts to connect to the IT8951 display driver, clear the screen, and set
-        the display rotation. If the IT8951 library is not available (e.g., when not
-        running on Raspberry Pi hardware), a mock display is used instead.
-
-        Raises:
-            RuntimeError: If the display initialization fails.
+        Attempts to connect to the IT8951 display driver and configure it.
+        Falls back to mock mode if hardware is not available.
         """
         try:
-            # Try to import the IT8951 library, which is only available on Raspberry Pi
             auto_epd_display = _import_it8951()
             if not auto_epd_display:
                 print("Warning: IT8951 library not available. Using mock display.")
                 self._initialized = False
                 return
 
-            # Initialize the display with configured VCOM value
+            # Initialize display
             self._display = auto_epd_display(vcom=self.config.vcom)
             if self._display:
                 self._display.clear()
-
-                # Set rotation
-                if self.config.rotate in VALID_ROTATION_ANGLES:
-                    self._display.epd.set_rotation(self.config.rotate // 90)
+                self._set_rotation()
 
             self._initialized = True
         except Exception as e:
-            # Log any other exceptions
             print(f"Error initializing display: {e}")
             self._initialized = False
 
-    def _check_initialized(self) -> None:
-        """Check if the display is initialized.
-
-        Raises:
-            RuntimeError: If the display has not been initialized.
-        """
-        if not self._initialized:
-            raise RuntimeError("Display not initialized. Call initialize() first.")
+    def _set_rotation(self) -> None:
+        """Set display rotation if configured."""
+        if (
+            self._display 
+            and self.config.rotate in VALID_ROTATION_ANGLES
+            and hasattr(self._display, "epd")
+        ):
+            self._display.epd.set_rotation(self.config.rotate // 90)
 
     def clear(self) -> None:
-        """Clear the display.
-
-        Clears the entire display to white and resets the last image cache.
-        If the display is not initialized, this operation is silently skipped.
-        """
+        """Clear the display and reset state."""
         if self._initialized and self._display:
             self._display.clear()
-            self._last_image = None
+        self.partial_refresh_manager.clear_last_image()
 
     def display_image(self, image_path: PathLike) -> None:
-        """Display an image from a file on the e-paper display.
+        """Display an image from file.
 
         Args:
-            image_path: Path to the image file to display.
-
-        Raises:
-            FileNotFoundError: If the image file does not exist.
-            PIL.UnidentifiedImageError: If the file is not a valid image.
+            image_path: Path to the image file
         """
         image_data = read_bytes(image_path)
-        # Use context manager to ensure image is properly closed
         with Image.open(BytesIO(image_data)) as image:
             self.display_pil_image(image)
-
-    def update_battery_status(self, battery_status: BatteryStatus) -> None:
-        """Update the current battery status for dynamic adjustments.
-
-        This information is used to modify refresh thresholds and behavior
-        based on battery level, helping extend battery life when needed.
-
-        Args:
-            battery_status: The current battery status including level and charging state.
-        """
-        self._current_battery_status = battery_status
 
     def display_pil_image(self, image: Image.Image) -> None:
         """Display a PIL Image on the e-paper display.
 
-        Handles image preprocessing (resizing, conversion to grayscale) and
-        implements power-efficient partial refresh when appropriate based on
-        battery status and configuration settings.
-
         Args:
-            image: PIL Image object to display.
-
-        Raises:
-            Exception: If there is an error during image display.
+            image: PIL Image object to display
         """
         if not self._initialized:
             self._handle_mock_display(image)
             return
 
-        processed_image = None
         try:
-            # Process image for display
-            processed_image = self._preprocess_image(image)
-
-            # Determine refresh strategy and update display
-            if self._should_update_display(processed_image):
-                self._update_last_image(processed_image)
-            else:
-                # Clean up if not updating
-                if processed_image is not image:
-                    processed_image.close()
-
+            # Process image
+            processed_image = self.image_processor.preprocess_image(image)
+            
+            # Update display through partial refresh manager
+            updated = self.partial_refresh_manager.update_display(
+                processed_image,
+                self._display
+            )
+            
+            # Clean up if image wasn't used
+            if not updated and processed_image is not image:
+                processed_image.close()
+                
         except Exception as e:
             print(f"Error displaying image: {e}")
-            # Clean up on error
-            if processed_image is not None and processed_image is not image:
-                processed_image.close()
 
     def _handle_mock_display(self, image: Image.Image) -> None:
-        """Handle display operations when running without hardware.
+        """Handle display operations in mock mode.
         
         Args:
-            image: PIL Image object to mock display.
+            image: Image that would be displayed
         """
         print(f"Mock display: would display image of size {image.size}")
-        # Create a copy to avoid holding reference to external image
-        self._last_image = image.copy() if image else None
+        # Update partial refresh manager's state
+        processed = self.image_processor.preprocess_image(image)
+        self.partial_refresh_manager.update_display(processed, None)
 
-    def _preprocess_image(self, image: Image.Image) -> Image.Image:
-        """Preprocess image for e-paper display.
-        
-        Resizes image to display dimensions and converts to grayscale.
-        
-        Args:
-            image: Original PIL Image object.
-            
-        Returns:
-            Processed PIL Image ready for display.
-        """
-        processed_image = image
-
-        # Resize image if necessary
-        if image.size != (self.config.width, self.config.height):
-            # Handle LANCZOS resampling which might have different names in different PIL versions
-            resampling = getattr(Image, "LANCZOS", getattr(Image, "ANTIALIAS", 1))
-            processed_image = image.resize((self.config.width, self.config.height), resampling)
-
-        # Convert to grayscale if not already
-        if processed_image.mode != "L":
-            processed_image = processed_image.convert("L")
-
-        return processed_image
-
-    def _should_update_display(self, processed_image: Image.Image) -> bool:
-        """Determine if display should be updated and perform the update.
-        
-        Handles both partial and full refresh strategies.
-        
-        Args:
-            processed_image: Preprocessed image ready for display.
-            
-        Returns:
-            True if display was updated, False otherwise.
-        """
-        if self.config.partial_refresh and self._last_image is not None:
-            return self._handle_partial_refresh(processed_image)
-        else:
-            return self._handle_full_refresh(processed_image)
-
-    def _handle_partial_refresh(self, processed_image: Image.Image) -> bool:
-        """Handle partial refresh logic.
-        
-        Args:
-            processed_image: Image to display.
-            
-        Returns:
-            True if display was updated, False if no update needed.
-        """
-        if self._last_image is None:
-            # Should not happen due to calling logic, but handle gracefully
-            return self._handle_full_refresh(processed_image)
-            
-        # Calculate the bounding box of differences
-        bbox = self._calculate_diff_bbox(self._last_image, processed_image)
-
-        if bbox:
-            # Display the image with partial refresh
-            if self._display:
-                self._display.display_partial(processed_image, bbox)
-            return True
-        
-        # No significant difference, no need to update
-        return False
-
-    def _handle_full_refresh(self, processed_image: Image.Image) -> bool:
-        """Handle full refresh logic.
-        
-        Args:
-            processed_image: Image to display.
-            
-        Returns:
-            True if display was updated.
-        """
-        if self._display:
-            self._display.display(processed_image)
-        return True
-
-    def _update_last_image(self, new_image: Image.Image) -> None:
-        """Update the stored last image reference.
-        
-        Handles cleanup of previous image.
-        
-        Args:
-            new_image: New image to store as last displayed.
-        """
-        # Clean up old image before storing new one
-        if self._last_image is not None:
-            self._last_image.close()
-
-        # Save the current image for future partial refreshes
-        self._last_image = new_image
-
-    def _get_bbox_dimensions(
-        self, non_zero: tuple[list[int], list[int]], diff_shape: tuple[int, int]
-    ) -> tuple[int, int, int, int] | None:
-        """Calculate the dimensions of the bounding box for partial refresh.
-
-        Takes the non-zero pixel positions from the difference image and
-        calculates a bounding box that contains all changed pixels, with
-        a margin to ensure smooth updates. This is used during partial refresh
-        to determine which section of the display needs to be updated.
-
-        The function adds a margin (defined by DISPLAY_MARGIN constant) around
-        the detected changes to ensure a clean update with no artifacts, while
-        keeping the refresh area as small as possible to save power.
+    def display_text(self, title: str, message: str) -> None:
+        """Display a text message on the display.
 
         Args:
-            non_zero: Tuple of arrays with non-zero pixel indices (rows, columns)
-            diff_shape: Shape of the difference array (height, width)
-
-        Returns:
-            Bounding box as (left, top, right, bottom) or None if calculation fails
-        """
-        np = _import_numpy()
-        if not np:
-            return None
-
-        left = max(0, int(np.min(non_zero[1])) - DISPLAY_MARGIN)  # Add margin
-        top = max(0, int(np.min(non_zero[0])) - DISPLAY_MARGIN)
-        right = min(int(diff_shape[1]), int(np.max(non_zero[1])) + DISPLAY_MARGIN)
-        bottom = min(int(diff_shape[0]), int(np.max(non_zero[0])) + DISPLAY_MARGIN)
-
-        return (left, top, right, bottom)
-
-    def _calculate_diff_bbox(
-        self, old_image: Image.Image, new_image: Image.Image
-    ) -> tuple[int, int, int, int] | None:
-        """Calculate the bounding box of differences between two images.
-
-        Compares the previous and new images to determine which areas have changed
-        significantly. Uses configurable thresholds that adapt based on battery status
-        to optimize power usage.
-
-        The algorithm works by:
-        1. Converting images to NumPy arrays
-        2. Calculating absolute difference between pixel values
-        3. Finding pixels that exceed the difference threshold
-        4. Checking if enough pixels have changed to warrant an update
-        5. Computing a bounding box around the changed areas
-
-        This approach significantly reduces power consumption by only updating
-        the portions of the display that have actually changed, which is especially
-        important for battery-powered operation.
-
-        Args:
-            old_image: Previously displayed image
-            new_image: New image to be displayed
-
-        Returns:
-            Tuple of (left, top, right, bottom) defining the update region, or
-            None if no significant differences exist or the calculation fails
+            title: Title text
+            message: Main message text
         """
         try:
-            np = _import_numpy()
-            if not np:
-                return None
-
-            # Convert to numpy arrays
-            old_array = np.array(old_image)
-            new_array = np.array(new_image)
-
-            # Calculate difference
-            diff = np.abs(old_array.astype(np.int16) - new_array.astype(np.int16))
-
-            # Get the appropriate threshold based on battery status
-            pixel_threshold = self._get_pixel_diff_threshold()
-            min_changed_pixels = self._get_min_changed_pixels()
-
-            # If max difference is below threshold, return None
-            max_diff = np.max(diff)
-            if max_diff < pixel_threshold:
-                # Clean up arrays
-                del old_array, new_array, diff
-                return None
-
-            # Find non-zero positions
-            non_zero = np.where(diff > pixel_threshold)
-
-            # If insufficient pixels have changed, return None
-            if len(non_zero[0]) < min_changed_pixels:
-                # Clean up arrays
-                del old_array, new_array, diff
-                return None
-
-            # Calculate bounding box
-            bbox = self._get_bbox_dimensions(non_zero, diff.shape)
-
-            # Clean up arrays
-            del old_array, new_array, diff
-
-            return bbox
+            # Generate text image
+            image = self.text_renderer.render_text_image(title, message)
+            
+            # Display it
+            self.display_pil_image(image)
+            
         except Exception as e:
-            print(f"Error calculating diff bbox: {e}")
-            return None
+            print(f"Error displaying text: {e}")
+            print(f"Message: {title} - {message}")
 
-    def _get_pixel_diff_threshold(self) -> int:
-        """Get the pixel difference threshold based on battery status.
-
-        Implements battery-aware thresholds to reduce refresh frequency
-        when battery is low, extending overall battery life. The threshold
-        determines how different a pixel must be before it's considered "changed".
-
-        Higher thresholds mean fewer pixels are considered different, reducing
-        refresh frequency at the cost of potential minor display inconsistencies.
-
-        Threshold values are determined by battery status:
-        - While charging: standard threshold from config
-        - Critical battery (≤10%): highest threshold to minimize refreshes
-        - Low battery (≤20%): elevated threshold to reduce refreshes
-        - Normal battery: standard threshold from config
+    def update_battery_status(self, battery_status: BatteryStatus) -> None:
+        """Update battery status for threshold management.
 
         Args:
-            None
-
-        Returns:
-            int: The threshold value to use for pixel differences (0-255)
-                Higher values mean larger differences are required to trigger refresh
+            battery_status: Current battery status
         """
-        # If battery-aware thresholds are disabled, return the default threshold
-        if not self.config.battery_aware_threshold or self._current_battery_status is None:
-            return self.config.pixel_diff_threshold
-
-        # Use appropriate threshold based on battery status
-        battery = self._current_battery_status
-
-        match (battery.state, battery.level):
-            case (BatteryState.CHARGING, _):
-                # When charging, use the standard threshold
-                return self.config.pixel_diff_threshold
-            case (BatteryState.DISCHARGING, level) if level <= 10:
-                # Critical battery (10% or less and discharging)
-                return self.config.pixel_diff_threshold_critical_battery
-            case (BatteryState.DISCHARGING, level) if level <= 20:
-                # Low battery (20% or less and discharging)
-                return self.config.pixel_diff_threshold_low_battery
-            case _:
-                # Normal battery or other states
-                return self.config.pixel_diff_threshold
-
-    def _get_min_changed_pixels(self) -> int:
-        """Get the minimum number of changed pixels required based on battery status.
-
-        Implements battery-aware thresholds to ensure refreshes only occur when
-        there are enough changed pixels to warrant an update, which helps reduce
-        power consumption when battery is low.
-
-        This method works together with _get_pixel_diff_threshold() to determine
-        when a display refresh should occur:
-        1. First, pixels must exceed the difference threshold to be considered "changed"
-        2. Then, the total count of changed pixels must exceed the minimum returned here
-
-        Minimum changed pixel counts are determined by battery status:
-        - While charging: standard minimum from config
-        - Critical battery (≤10%): highest minimum to minimize refreshes
-        - Low battery (≤20%): elevated minimum to reduce refreshes
-        - Normal battery: standard minimum from config
-
-        Args:
-            None
-
-        Returns:
-            int: The minimum number of changed pixels required to trigger a refresh.
-                Higher values mean more content must change before refresh occurs.
-        """
-        # If battery-aware thresholds are disabled, return the default threshold
-        if not self.config.battery_aware_threshold or self._current_battery_status is None:
-            return self.config.min_changed_pixels
-
-        # Use appropriate threshold based on battery status
-        battery = self._current_battery_status
-
-        match (battery.state, battery.level):
-            case (BatteryState.CHARGING, _):
-                # When charging, use the standard threshold
-                return self.config.min_changed_pixels
-            case (BatteryState.DISCHARGING, level) if level <= 10:
-                # Critical battery (10% or less and discharging)
-                return self.config.min_changed_pixels_critical_battery
-            case (BatteryState.DISCHARGING, level) if level <= 20:
-                # Low battery (20% or less and discharging)
-                return self.config.min_changed_pixels_low_battery
-            case _:
-                # Normal battery or other states
-                return self.config.min_changed_pixels
+        self.battery_threshold_manager.update_battery_status(battery_status)
 
     def sleep(self) -> None:
-        """Put the display to sleep (deep sleep mode) to conserve power.
-
-        When in deep sleep mode, the display consumes minimal power but requires
-        a full refresh when waking up again. This is useful for periods when
-        the display will not be updated for a while.
-        """
+        """Put the display into deep sleep mode."""
         if self._initialized and self._display and hasattr(self._display, "epd"):
             try:
                 self._display.epd.sleep()
             except AttributeError:
-                # If sleep not available, we'll just leave it as is
                 pass
 
-    def display_text(self, title: str, message: str) -> None:
-        """Display a text message on the e-paper display.
-
-        Creates a simple text image with the given title and message
-        for displaying alerts or status messages. Handles font loading,
-        text positioning, and rendering automatically.
-
-        Args:
-            title: The title/heading text to display at the top
-            message: The main message text to display below the title
-
-        Raises:
-            Exception: If there is an error during text rendering or display
-        """
-        try:
-            from PIL import Image, ImageDraw, ImageFont
-
-            # Create a blank white image
-            image = Image.new("L", (self.config.width, self.config.height), 255)
-            draw = ImageDraw.Draw(image)
-
-            # Determine font sizes based on display size
-            title_font_size = max(
-                TITLE_FONT_SIZE_BASE,
-                min(TITLE_FONT_SIZE_MAX, self.config.width // FONT_SIZE_DIVIDER),
-            )
-            message_font_size = max(
-                MESSAGE_FONT_SIZE_BASE,
-                min(MESSAGE_FONT_SIZE_MAX, self.config.width // FONT_SIZE_MESSAGE_DIVIDER),
-            )
-
-            # Try to load a font, fall back to default if not available
-            try:
-                title_font = ImageFont.truetype(DEFAULT_TITLE_FONT, title_font_size)
-                message_font = ImageFont.truetype(DEFAULT_MESSAGE_FONT, message_font_size)
-            except OSError:
-                # Fall back to default font
-                title_font = ImageFont.load_default()
-                message_font = ImageFont.load_default()
-
-            # Calculate positions
-            title_bbox = draw.textbbox((0, 0), title, font=title_font)
-            title_width = title_bbox[2] - title_bbox[0]
-            title_x = (self.config.width - title_width) // 2
-            title_y = self.config.height // TITLE_Y_POSITION_FACTOR
-
-            message_bbox = draw.textbbox((0, 0), message, font=message_font)
-            message_width = message_bbox[2] - message_bbox[0]
-            message_x = (self.config.width - message_width) // 2
-            message_y = self.config.height // MESSAGE_Y_POSITION_FACTOR
-
-            # Draw the text
-            draw.text((title_x, title_y), title, font=title_font, fill=0)
-            draw.text((message_x, message_y), message, font=message_font, fill=0)
-
-            # Display the image
-            self.display_pil_image(image)
-
-        except Exception as e:
-            print(f"Error displaying text: {e}")
-            # If we can't create a proper image, at least log the message
-            print(f"Message: {title} - {message}")
-
     def close(self) -> None:
-        """Close and clean up the display resources.
-
-        Puts the display into sleep mode and releases any resources.
-        Should be called when the application is shutting down.
-        """
+        """Close and clean up display resources."""
         self.sleep()
-        # Clean up last image if it exists
-        if self._last_image is not None:
-            self._last_image.close()
-            self._last_image = None
+        self.partial_refresh_manager.clear_last_image()
         self._initialized = False
         self._display = None
