@@ -55,9 +55,10 @@ class CodeQualityTracker:
         Returns:
             Dictionary with the command output
         """
-        cmd = ["radon", metric_type, str(self.src_path), "-j"]
+        cmd = ["radon", metric_type, str(self.src_path)]
         if extra_args:
             cmd.extend(extra_args)
+        cmd.append("-j")
 
         try:
             result = subprocess.run(  # noqa: S603
@@ -80,7 +81,7 @@ class CodeQualityTracker:
         timestamp = datetime.now().isoformat()
 
         print("Collecting Cyclomatic Complexity...")
-        cc_data = self.run_radon_command("cc", ["-a", "-nc"])
+        cc_data = self.run_radon_command("cc", ["-a"])
 
         print("Collecting Maintainability Index...")
         mi_data = self.run_radon_command("mi", [])
