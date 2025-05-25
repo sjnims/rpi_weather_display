@@ -72,11 +72,14 @@ Priority is indicated as:
   - Created 6 helper methods: _get_template_data, _add_weather_icons, _add_daily_forecast_icons, _add_hourly_forecast_icons, _add_wind_icons, _get_moon_icon
   - Fixed weather models to correctly match OpenWeatherMap API structure
   - All tests passing and preview functionality confirmed working
-- [ ] 🔴 2.5.3 Refactor battery_monitor.py get_battery_status method (D-rated, CC: 22) [PLANNED]
+- [x] 🔴 2.5.3 Refactor battery_monitor.py get_battery_status method (D-rated, CC: 22) [COMPLETED 2025-05-25]
   - NEW: Emerged as high complexity after power_manager modularization
   - Break down battery status determination logic
   - Extract voltage-based calculations into separate methods
   - Simplify nested conditionals for different battery states
+  - NOTE: Successfully reduced complexity from CC: 22 to below 10 (no longer in high complexity list)
+  - Extracted 6 helper methods: _get_development_battery_status, _get_default_battery_status, _extract_pijuice_value, _get_pijuice_data, _determine_battery_state, _update_battery_history
+  - All tests passing and functionality preserved
 - [ ] 🔴 2.5.4 Simplify renderer._get_daily_max_uvi method (C-rated, CC: 19) [PLANNED]
   - Extract cache handling logic
   - Separate UVI calculation from persistence logic
@@ -293,13 +296,12 @@ Priority is indicated as:
 Based on the code complexity analysis, the following tasks should be prioritized:
 
 **Code Quality Metrics Summary (Updated 2025-05-25):**
-- Average Complexity: 14.88 (-1.24 improvement from baseline) - Good progress!
+- Average Complexity: 13.86 (-2.26 improvement from baseline) - Excellent progress!
 - Complex Functions (E-F): 0 - Good, no extremely complex functions
 - Lowest Maintainability: All files now above 20 (maintained!)
-- Average Maintainability: 68.06/100 - Good overall maintainability
+- Average Maintainability: 68.14/100 - Good overall maintainability
 - Highest Complexity Methods:
-  - battery_monitor.get_battery_status: CC 22 (D rating) - Currently highest complexity
-  - renderer._get_daily_max_uvi: CC 19 (C rating) - Increased from CC 12
+  - renderer._get_daily_max_uvi: CC 19 (C rating) - Now highest complexity
   - display.display_pil_image: CC 15 (C rating)
   - renderer._prepare_time_data: CC 14 (C rating)
   - network.set_wifi_power_save_mode: CC 13 (C rating)
@@ -308,22 +310,24 @@ Based on the code complexity analysis, the following tasks should be prioritized
   - api.get_weather_data: CC 11 (C rating)
 - Successfully Refactored:
   - renderer.generate_html: CC 27 → 5 (D → A rating) - 81% reduction!
+  - battery_monitor.get_battery_status: CC 22 → <10 (D → A/B rating) - No longer in high complexity list!
   - power_manager: Modularized and no longer in high complexity list
-- Total Source Lines: 3,974 (+35)
-- Comment Ratio: 22.42% - Good documentation coverage
+- Total Source Lines: 3,977 (+57 from baseline)
+- Comment Ratio: 22.43% - Good documentation coverage
 
 *Complexity Ratings: A (simple) → B → C (moderate) → D (complex) → E → F (very complex)*
 
 ### Immediate Priority (Next Sprint)
-1. **Phase 2.5.3** - Refactor battery_monitor.py get_battery_status method
-   - Complexity rating: D (CC: 22) - now highest complexity in codebase
-   - Created during power_manager modularization
-   - Needs to be broken down into smaller, focused methods
-
-2. **Phase 2.5.4** - Simplify renderer._get_daily_max_uvi
-   - Complexity rating: C (CC: 19) - increased complexity after generate_html refactoring
+1. **Phase 2.5.4** - Simplify renderer._get_daily_max_uvi
+   - Complexity rating: C (CC: 19) - now highest complexity in codebase
    - Mixed concerns (calculation + caching + persistence)
-   - Cache handling logic became more complex with type guards
+   - Cache handling logic became more complex with type guards after generate_html refactoring
+
+2. **Phase 2.5.6** - Refactor other C-rated complex methods
+   - display.py: display_pil_image (CC: 15)
+   - renderer._prepare_time_data (CC: 14) - emerged after generate_html refactoring
+   - network.py: set_wifi_power_save_mode (CC: 13)
+   - client/main.py: run method (CC: 13)
 
 ### Short-term Priority (Q1 2025)
 1. **Phase 2.5.6** - Refactor other C-rated complex methods
@@ -345,10 +349,10 @@ Based on the code complexity analysis, the following tasks should be prioritized
 | Phase | Not Started | In Progress | Completed | Total |
 |-------|------------|-------------|-----------|-------|
 | 1     | 0          | 0           | 14        | 14    |
-| 2     | 15         | 0           | 21        | 36    |
+| 2     | 14         | 0           | 22        | 36    |
 | 3     | 12         | 0           | 0         | 12    |
 | 4     | 12         | 0           | 0         | 12    |
 | 5     | 17         | 0           | 2         | 19    |
 | 6     | 21         | 0           | 0         | 21    |
 | 7     | 18         | 0           | 0         | 18    |
-| Total | 95         | 0           | 37        | 132   |
+| Total | 94         | 0           | 38        | 132   |

@@ -31,7 +31,7 @@ from rpi_weather_display.utils.battery_utils import (
 )
 
 if TYPE_CHECKING:
-    from rpi_weather_display.utils.pijuice_adapter import PiJuiceAdapter, PiJuiceStatusData
+    from rpi_weather_display.utils.pijuice_adapter import PiJuiceAdapter, PiJuiceResponse
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +52,164 @@ class BatteryMonitor:
         self._current_drain_rate = DEFAULT_DRAIN_RATE
         self._last_battery_update: datetime | None = None
 
+    def _get_development_battery_status(self) -> BatteryStatus:
+        """Get mock battery status for development mode.
+        
+        Returns:
+            Mock battery status with predefined values
+        """
+        status = BatteryStatus(
+            level=MOCK_BATTERY_LEVEL,
+            voltage=MOCK_BATTERY_VOLTAGE,
+            current=MOCK_BATTERY_CURRENT,
+            temperature=MOCK_BATTERY_TEMPERATURE,
+            state=BatteryState.UNKNOWN,
+            timestamp=datetime.now(),
+        )
+        logger.info(
+            "Development mode: Using mock battery status", extra={"battery_level": status.level}
+        )
+        return status
+    
+    def _get_default_battery_status(self) -> BatteryStatus:
+        """Get default battery status when PiJuice is not available.
+        
+        Returns:
+            Battery status with zero/unknown values
+        """
+        logger.warning("PiJuice not available, returning unknown battery status")
+        return BatteryStatus(
+            level=0,
+            voltage=0.0,
+            current=0.0,
+            temperature=0.0,
+            state=BatteryState.UNKNOWN,
+            timestamp=datetime.now(),
+        )
+    
+    def _extract_pijuice_value(
+        self, response: "PiJuiceResponse", default: float = 0.0, divisor: float = 1.0
+    ) -> float:
+        """Extract numeric value from PiJuice response.
+        
+        Args:
+            response: PiJuice API response dict
+            default: Default value if extraction fails
+            divisor: Divisor to apply to the value (e.g., 1000 for mV to V conversion)
+            
+        Returns:
+            Extracted float value or default
+        """
+        if response.get("error") == PIJUICE_STATUS_OK:
+            data = response.get("data")
+            if isinstance(data, int | float):
+                return float(data) / divisor
+        return default
+    
+    def _get_pijuice_data(self) -> tuple[dict[str, Any], int, float, float, float]:
+        """Retrieve all data from PiJuice hardware.
+        
+        Returns:
+            Tuple of (status_data, charge_level, voltage, current, temperature)
+        """
+        # Get all responses from PiJuice
+        if self.pijuice is None:
+            raise RuntimeError("PiJuice adapter is not available")
+        status_response = self.pijuice.get_status()
+        charge_response = self.pijuice.get_charge_level()
+        voltage_response = self.pijuice.get_battery_voltage()
+        current_response = self.pijuice.get_battery_current()
+        temp_response = self.pijuice.get_battery_temperature()
+        
+        # Extract status data
+        status_data = (
+            dict(status_response["data"]) 
+            if status_response.get("error") == PIJUICE_STATUS_OK 
+            else {}
+        )
+        
+        # Extract numeric values
+        charge_level = int(self._extract_pijuice_value(charge_response))
+        voltage = self._extract_pijuice_value(voltage_response, divisor=1000.0)  # mV to V
+        current = self._extract_pijuice_value(current_response)
+        temperature = self._extract_pijuice_value(temp_response)
+        
+        return status_data, charge_level, voltage, current, temperature
+    
+    def _determine_battery_state(
+        self, status_data: dict[str, Any], charge_level: int
+    ) -> BatteryState:
+        """Determine battery state from PiJuice status data.
+        
+        Args:
+            status_data: PiJuice status data dictionary
+            charge_level: Current battery charge level (0-100)
+            
+        Returns:
+            Determined battery state
+        """
+        battery_status_str = str(status_data.get("battery", "UNKNOWN"))
+        power_input = str(status_data.get("powerInput", "UNKNOWN"))
+        is_fault = bool(status_data.get("isFault", False))
+        
+        # Log fault conditions
+        if is_fault:
+            logger.warning(
+                "PiJuice fault detected",
+                extra={
+                    "battery_state": battery_status_str,
+                    "power_input": power_input,
+                    "io_voltage": str(status_data.get("powerInput5vIo", "UNKNOWN")),
+                    "charge_level": charge_level,
+                },
+            )
+        
+        # Special case: battery might be fully charged
+        if battery_status_str == "NORMAL" and power_input == "PRESENT" and charge_level >= 95:
+            logger.debug(
+                "Battery likely fully charged (power present, high charge level)",
+                extra={"charge_level": charge_level, "power_input": power_input},
+            )
+            return BatteryState.CHARGING
+        
+        # Log power input but battery not charging
+        if power_input in ["PRESENT", "WEAK"] and battery_status_str not in [
+            "CHARGING_FROM_IN",
+            "CHARGING_FROM_5V_IO",
+        ]:
+            logger.debug(
+                "Power input detected but battery not charging",
+                extra={
+                    "power_input": power_input,
+                    "battery_state": battery_status_str,
+                    "charge_level": charge_level,
+                },
+            )
+        
+        return BatteryState.from_string(battery_status_str)
+    
+    def _update_battery_history(self, status: BatteryStatus) -> None:
+        """Update battery history and calculate drain rate.
+        
+        Args:
+            status: Current battery status
+        """
+        if status.level <= 0:
+            return
+            
+        self._battery_history.append(status)
+        
+        # Calculate drain rate if we have enough history
+        if len(self._battery_history) >= 2:
+            drain_rate = calculate_drain_rate(list(self._battery_history))
+            if drain_rate is not None:
+                self._current_drain_rate = (
+                    DRAIN_WEIGHT_NEW * drain_rate
+                    + DRAIN_WEIGHT_PREV * self._current_drain_rate
+                )
+        
+        self._last_battery_update = datetime.now()
+    
     def get_battery_status(self) -> BatteryStatus:
         """Get comprehensive battery status information.
 
@@ -59,116 +217,19 @@ class BatteryMonitor:
             Battery status with charge level, state, voltage, current, and health metrics
         """
         if self.config.development_mode:
-            status = BatteryStatus(
-                level=MOCK_BATTERY_LEVEL,
-                voltage=MOCK_BATTERY_VOLTAGE,
-                current=MOCK_BATTERY_CURRENT,
-                temperature=MOCK_BATTERY_TEMPERATURE,
-                state=BatteryState.UNKNOWN,
-                timestamp=datetime.now(),
-            )
-            logger.info(
-                "Development mode: Using mock battery status", extra={"battery_level": status.level}
-            )
-            return status
+            return self._get_development_battery_status()
 
         if not self.pijuice:
-            logger.warning("PiJuice not available, returning unknown battery status")
-            return BatteryStatus(
-                level=0,
-                voltage=0.0,
-                current=0.0,
-                temperature=0.0,
-                state=BatteryState.UNKNOWN,
-                timestamp=datetime.now(),
-            )
+            return self._get_default_battery_status()
 
         try:
-            # Get status from PiJuice
-            status_response = self.pijuice.get_status()
-            charge_response = self.pijuice.get_charge_level()
-            voltage_response = self.pijuice.get_battery_voltage()
-            current_response = self.pijuice.get_battery_current()
-            temp_response = self.pijuice.get_battery_temperature()
+            # Get all data from PiJuice
+            status_data, charge_level, voltage, current, temperature = self._get_pijuice_data()
+            
+            # Determine battery state
+            state = self._determine_battery_state(status_data, charge_level)
 
-            # Extract values with type assertion
-            status_data: PiJuiceStatusData | dict[str, Any] = (
-                status_response["data"] if status_response["error"] == PIJUICE_STATUS_OK else {}
-            )
-            charge_level = (
-                int(charge_response["data"])
-                if charge_response["error"] == PIJUICE_STATUS_OK
-                and isinstance(charge_response["data"], int | float)
-                else 0
-            )
-            voltage = (
-                float(voltage_response["data"]) / 1000.0
-                if voltage_response["error"] == PIJUICE_STATUS_OK
-                and isinstance(voltage_response["data"], int | float)
-                else 0.0
-            )
-            current = (
-                float(current_response["data"])
-                if current_response["error"] == PIJUICE_STATUS_OK
-                and isinstance(current_response["data"], int | float)
-                else 0.0
-            )
-            temperature = (
-                float(temp_response["data"])
-                if temp_response["error"] == PIJUICE_STATUS_OK
-                and isinstance(temp_response["data"], int | float)
-                else 0.0
-            )
-
-            # Determine battery state from status string
-            battery_status_str = str(status_data.get("battery", "UNKNOWN"))
-
-            # Get power and fault info
-            power_input = str(status_data.get("powerInput", "UNKNOWN"))
-            io_voltage = str(status_data.get("powerInput5vIo", "UNKNOWN"))
-            is_fault = bool(status_data.get("isFault", False))
-
-            # Log fault conditions
-            if is_fault:
-                logger.warning(
-                    "PiJuice fault detected",
-                    extra={
-                        "battery_state": battery_status_str,
-                        "power_input": power_input,
-                        "io_voltage": io_voltage,
-                        "charge_level": charge_level,
-                    },
-                )
-
-            # Use power input to improve state detection
-            if battery_status_str == "NORMAL" and power_input == "PRESENT":
-                # Battery might be fully charged if power is present but not charging
-                if charge_level >= 95:
-                    state = BatteryState.CHARGING
-                    logger.debug(
-                        "Battery likely fully charged (power present, high charge level)",
-                        extra={"charge_level": charge_level, "power_input": power_input},
-                    )
-                else:
-                    state = BatteryState.from_string(battery_status_str)
-            elif power_input in ["PRESENT", "WEAK"] and battery_status_str not in [
-                "CHARGING_FROM_IN",
-                "CHARGING_FROM_5V_IO",
-            ]:
-                # External power present but battery not charging - log for diagnostics
-                logger.debug(
-                    "Power input detected but battery not charging",
-                    extra={
-                        "power_input": power_input,
-                        "battery_state": battery_status_str,
-                        "charge_level": charge_level,
-                    },
-                )
-                state = BatteryState.from_string(battery_status_str)
-            else:
-                state = BatteryState.from_string(battery_status_str)
-
-            # Create status object first
+            # Create status object
             status = BatteryStatus(
                 level=charge_level,
                 voltage=voltage,
@@ -179,24 +240,16 @@ class BatteryMonitor:
             )
 
             # Store additional diagnostic info as private attributes
+            power_input = str(status_data.get("powerInput", "UNKNOWN"))
+            io_voltage = str(status_data.get("powerInput5vIo", "UNKNOWN"))
+            is_fault = bool(status_data.get("isFault", False))
+            
             status._pijuice_fault = is_fault  # type: ignore[attr-defined]
             status._power_input = power_input  # type: ignore[attr-defined]
             status._io_voltage = io_voltage  # type: ignore[attr-defined]
 
-            # Update battery history and calculate drain rate
-            if charge_level > 0:
-                self._battery_history.append(status)
-
-                # Calculate drain rate
-                if len(self._battery_history) >= 2:
-                    drain_rate = calculate_drain_rate(list(self._battery_history))
-                    if drain_rate is not None:
-                        self._current_drain_rate = (
-                            DRAIN_WEIGHT_NEW * drain_rate
-                            + DRAIN_WEIGHT_PREV * self._current_drain_rate
-                        )
-
-                self._last_battery_update = datetime.now()
+            # Update battery history and drain rate
+            self._update_battery_history(status)
 
             logger.info(
                 "Battery status retrieved",
