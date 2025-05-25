@@ -71,6 +71,7 @@ def mock_pijuice() -> MagicMock:
     return adapter
 
 
+@pytest.mark.usefixtures("mock_normal_hours_time")
 class TestPowerStateController:
     """Test cases for PowerStateController class."""
 
@@ -146,54 +147,60 @@ class TestPowerStateController:
         self, mock_config: AppConfig, mock_battery_monitor: MagicMock
     ) -> None:
         """Test power state when battery is critical."""
-        mock_battery_monitor.is_battery_critical.return_value = True
+        # Mock datetime to be during normal hours (not quiet hours)
+        with patch("rpi_weather_display.utils.power_state_controller.is_quiet_hours", return_value=False):
+            mock_battery_monitor.is_battery_critical.return_value = True
 
-        controller = PowerStateController(mock_config, mock_battery_monitor)
-        controller.initialize()
-        state = controller.update_power_state()
-        assert state == PowerState.CRITICAL
+            controller = PowerStateController(mock_config, mock_battery_monitor)
+            controller.initialize()
+            state = controller.update_power_state()
+            assert state == PowerState.CRITICAL
 
     def test_update_power_state_conserving(
         self, mock_config: AppConfig, mock_battery_monitor: MagicMock
     ) -> None:
         """Test power state when conserving power."""
-        mock_battery_monitor.should_conserve_power.return_value = True
+        # Mock datetime to be during normal hours (not quiet hours)
+        with patch("rpi_weather_display.utils.power_state_controller.is_quiet_hours", return_value=False):
+            mock_battery_monitor.should_conserve_power.return_value = True
 
-        controller = PowerStateController(mock_config, mock_battery_monitor)
-        controller.initialize()
-        state = controller.update_power_state()
-        assert state == PowerState.CONSERVING
+            controller = PowerStateController(mock_config, mock_battery_monitor)
+            controller.initialize()
+            state = controller.update_power_state()
+            assert state == PowerState.CONSERVING
 
     def test_state_change_callbacks(
         self, mock_config: AppConfig, mock_battery_monitor: MagicMock
     ) -> None:
         """Test state change callback mechanism."""
-        controller = PowerStateController(mock_config, mock_battery_monitor)
-        controller.initialize()
+        # Mock datetime to be during normal hours (not quiet hours)
+        with patch("rpi_weather_display.utils.power_state_controller.is_quiet_hours", return_value=False):
+            controller = PowerStateController(mock_config, mock_battery_monitor)
+            controller.initialize()
 
-        callback_called = False
-        old_state_received = None
-        new_state_received = None
+            callback_called = False
+            old_state_received = None
+            new_state_received = None
 
-        def test_callback(old_state: PowerState, new_state: PowerState) -> None:
-            nonlocal callback_called, old_state_received, new_state_received
-            callback_called = True
-            old_state_received = old_state
-            new_state_received = new_state
+            def test_callback(old_state: PowerState, new_state: PowerState) -> None:
+                nonlocal callback_called, old_state_received, new_state_received
+                callback_called = True
+                old_state_received = old_state
+                new_state_received = new_state
 
-        callback_obj = controller.register_state_change_callback(test_callback)
+            callback_obj = controller.register_state_change_callback(test_callback)
 
-        # Force a state change
-        controller._current_state = PowerState.NORMAL
-        mock_battery_monitor.is_battery_critical.return_value = True
-        controller.update_power_state()
+            # Force a state change
+            controller._current_state = PowerState.NORMAL
+            mock_battery_monitor.is_battery_critical.return_value = True
+            controller.update_power_state()
 
-        assert callback_called
-        assert old_state_received == PowerState.NORMAL
-        assert new_state_received == PowerState.CRITICAL
+            assert callback_called
+            assert old_state_received == PowerState.NORMAL
+            assert new_state_received == PowerState.CRITICAL
 
-        # Unregister callback
-        controller.unregister_state_change_callback(callback_obj)
+            # Unregister callback
+            controller.unregister_state_change_callback(callback_obj)
 
     def test_should_refresh_display_quiet_hours(
         self, mock_config: AppConfig, mock_battery_monitor: MagicMock
@@ -216,24 +223,27 @@ class TestPowerStateController:
         assert controller.should_refresh_display()
 
     def test_should_refresh_display_interval(
-        self, mock_config: AppConfig, mock_battery_monitor: MagicMock
+        self, mock_config: AppConfig, mock_battery_monitor: MagicMock, mock_normal_hours_time: MagicMock
     ) -> None:
         """Test display refresh interval enforcement."""
-        controller = PowerStateController(mock_config, mock_battery_monitor)
-        controller.initialize()
+        # Mock datetime to be during normal hours (not quiet hours)
+        with patch("rpi_weather_display.utils.power_state_controller.is_quiet_hours", return_value=False):
+            controller = PowerStateController(mock_config, mock_battery_monitor)
+            controller.initialize()
 
-        # First refresh should be allowed
-        assert controller.should_refresh_display()
+            # First refresh should be allowed
+            assert controller.should_refresh_display()
 
-        # Record refresh
-        controller.record_display_refresh()
+            # Record refresh
+            controller.record_display_refresh()
 
-        # Immediate refresh should be blocked
-        assert not controller.should_refresh_display()
+            # Immediate refresh should be blocked
+            assert not controller.should_refresh_display()
 
-        # After interval, refresh should be allowed
-        controller._last_display_refresh = datetime.now() - timedelta(minutes=31)
-        assert controller.should_refresh_display()
+            # After interval, refresh should be allowed
+            # Use the mocked time from the fixture
+            controller._last_display_refresh = mock_normal_hours_time.now.return_value - timedelta(minutes=31)
+            assert controller.should_refresh_display()
 
     def test_should_update_weather_quiet_hours(
         self, mock_config: AppConfig, mock_battery_monitor: MagicMock
@@ -302,12 +312,14 @@ class TestPowerStateController:
         self, mock_config: AppConfig, mock_battery_monitor: MagicMock
     ) -> None:
         """Test sleep time when charging."""
-        controller = PowerStateController(mock_config, mock_battery_monitor)
-        controller.initialize()
-        controller._current_state = PowerState.CHARGING
+        # Mock datetime to be during normal hours (not quiet hours)
+        with patch("rpi_weather_display.utils.power_state_controller.is_quiet_hours", return_value=False):
+            controller = PowerStateController(mock_config, mock_battery_monitor)
+            controller.initialize()
+            controller._current_state = PowerState.CHARGING
 
-        sleep_time = controller.calculate_sleep_time()
-        assert sleep_time <= mock_config.display.refresh_interval_minutes  # Should be reduced
+            sleep_time = controller.calculate_sleep_time()
+            assert sleep_time <= mock_config.display.refresh_interval_minutes  # Should be reduced
 
     def test_can_perform_operation_quiet_hours(
         self, mock_config: AppConfig, mock_battery_monitor: MagicMock
@@ -345,12 +357,14 @@ class TestPowerStateController:
         self, mock_config: AppConfig, mock_battery_monitor: MagicMock
     ) -> None:
         """Test entering low power mode."""
-        controller = PowerStateController(mock_config, mock_battery_monitor)
-        controller.initialize()
-        controller._current_state = PowerState.NORMAL
+        # Mock datetime to be during normal hours (not quiet hours)
+        with patch("rpi_weather_display.utils.power_state_controller.is_quiet_hours", return_value=False):
+            controller = PowerStateController(mock_config, mock_battery_monitor)
+            controller.initialize()
+            controller._current_state = PowerState.NORMAL
 
-        controller.enter_low_power_mode()
-        assert controller._current_state == PowerState.CONSERVING
+            controller.enter_low_power_mode()
+            assert controller._current_state == PowerState.CONSERVING
 
     def test_time_until_quiet_change(
         self, mock_config: AppConfig, mock_battery_monitor: MagicMock
@@ -369,6 +383,7 @@ class TestPowerStateController:
             assert minutes > 0  # Should be positive time until quiet hours start
 
 
+@pytest.mark.usefixtures("mock_normal_hours_time")
 class TestPowerStateControllerCoverage:
     """Additional test cases for complete coverage of PowerStateController."""
 
@@ -399,31 +414,33 @@ class TestPowerStateControllerCoverage:
         self, mock_config: AppConfig, mock_battery_monitor: MagicMock
     ) -> None:
         """Test state change notification when callback raises error."""
-        controller = PowerStateController(mock_config, mock_battery_monitor)
-        controller.initialize()
+        # Mock datetime to be during normal hours (not quiet hours)
+        with patch("rpi_weather_display.utils.power_state_controller.is_quiet_hours", return_value=False):
+            controller = PowerStateController(mock_config, mock_battery_monitor)
+            controller.initialize()
 
-        # Register a callback that raises an error
-        def error_callback(old: PowerState, new: PowerState) -> None:
-            raise ValueError("Test error")
+            # Register a callback that raises an error
+            def error_callback(old: PowerState, new: PowerState) -> None:
+                raise ValueError("Test error")
 
-        controller.register_state_change_callback(error_callback)
+            controller.register_state_change_callback(error_callback)
 
-        # Register a normal callback to ensure it still gets called
-        normal_called = False
+            # Register a normal callback to ensure it still gets called
+            normal_called = False
 
-        def normal_callback(old: PowerState, new: PowerState) -> None:
-            nonlocal normal_called
-            normal_called = True
+            def normal_callback(old: PowerState, new: PowerState) -> None:
+                nonlocal normal_called
+                normal_called = True
 
-        controller.register_state_change_callback(normal_callback)
+            controller.register_state_change_callback(normal_callback)
 
-        # Force a state change
-        controller._current_state = PowerState.NORMAL
-        mock_battery_monitor.is_battery_critical.return_value = True
-        controller.update_power_state()
+            # Force a state change
+            controller._current_state = PowerState.NORMAL
+            mock_battery_monitor.is_battery_critical.return_value = True
+            controller.update_power_state()
 
-        # Normal callback should still have been called despite error in first
-        assert normal_called
+            # Normal callback should still have been called despite error in first
+            assert normal_called
 
     def test_unregister_nonexistent_callback(
         self, mock_config: AppConfig, mock_battery_monitor: MagicMock
@@ -742,23 +759,25 @@ class TestPowerStateControllerCoverage:
         self, mock_config: AppConfig, mock_battery_monitor: MagicMock
     ) -> None:
         """Test all testing helper methods."""
-        controller = PowerStateController(mock_config, mock_battery_monitor)
-        controller.initialize()
-        helper = PowerStateControllerTestHelper()
+        # Mock datetime to be during normal hours (not quiet hours)
+        with patch("rpi_weather_display.utils.power_state_controller.is_quiet_hours", return_value=False):
+            controller = PowerStateController(mock_config, mock_battery_monitor)
+            controller.initialize()
+            helper = PowerStateControllerTestHelper()
 
-        # Test state helpers
-        assert helper.get_internal_state(controller) == PowerState.NORMAL
-        helper.set_internal_state(controller, PowerState.CRITICAL)
-        assert helper.get_internal_state(controller) == PowerState.CRITICAL
+            # Test state helpers
+            assert helper.get_internal_state(controller) == PowerState.NORMAL
+            helper.set_internal_state(controller, PowerState.CRITICAL)
+            assert helper.get_internal_state(controller) == PowerState.CRITICAL
 
-        # Test refresh time helpers
-        assert helper.get_last_refresh(controller) is None
-        test_time = datetime.now()
-        helper.set_last_refresh(controller, test_time)
-        assert helper.get_last_refresh(controller) == test_time
+            # Test refresh time helpers
+            assert helper.get_last_refresh(controller) is None
+            test_time = datetime.now()
+            helper.set_last_refresh(controller, test_time)
+            assert helper.get_last_refresh(controller) == test_time
 
-        # Test update time helpers
-        assert helper.get_last_update(controller) is None
-        test_time2 = datetime.now()
-        helper.set_last_update(controller, test_time2)
-        assert helper.get_last_update(controller) == test_time2
+            # Test update time helpers
+            assert helper.get_last_update(controller) is None
+            test_time2 = datetime.now()
+            helper.set_last_update(controller, test_time2)
+            assert helper.get_last_update(controller) == test_time2

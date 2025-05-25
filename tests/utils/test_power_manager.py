@@ -61,6 +61,7 @@ def power_manager(default_config: AppConfig) -> PowerStateManager:
     return PowerStateManager(default_config)
 
 
+@pytest.mark.usefixtures("mock_normal_hours_time")
 class TestPowerStateManagerPublicInterface:
     """Tests for the public interface of PowerStateManager."""
 
@@ -135,11 +136,16 @@ class TestPowerStateManagerPublicInterface:
 
     def test_enter_low_power_mode(self, power_manager: PowerStateManager) -> None:
         """Test entering low power mode."""
-        power_manager.initialize()
-        power_manager.enter_low_power_mode()
-        # Should change state to at least CONSERVING
-        state = power_manager.get_current_state()
-        assert state in [PowerState.CONSERVING, PowerState.CRITICAL]
+        # Mock datetime to be during normal hours (not quiet hours)
+        with patch("rpi_weather_display.utils.time_utils.datetime") as mock_datetime:
+            mock_datetime.now.return_value = datetime(2024, 5, 25, 14, 0, 0)  # 2 PM
+            mock_datetime.strptime = datetime.strptime
+            
+            power_manager.initialize()
+            power_manager.enter_low_power_mode()
+            # Should change state to at least CONSERVING
+            state = power_manager.get_current_state()
+            assert state in [PowerState.CONSERVING, PowerState.CRITICAL]
 
     def test_shutdown_system_dev_mode(self, power_manager: PowerStateManager) -> None:
         """Test shutdown in development mode."""
@@ -159,24 +165,29 @@ class TestPowerStateManagerPublicInterface:
 
     def test_state_change_callbacks(self, power_manager: PowerStateManager) -> None:
         """Test state change callback registration."""
-        power_manager.initialize()
+        # Mock datetime to be during normal hours (not quiet hours)
+        with patch("rpi_weather_display.utils.time_utils.datetime") as mock_datetime:
+            mock_datetime.now.return_value = datetime(2024, 5, 25, 14, 0, 0)  # 2 PM
+            mock_datetime.strptime = datetime.strptime
+            
+            power_manager.initialize()
 
-        callback_called = False
+            callback_called = False
 
-        def test_callback(old_state: PowerState, new_state: PowerState) -> None:
-            nonlocal callback_called
-            callback_called = True
+            def test_callback(old_state: PowerState, new_state: PowerState) -> None:
+                nonlocal callback_called
+                callback_called = True
 
-        callback_obj = power_manager.register_state_change_callback(test_callback)
-        assert callback_obj is not None
+            callback_obj = power_manager.register_state_change_callback(test_callback)
+            assert callback_obj is not None
 
-        # Force a state change by setting state
-        helper = PowerStateManagerTestHelper()
-        helper.set_internal_state(power_manager, PowerState.CHARGING)
-        power_manager.enter_low_power_mode()  # This should trigger a state change
+            # Force a state change by setting state
+            helper = PowerStateManagerTestHelper()
+            helper.set_internal_state(power_manager, PowerState.CHARGING)
+            power_manager.enter_low_power_mode()  # This should trigger a state change
 
-        # Unregister callback
-        power_manager.unregister_state_change_callback(callback_obj)
+            # Unregister callback
+            power_manager.unregister_state_change_callback(callback_obj)
 
     def test_battery_life_estimation(self, power_manager: PowerStateManager) -> None:
         """Test battery life estimation."""
@@ -198,6 +209,7 @@ class TestPowerStateManagerPublicInterface:
         assert isinstance(config, dict)
 
 
+@pytest.mark.usefixtures("mock_normal_hours_time")
 class TestPowerStateManagerCoverage:
     """Additional tests to improve coverage of PowerStateManager."""
 

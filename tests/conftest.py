@@ -1,6 +1,7 @@
 """Common fixtures for testing the weather display application."""
 
 from collections.abc import Generator
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -125,3 +126,22 @@ def mock_logger() -> MagicMock:
     # Mock the logger name
     logger.name = "test_logger"
     return logger
+
+
+@pytest.fixture()
+def mock_normal_hours_time() -> Generator[MagicMock, None, None]:
+    """Mock datetime to always return a time during normal hours (10:00 AM).
+    
+    This ensures tests have consistent behavior regardless of when they run.
+    Tests that need to test quiet hours behavior should override this fixture.
+    """
+    # Create a fixed datetime during normal hours (10:00 AM)
+    fixed_time = datetime(2024, 5, 25, 10, 0, 0)
+    
+    with patch("rpi_weather_display.utils.power_state_controller.datetime") as mock_datetime:
+        # Mock datetime.now() to return our fixed time
+        mock_datetime.now.return_value = fixed_time
+        # Keep other datetime methods working normally
+        mock_datetime.strptime = datetime.strptime
+        mock_datetime.combine = datetime.combine
+        yield mock_datetime
