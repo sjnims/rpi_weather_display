@@ -83,12 +83,14 @@ class CurrentWeatherResponse(TypedDict):
     snow: dict[str, float] | None  # Optional field, e.g. {"1h": 0.5}
 
 
-class HourlyWeatherResponse(TypedDict):
+class HourlyWeatherResponse(TypedDict, total=False):
     """Hourly weather forecast from API response.
     
     Maps to HourlyWeather Pydantic model.
+    Uses total=False to handle optional fields properly.
     """
 
+    # Required fields
     dt: int
     temp: float
     feels_like: float
@@ -97,12 +99,14 @@ class HourlyWeatherResponse(TypedDict):
     dew_point: float
     uvi: float
     clouds: int
-    visibility: int
     wind_speed: float
     wind_deg: int
-    wind_gust: float | None
     weather: list[WeatherConditionResponse]
     pop: float  # Probability of precipitation (0-1)
+    
+    # Optional fields
+    visibility: int  # Not always provided in hourly forecasts
+    wind_gust: float | None
     rain: dict[str, float] | None  # e.g. {"1h": 0.5}
     snow: dict[str, float] | None  # e.g. {"1h": 0.5}
 

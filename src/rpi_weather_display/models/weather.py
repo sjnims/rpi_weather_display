@@ -144,7 +144,7 @@ class HourlyWeather(BaseModel):
     dew_point: float
     uvi: float
     clouds: int
-    visibility: int
+    visibility: int | None = None  # Not always provided in hourly forecasts
     wind_speed: float
     wind_deg: int
     wind_gust: float | None = None
