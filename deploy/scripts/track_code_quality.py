@@ -10,7 +10,7 @@ import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import TypedDict
 
 try:
     import pandas as pd
@@ -20,6 +20,103 @@ except ImportError:
     pandas_available = False
     pd = None  # type: ignore[assignment]
     print("Warning: pandas not installed. Install with 'pip install pandas' for better reporting.")
+
+
+# Type definitions for radon output
+class CCItem(TypedDict):
+    """Cyclomatic complexity item."""
+    type: str  # 'method', 'function', or 'class'
+    name: str
+    complexity: int
+    rank: str  # 'A', 'B', 'C', 'D', 'E', 'F'
+    lineno: int
+    col_offset: int
+    endline: int
+    classname: str  # Only for methods
+    closures: list[str]  # List of closure names
+
+
+class MIItem(TypedDict):
+    """Maintainability index item."""
+    mi: float
+    rank: str  # 'A', 'B', 'C'
+
+
+class RawMetrics(TypedDict):
+    """Raw code metrics."""
+    loc: int  # Lines of code
+    lloc: int  # Logical lines of code
+    sloc: int  # Source lines of code
+    comments: int  # Comment lines
+    single_comments: int
+    multi: int  # Multi-line strings
+    blank: int  # Blank lines
+
+
+class HalsteadMetrics(TypedDict):
+    """Halstead complexity metrics."""
+    h1: int  # Number of distinct operators
+    h2: int  # Number of distinct operands
+    N1: int  # Total number of operators
+    N2: int  # Total number of operands
+    vocabulary: int  # h1 + h2
+    length: int  # N1 + N2
+    calculated_length: float
+    volume: float
+    difficulty: float
+    effort: float
+    time: float  # Time to implement in seconds
+    bugs: float  # Estimated number of bugs
+
+
+# Type aliases for command outputs
+CCData = dict[str, list[CCItem]]
+MIData = dict[str, MIItem]
+RawData = dict[str, RawMetrics]
+HalData = dict[str, HalsteadMetrics]
+
+
+# Analysis result types
+class CCAnalysis(TypedDict):
+    """Cyclomatic complexity analysis results."""
+    total_functions: int
+    total_complexity: int
+    average_complexity: float
+    complex_functions: list[dict[str, str | int]]
+
+
+class MIAnalysis(TypedDict):
+    """Maintainability index analysis results."""
+    average_maintainability: float
+    total_files: int
+    low_maintainability_files: list[dict[str, str | float]]
+
+
+class RawAnalysis(TypedDict):
+    """Raw metrics analysis results."""
+    total_lines: int
+    source_lines: int
+    comment_lines: int
+    blank_lines: int
+    comment_ratio: float
+
+
+class MetricsData(TypedDict):
+    """Complete metrics data structure."""
+    timestamp: str
+    cyclomatic_complexity: CCData
+    maintainability_index: MIData
+    raw_metrics: RawData
+    halstead_metrics: HalData
+
+
+class TrendItem(TypedDict):
+    """Trend analysis item."""
+    timestamp: str
+    avg_complexity: float
+    avg_maintainability: float
+    total_sloc: int
+    comment_ratio: float
 
 
 class CodeQualityTracker:
@@ -45,7 +142,7 @@ class CodeQualityTracker:
 
     def run_radon_command(
         self, metric_type: str, extra_args: list[str] | None = None
-    ) -> dict[str, Any]:
+    ) -> CCData | MIData | RawData | HalData:
         """Run a radon command and return JSON output.
 
         Args:
@@ -72,7 +169,7 @@ class CodeQualityTracker:
             print(f"Error parsing radon output: {e}")
             return {}
 
-    def collect_metrics(self) -> dict[str, Any]:
+    def collect_metrics(self) -> MetricsData:
         """Collect all metrics from radon.
 
         Returns:
@@ -92,15 +189,15 @@ class CodeQualityTracker:
         print("Collecting Halstead metrics...")
         hal_data = self.run_radon_command("hal")
 
-        return {
-            "timestamp": timestamp,
-            "cyclomatic_complexity": cc_data,
-            "maintainability_index": mi_data,
-            "raw_metrics": raw_data,
-            "halstead_metrics": hal_data,
-        }
+        return MetricsData(
+            timestamp=timestamp,
+            cyclomatic_complexity=cc_data,  # type: ignore[typeddict-item]
+            maintainability_index=mi_data,  # type: ignore[typeddict-item]
+            raw_metrics=raw_data,  # type: ignore[typeddict-item]
+            halstead_metrics=hal_data,  # type: ignore[typeddict-item]
+        )
 
-    def save_metrics(self, metrics: dict[str, Any]) -> Path:
+    def save_metrics(self, metrics: MetricsData) -> Path:
         """Save metrics to a JSON file.
 
         Args:
@@ -118,7 +215,7 @@ class CodeQualityTracker:
         print(f"Metrics saved to: {filename}")
         return filename
 
-    def analyze_complexity(self, cc_data: dict[str, Any]) -> dict[str, Any]:
+    def analyze_complexity(self, cc_data: CCData) -> CCAnalysis:
         """Analyze cyclomatic complexity data.
 
         Args:
@@ -129,7 +226,7 @@ class CodeQualityTracker:
         """
         total_complexity = 0
         total_functions = 0
-        complex_functions: list[dict[str, Any]] = []
+        complex_functions: list[dict[str, str | int]] = []
 
         for file_path, file_data in cc_data.items():
             for item in file_data:
@@ -149,16 +246,16 @@ class CodeQualityTracker:
 
         avg_complexity = total_complexity / total_functions if total_functions > 0 else 0
 
-        return {
-            "total_functions": total_functions,
-            "total_complexity": total_complexity,
-            "average_complexity": round(avg_complexity, 2),
-            "complex_functions": sorted(
-                complex_functions, key=lambda x: x["complexity"], reverse=True
+        return CCAnalysis(
+            total_functions=total_functions,
+            total_complexity=total_complexity,
+            average_complexity=round(avg_complexity, 2),
+            complex_functions=sorted(
+                complex_functions, key=lambda x: x["complexity"], reverse=True  # type: ignore[return-value]
             )[:10],
-        }
+        )
 
-    def analyze_maintainability(self, mi_data: dict[str, Any]) -> dict[str, Any]:
+    def analyze_maintainability(self, mi_data: MIData) -> MIAnalysis:
         """Analyze maintainability index data.
 
         Args:
@@ -168,7 +265,7 @@ class CodeQualityTracker:
             Analysis summary
         """
         mi_scores: list[float] = []
-        low_maintainability: list[dict[str, Any]] = []
+        low_maintainability: list[dict[str, str | float]] = []
 
         for file_path, score in mi_data.items():
             mi_scores.append(score["mi"])
@@ -181,15 +278,19 @@ class CodeQualityTracker:
 
         if mi_scores:
             avg_mi = sum(mi_scores) / len(mi_scores)
-            return {
-                "average_maintainability": round(avg_mi, 2),
-                "total_files": len(mi_scores),
-                "low_maintainability_files": sorted(low_maintainability, key=lambda x: x["score"]),
-            }
+            return MIAnalysis(
+                average_maintainability=round(avg_mi, 2),
+                total_files=len(mi_scores),
+                low_maintainability_files=sorted(low_maintainability, key=lambda x: x["score"]),  # type: ignore[return-value]
+            )
 
-        return {"average_maintainability": 0, "total_files": 0, "low_maintainability_files": []}
+        return MIAnalysis(
+            average_maintainability=0,
+            total_files=0,
+            low_maintainability_files=[]
+        )
 
-    def analyze_raw_metrics(self, raw_data: dict[str, Any]) -> dict[str, Any]:
+    def analyze_raw_metrics(self, raw_data: RawData) -> RawAnalysis:
         """Analyze raw metrics data.
 
         Args:
@@ -211,15 +312,15 @@ class CodeQualityTracker:
 
         comment_ratio = (total_comments / total_sloc * 100) if total_sloc > 0 else 0
 
-        return {
-            "total_lines": total_loc,
-            "source_lines": total_sloc,
-            "comment_lines": total_comments,
-            "blank_lines": total_blank,
-            "comment_ratio": round(comment_ratio, 2),
-        }
+        return RawAnalysis(
+            total_lines=total_loc,
+            source_lines=total_sloc,
+            comment_lines=total_comments,
+            blank_lines=total_blank,
+            comment_ratio=round(comment_ratio, 2),
+        )
 
-    def generate_report(self, metrics: dict[str, Any]) -> str:
+    def generate_report(self, metrics: MetricsData) -> str:
         """Generate a markdown report from metrics.
 
         Args:
@@ -285,7 +386,7 @@ Generated: {metrics['timestamp']}
             print("Pandas not available - skipping trend analysis.")
             return
 
-        trends: list[dict[str, Any]] = []
+        trends: list[TrendItem] = []
 
         for file_path in history_files:
             with open(file_path) as f:
@@ -296,13 +397,13 @@ Generated: {metrics['timestamp']}
             raw_analysis = self.analyze_raw_metrics(data["raw_metrics"])
 
             trends.append(
-                {
-                    "timestamp": data["timestamp"],
-                    "avg_complexity": cc_analysis["average_complexity"],
-                    "avg_maintainability": mi_analysis["average_maintainability"],
-                    "total_sloc": raw_analysis["source_lines"],
-                    "comment_ratio": raw_analysis["comment_ratio"],
-                }
+                TrendItem(
+                    timestamp=data["timestamp"],
+                    avg_complexity=cc_analysis["average_complexity"],
+                    avg_maintainability=mi_analysis["average_maintainability"],
+                    total_sloc=raw_analysis["source_lines"],
+                    comment_ratio=raw_analysis["comment_ratio"],
+                )
             )
 
         df = pd.DataFrame(trends)
