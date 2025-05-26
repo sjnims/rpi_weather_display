@@ -114,6 +114,25 @@ Client uses async/await throughout for power efficiency:
 - Mock hardware for macOS compatibility
 - Test fixtures in `tests/conftest.py`
 
+### Coverage Reporting
+When checking coverage for specific modules, use the import path (not file path):
+```bash
+# CORRECT - No warnings, accurate coverage for specific module
+poetry run pytest tests/models/test_config.py --cov=rpi_weather_display.models.config --cov-report=term-missing:skip-covered
+
+# Show only the specific module in the report (with grep)
+poetry run pytest tests/models/test_config.py --cov=rpi_weather_display.models.config --cov-report=term-missing:skip-covered | grep -E "(models/config|Cover)"
+
+# Disable fail_under for single module testing (won't fail at 94%)
+poetry run pytest tests/models/test_config.py --cov=rpi_weather_display.models.config --cov-report=term-missing:skip-covered --cov-fail-under=0
+
+# Quick coverage check for a specific module (alias-friendly)
+poetry run pytest tests/models/test_config.py --cov=rpi_weather_display.models.config --cov-fail-under=0 -q | grep -A1 -B1 "models/config"
+
+# WRONG - Shows misleading "module not imported" warning
+poetry run pytest tests/models/test_config.py --cov=src/rpi_weather_display/models/config
+```
+
 ### AsyncMock Warning Fix
 ```python
 # WRONG - causes warning

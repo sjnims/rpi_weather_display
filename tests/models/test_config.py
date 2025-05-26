@@ -14,6 +14,11 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
+from rpi_weather_display.exceptions import (
+    ConfigFileNotFoundError,
+    InvalidConfigError,
+    MissingConfigError,
+)
 from rpi_weather_display.models.config import (
     AppConfig,
     DisplayConfig,
@@ -21,6 +26,7 @@ from rpi_weather_display.models.config import (
     PowerConfig,
     ServerConfig,
     WeatherConfig,
+    _normalize_path,
 )
 
 
@@ -516,3 +522,121 @@ class TestAppConfig:
         error_details = str(excinfo.value)
         assert "server.url" in error_details
         assert "Field required" in error_details
+
+    def test_from_yaml_file_not_found(self) -> None:
+        """Test handling of file not found error."""
+        non_existent_path = "/path/that/does/not/exist.yaml"
+        
+        with pytest.raises(ConfigFileNotFoundError) as excinfo:
+            AppConfig.from_yaml(non_existent_path)
+        
+        # The actual error message includes additional details
+        assert "Failed to read configuration file" in str(excinfo.value)
+        assert non_existent_path in str(excinfo.value)
+
+    def test_from_yaml_file_read_error(self, tmp_path: Path) -> None:
+        """Test handling of file read errors."""
+        # Create a real file that exists
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text("test")
+        
+        # Mock the file reading to raise a permission error
+        with patch("rpi_weather_display.utils.file_utils.open", side_effect=PermissionError("Access denied")):
+            with pytest.raises(ConfigFileNotFoundError) as excinfo:
+                AppConfig.from_yaml(config_file)
+            
+            assert "Failed to read configuration file" in str(excinfo.value)
+            assert "Access denied" in str(excinfo.value)
+
+    def test_from_yaml_invalid_yaml(self) -> None:
+        """Test handling of invalid YAML syntax."""
+        invalid_yaml = """
+        weather:
+          api_key: test_key
+          invalid: [unclosed bracket
+        """
+        
+        with patch("builtins.open", mock_open(read_data=invalid_yaml)):
+            with pytest.raises(InvalidConfigError) as excinfo:
+                AppConfig.from_yaml("config.yaml")
+            
+            assert "Invalid YAML syntax in configuration file" in str(excinfo.value)
+
+    def test_from_yaml_empty_file(self) -> None:
+        """Test handling of empty configuration file."""
+        empty_yaml = ""
+        
+        with patch("builtins.open", mock_open(read_data=empty_yaml)):
+            # yaml.safe_load returns None for empty files
+            with patch("yaml.safe_load", return_value=None):
+                with pytest.raises(InvalidConfigError) as excinfo:
+                    AppConfig.from_yaml("config.yaml")
+                
+                assert "Configuration file is empty" in str(excinfo.value)
+
+    def test_from_yaml_missing_required_sections(self) -> None:
+        """Test handling of missing required sections."""
+        # Config missing weather section
+        config_dict = {
+            "display": {"width": 800, "height": 600},
+            "server": {"url": "http://localhost"},
+            "power": {}
+        }
+        
+        with patch("builtins.open", mock_open(read_data="dummy")):
+            with patch("yaml.safe_load", return_value=config_dict):
+                with pytest.raises(MissingConfigError) as excinfo:
+                    AppConfig.from_yaml("config.yaml")
+                
+                assert "Missing required configuration sections: weather" in str(excinfo.value)
+
+    def test_from_yaml_validation_error_with_details(self) -> None:
+        """Test handling of validation errors with detailed error messages."""
+        invalid_config_dict = {
+            "weather": {
+                "api_key": "test_key",
+                "update_interval_minutes": 5,  # Too low
+                "hourly_forecast_count": 100  # Too high
+            },
+            "display": {
+                "width": 800,
+                "height": 600,
+                "pressure_units": "invalid_unit"  # Invalid
+            },
+            "power": {
+                "wifi_power_save_mode": "ultra_mode"  # Invalid
+            },
+            "server": {
+                # Missing required url field
+                "port": 8080
+            }
+        }
+        
+        with patch("builtins.open", mock_open(read_data="dummy")):
+            with patch("yaml.safe_load", return_value=invalid_config_dict):
+                with pytest.raises(InvalidConfigError) as excinfo:
+                    AppConfig.from_yaml("config.yaml")
+                
+                error_message = str(excinfo.value)
+                # The error message now starts with "Configuration validation failed:"
+                assert "Configuration validation failed" in error_message
+                # Check that our validation errors are in the message
+                assert "Update interval must be at least 15 minutes" in error_message
+                assert "Hourly forecast count must be between 1 and 48" in error_message
+                assert "Pressure units must be one of" in error_message
+                assert "WiFi power save mode must be one of" in error_message
+                assert "server.url" in error_message
+                assert "Field required" in error_message
+
+    def test_normalize_path_expansion(self) -> None:
+        """Test path normalization helper function."""
+        # Test string to Path conversion
+        result = _normalize_path("config.yaml")
+        assert isinstance(result, Path)
+        assert str(result) == "config.yaml"
+        
+        # Test Path passthrough
+        path_obj = Path("/etc/config.yaml")
+        result = _normalize_path(path_obj)
+        assert result is path_obj
+        assert isinstance(result, Path)
