@@ -185,6 +185,44 @@ def test_function_using_file_utils(mocker):
     assert result == expected_result
 ```
 
+## Import Structure and Circular Dependency Prevention
+
+The utils module follows a clean dependency hierarchy to prevent circular imports:
+
+```
+path_utils.py (no internal dependencies)
+    ↓
+file_utils.py (depends on path_utils)
+    ↓
+Other utils modules (depend on path_utils and/or file_utils)
+```
+
+### Best Practices
+
+1. **TYPE_CHECKING Imports**: Used for type hints without creating runtime dependencies
+   ```python
+   from typing import TYPE_CHECKING
+   
+   if TYPE_CHECKING:
+       from rpi_weather_display.utils.pijuice_adapter import PiJuiceAdapter
+   ```
+
+2. **Delayed Imports**: Used inside functions to avoid import-time dependencies
+   ```python
+   def configure_logging(config: LoggingConfig) -> None:
+       if config.file:
+           # Import only when needed
+           from rpi_weather_display.utils import file_utils
+           file_utils.ensure_dir_exists(log_path.parent)
+   ```
+
+3. **Import Rules**:
+   - Never import from `__init__.py` within utils modules
+   - Import specific modules directly
+   - Use TYPE_CHECKING for type hints
+   - Use delayed imports for optional features
+   - Keep foundational modules dependency-free
+
 ## Other Utilities
 
 - **Battery Utilities** (`battery_utils.py`) - Functions for battery state management

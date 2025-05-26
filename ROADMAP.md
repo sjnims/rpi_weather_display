@@ -14,7 +14,7 @@ Priority is indicated as:
 - 🟠 Medium - Important but not blocking
 - 🟢 Low - Nice to have
 
-## Phase 1: Core Functionality & Power Optimization ✅ COMPLETED
+## Phase 1: Core Functionality & Power Optimization (Target: v0.2.0) ✅ COMPLETED
 
 ### 1.1 Power State Management
 - [x] 1.1.1 🔴 Move `is_quiet_hours()` to a common utility function [COMPLETED 2025-05-15]
@@ -36,7 +36,7 @@ Priority is indicated as:
 ### 1.4 PiJuice Integration
 - [x] 1.4.1 🔴 Add support for all PiJuice events (LOW_CHARGE, button press) [COMPLETED 2025-05-18]
 
-## Phase 2: Code Quality & Architecture ✅ MOSTLY COMPLETE
+## Phase 2: Code Quality & Architecture (Target: v0.3.0) ✅ COMPLETED
 
 ### 2.1 Code Organization & Standards
 - [x] 2.1.1 🔴 Create centralized constants module for default values [COMPLETED 2025-05-19]
@@ -45,7 +45,7 @@ Priority is indicated as:
 - [x] 2.1.4 🔴 Add proper Google-style docstrings to all modules [COMPLETED 2025-05-19]
 - [x] 2.1.5 ✅ Replace all `print()` calls with structured logging [COMPLETED 2025-05-26]
 - [x] 2.1.6 🟢 Remove test-only methods from production interfaces [COMPLETED 2025-05-26]
-- [ ] 2.1.7 🟢 Resolve circular import risks in utils module [PLANNED]
+- [x] 2.1.7 🟢 Resolve circular import risks in utils module [COMPLETED 2025-05-26]
 
 ### 2.2 Modern Python & Type Safety
 - [x] 2.2.1 🔴 Replace generic `Any` types with more specific Union types [COMPLETED 2025-05-23]
@@ -80,7 +80,7 @@ Priority is indicated as:
 - [x] 2.6.8 🟢 Add --dry-run options to destructive scripts [COMPLETED 2025-05-24]
 - [x] 2.6.9 🟢 Improve shell script safety (shellcheck compliance) [COMPLETED 2025-05-24]
 
-## Phase 3: Hardware Optimization & Validation
+## Phase 3: Hardware Optimization & Validation (Target: v0.4.0)
 
 ### 3.1 E-Paper Display Optimization 🔴 HIGH PRIORITY
 - [ ] 3.1.1 🔴 Implement correct refresh modes for Waveshare 10.3" (GC16/Mode2 at 4bpp)
@@ -111,7 +111,7 @@ Priority is indicated as:
 - [ ] 3.3.8 🟠 Validate display refresh performance and battery impact
 - [ ] 3.3.9 🟢 Test hardware failure scenarios and recovery mechanisms
 
-## Phase 4: Telemetry & Monitoring
+## Phase 4: Telemetry & Monitoring (Target: v0.5.0)
 
 ### 4.1 Power Consumption Tracking
 - [ ] 4.1.1 🔴 Create power consumption logging for different operations
@@ -130,7 +130,7 @@ Priority is indicated as:
 - [ ] 4.3.2 🟠 Implement periodic reporting to server during updates
 - [ ] 4.3.3 🟢 Add alert mechanism for abnormal power consumption
 
-## Phase 5: Adaptive Behavior & Optimization
+## Phase 5: Adaptive Behavior & Optimization (Target: v0.6.0)
 
 ### 5.1 Weather-Aware Optimization
 - [ ] 5.1.1 🔴 Implement forecast-aware update scheduling
@@ -157,7 +157,7 @@ Priority is indicated as:
 - [ ] 5.4.3 🟠 Add telemetry for missing field occurrences
 - [ ] 5.4.4 🟢 Create fallback values for non-critical missing data
 
-## Phase 6: Testing & Validation
+## Phase 6: Testing & Validation (Target: v0.7.0)
 
 ### 6.1 Enhanced Testing
 - [ ] 6.1.1 🔴 Add property-based tests with Hypothesis
@@ -279,7 +279,7 @@ Priority is indicated as:
 | Phase | Not Started | In Progress | Completed | Total |
 |-------|------------|-------------|-----------|-------|
 | 1     | 0          | 0           | 14        | 14    |
-| 2     | 1          | 0           | 35        | 36    |
+| 2     | 0          | 0           | 36        | 36    |
 | 3     | 20         | 0           | 0         | 20    |
 | 4     | 10         | 0           | 0         | 10    |
 | 5     | 16         | 0           | 0         | 16    |
@@ -287,14 +287,14 @@ Priority is indicated as:
 | 7     | 9          | 0           | 0         | 9     |
 | 8     | 21         | 0           | 0         | 21    |
 | 9     | 16         | 0           | 0         | 16    |
-| Total | 103        | 0           | 49        | 152   |
+| Total | 102        | 0           | 50        | 152   |
 
 ## Recommended Next Steps (Priority Order)
 
 ### Immediate
 1. **Phase 3.1** - E-Paper display optimization (critical for battery life)
-2. **Phase 2.1.7** - Resolve circular import risks in utils module (last task in Phase 2.1!)
-3. **Phase 3.2** - Hardware abstraction layer
+2. **Phase 3.2** - Hardware abstraction layer
+3. **Phase 3.3** - Hardware testing and validation
 
 ### Short-term
 1. **Phase 3** - Complete hardware optimization and testing
