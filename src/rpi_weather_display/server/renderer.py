@@ -81,10 +81,9 @@ class WeatherRenderer:
 
         if units == "metric":
             return f"{int(round(temp))}°C"
-        elif units == "imperial":
+        if units == "imperial":
             return f"{int(round(temp))}°F"
-        else:
-            return f"{int(round(temp))}K"
+        return f"{int(round(temp))}K"
 
     def _prepare_time_data(
         self, weather_data: WeatherData, now: datetime
@@ -408,9 +407,8 @@ class WeatherRenderer:
 
             # Get and render template
             template = self.jinja_env.get_template("dashboard.html.j2")
-            html = template.render(**context)
+            return template.render(**context)
 
-            return html
         except jinja2.exceptions.TemplateError as e:
             error_location = get_error_location()
             self.logger.error(f"Template error [{error_location}]: {e}")
@@ -471,10 +469,9 @@ class WeatherRenderer:
             if output_path:
                 await page.screenshot(path=str(output_path), type="png")
                 return output_path
-            else:
-                # Return raw bytes for direct transmission
-                screenshot: bytes = await page.screenshot(type="png")
-                return screenshot
+            # Return raw bytes for direct transmission
+            screenshot: bytes = await page.screenshot(type="png")
+            return screenshot
         except Exception as e:
             error_location = get_error_location()
             self.logger.error(f"Error rendering image [{error_location}]: {e}")

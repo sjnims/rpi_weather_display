@@ -197,8 +197,7 @@ class SystemMetricsCollector:
             if file_exists(self._loadavg_path):
                 content = read_text(self._loadavg_path).strip()
                 # First value is 1-minute average
-                load_1min = float(content.split()[0])
-                return load_1min
+                return float(content.split()[0])
         except Exception as e:
             logger.error(f"Failed to get load average: {e}")
 
@@ -218,13 +217,12 @@ class SystemMetricsCollector:
             size_str = size_str.upper()
             if size_str.endswith("G"):
                 return float(size_str[:-1])
-            elif size_str.endswith("M"):
+            if size_str.endswith("M"):
                 return float(size_str[:-1]) / 1024
-            elif size_str.endswith("K"):
+            if size_str.endswith("K"):
                 return float(size_str[:-1]) / (1024 * 1024)
-            else:
-                # Assume bytes
-                return float(size_str) / (1024 * 1024 * 1024)
+            # Assume bytes
+            return float(size_str) / (1024 * 1024 * 1024)
         except Exception:
             return 0.0
 

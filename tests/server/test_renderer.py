@@ -319,8 +319,7 @@ class TestWeatherRenderer:
         mock_template = MagicMock()
         mock_template.render.side_effect = jinja2.exceptions.TemplateError("Test error")
 
-        with patch.object(renderer.jinja_env, "get_template", return_value=mock_template):
-            with pytest.raises(jinja2.exceptions.TemplateError):
+        with patch.object(renderer.jinja_env, "get_template", return_value=mock_template), pytest.raises(jinja2.exceptions.TemplateError):
                 await renderer.generate_html(weather_data, battery_status)
 
     @pytest.mark.asyncio()
@@ -519,23 +518,29 @@ class TestWeatherRenderer:
                     "Waning Crescent",  # 0.79-0.99
                 ]
 
-                # Get the general phase category
+                # Define phase thresholds and their corresponding label indices
+                phase_thresholds = [
+                    (MOON_PHASE_NEW_THRESHOLD, 0),  # New Moon
+                    (MOON_PHASE_FIRST_QUARTER_MIN, 1),  # Waxing Crescent
+                    (MOON_PHASE_FIRST_QUARTER_MAX, 2),  # First Quarter
+                    (MOON_PHASE_FULL_MIN, 3),  # Waxing Gibbous
+                    (MOON_PHASE_FULL_MAX, 4),  # Full Moon
+                    (MOON_PHASE_LAST_QUARTER_MIN, 5),  # Waning Gibbous
+                    (MOON_PHASE_LAST_QUARTER_MAX, 6),  # Last Quarter
+                    (1 - MOON_PHASE_NEW_THRESHOLD, 7),  # Waning Crescent
+                ]
+                
+                # Special case: phases very close to 0 or 1 are New Moon
                 if phase == 0 or phase >= (1 - MOON_PHASE_NEW_THRESHOLD):
-                    return labels[0]  # New Moon
-                elif phase < MOON_PHASE_FIRST_QUARTER_MIN:
-                    return labels[1]  # Waxing Crescent
-                elif phase < MOON_PHASE_FIRST_QUARTER_MAX:
-                    return labels[2]  # First Quarter
-                elif phase < MOON_PHASE_FULL_MIN:
-                    return labels[3]  # Waxing Gibbous
-                elif phase < MOON_PHASE_FULL_MAX:
-                    return labels[4]  # Full Moon
-                elif phase < MOON_PHASE_LAST_QUARTER_MIN:
-                    return labels[5]  # Waning Gibbous
-                elif phase < MOON_PHASE_LAST_QUARTER_MAX:
-                    return labels[6]  # Last Quarter
-                else:
-                    return labels[7]  # Waning Crescent
+                    return labels[0]
+                
+                # Find the appropriate phase label
+                for threshold, label_index in phase_thresholds:
+                    if phase < threshold:
+                        return labels[label_index]
+                
+                # Default to Waning Crescent (should not reach here)
+                return labels[7]
 
             # Test exact phase boundaries
             assert moon_phase_label_filter(0) == "New Moon"
@@ -1020,9 +1025,7 @@ class TestWeatherRenderer:
         with patch(
             "rpi_weather_display.utils.file_utils.read_text",
             side_effect=Exception("CSV read error"),
-        ):
-            # Create a situation where the paths exist but reading the file fails
-            with patch("rpi_weather_display.utils.file_utils.file_exists", return_value=True):
+        ), patch("rpi_weather_display.utils.file_utils.file_exists", return_value=True):
                 # This should handle the error and create empty maps
                 renderer.icon_mapper._ensure_mappings_loaded()
 

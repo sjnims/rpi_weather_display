@@ -142,10 +142,40 @@ line-length = 100
 target-version = "py311"
 
 [tool.ruff.lint]
-ignore = ["ANN101", "ANN102"]
-select = ["E", "F", "B", "I", "N", "UP", "ANN", "S", "A", "C4", "PT", "RUF", "D"]
+ignore = [
+    "ANN101",   # Missing type annotation for self in method
+    "ANN102",   # Missing type annotation for cls in classmethod
+    "PLR2004",  # Magic value used in comparison (too many false positives)
+    "TRY003",   # Avoid specifying long messages outside the exception class
+    "TRY300",   # Consider else block (style preference)
+    "TRY301",   # Detailed exception context is intentional for debugging
+    "TRY400",   # Using logger.error with explicit exception info is intentional for structured error logging
+]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "B",    # flake8-bugbear
+    "I",    # isort
+    "N",    # pep8-naming
+    "UP",   # pyupgrade
+    "ANN",  # flake8-annotations
+    "S",    # flake8-bandit
+    "A",    # flake8-builtins
+    "C4",   # flake8-comprehensions
+    "PT",   # flake8-pytest-style
+    "RUF",  # ruff-specific rules
+    "D",    # pydocstyle
+    "PL",   # pylint
+    "SIM",  # flake8-simplify
+    "C90",  # mccabe complexity
+    "RET",  # flake8-return
+    "TRY",  # tryceratops
+]
 
 [tool.ruff.lint.per-file-ignores]
+"src/rpi_weather_display/client/main.py" = [
+    "PLR0911", # Too many return statements - necessary for error handling in update_weather
+]
 "tests/**/*.py" = [
     "S101",    # Use of assert detected (pytest uses assertions)
     "ANN201",  # Missing return type annotation for public function

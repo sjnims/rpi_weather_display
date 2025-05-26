@@ -63,10 +63,10 @@ class WeatherCalculator:
         """
         if target_units == "mmHg":
             return pressure_hpa * HPA_TO_MMHG
-        elif target_units == "inHg":
+        if target_units == "inHg":
             return pressure_hpa * HPA_TO_INHG
-        else:  # hPa
-            return pressure_hpa
+        # hPa
+        return pressure_hpa
     
     def get_daily_max_uvi(self, weather_data: "WeatherData", now: datetime) -> tuple[float, int]:
         """Calculate the max UVI for today with caching.

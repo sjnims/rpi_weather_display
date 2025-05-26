@@ -54,64 +54,72 @@ class TestWeatherIconMapper:
         mapper._loaded = True
         
         # Mock path_resolver and file_utils to ensure they're not called
-        with patch("rpi_weather_display.server.weather_icon_mapper.path_resolver") as mock_path:
-            with patch("rpi_weather_display.server.weather_icon_mapper.file_utils") as mock_file:
-                mapper._ensure_mappings_loaded()
-                
-                # Should not call any file operations
-                mock_path.get_data_file.assert_not_called()
-                mock_file.file_exists.assert_not_called()
+        with (
+            patch("rpi_weather_display.server.weather_icon_mapper.path_resolver") as mock_path,
+            patch("rpi_weather_display.server.weather_icon_mapper.file_utils") as mock_file
+        ):
+            mapper._ensure_mappings_loaded()
+            
+            # Should not call any file operations
+            mock_path.get_data_file.assert_not_called()
+            mock_file.file_exists.assert_not_called()
 
     def test_ensure_mappings_loaded_no_file(self, mapper: WeatherIconMapper) -> None:
         """Test loading when CSV file doesn't exist."""
-        with patch("rpi_weather_display.server.weather_icon_mapper.path_resolver.get_data_file") as mock_path:
-            with patch("rpi_weather_display.server.weather_icon_mapper.file_utils.file_exists") as mock_exists:
-                mock_path.return_value = "/path/to/owm_icon_map.csv"
-                mock_exists.return_value = False
-                
-                mapper._ensure_mappings_loaded()
-                
-                assert mapper._loaded is True
-                assert mapper._weather_icon_map == {}
-                assert mapper._weather_id_to_icon == {}
+        with (
+            patch("rpi_weather_display.server.weather_icon_mapper.path_resolver.get_data_file") as mock_path,
+            patch("rpi_weather_display.server.weather_icon_mapper.file_utils.file_exists") as mock_exists
+        ):
+            mock_path.return_value = "/path/to/owm_icon_map.csv"
+            mock_exists.return_value = False
+            
+            mapper._ensure_mappings_loaded()
+            
+            assert mapper._loaded is True
+            assert mapper._weather_icon_map == {}
+            assert mapper._weather_id_to_icon == {}
 
     def test_ensure_mappings_loaded_with_csv(
         self, mapper: WeatherIconMapper, sample_csv_content: str
     ) -> None:
         """Test loading mappings from CSV file."""
-        with patch("rpi_weather_display.server.weather_icon_mapper.path_resolver.get_data_file") as mock_path:
-            with patch("rpi_weather_display.server.weather_icon_mapper.file_utils.file_exists") as mock_exists:
-                with patch("rpi_weather_display.server.weather_icon_mapper.file_utils.read_text") as mock_read:
-                    mock_path.return_value = "/path/to/owm_icon_map.csv"
-                    mock_exists.return_value = True
-                    mock_read.return_value = sample_csv_content
-                    
-                    mapper._ensure_mappings_loaded()
-                    
-                    assert mapper._loaded is True
-                    assert len(mapper._weather_icon_map) > 0
-                    assert len(mapper._weather_id_to_icon) > 0
-                    
-                    # Check specific mappings
-                    assert mapper._weather_icon_map["200_11d"] == "wi-thunderstorm"
-                    assert mapper._weather_icon_map["800_01d"] == "wi-day-sunny"
-                    assert mapper._weather_icon_map["800_01n"] == "wi-night-clear"
-                    assert mapper._weather_id_to_icon["200"] == "wi-thunderstorm"
+        with (
+            patch("rpi_weather_display.server.weather_icon_mapper.path_resolver.get_data_file") as mock_path,
+            patch("rpi_weather_display.server.weather_icon_mapper.file_utils.file_exists") as mock_exists,
+            patch("rpi_weather_display.server.weather_icon_mapper.file_utils.read_text") as mock_read
+        ):
+            mock_path.return_value = "/path/to/owm_icon_map.csv"
+            mock_exists.return_value = True
+            mock_read.return_value = sample_csv_content
+            
+            mapper._ensure_mappings_loaded()
+            
+            assert mapper._loaded is True
+            assert len(mapper._weather_icon_map) > 0
+            assert len(mapper._weather_id_to_icon) > 0
+            
+            # Check specific mappings
+            assert mapper._weather_icon_map["200_11d"] == "wi-thunderstorm"
+            assert mapper._weather_icon_map["800_01d"] == "wi-day-sunny"
+            assert mapper._weather_icon_map["800_01n"] == "wi-night-clear"
+            assert mapper._weather_id_to_icon["200"] == "wi-thunderstorm"
 
     def test_ensure_mappings_loaded_with_exception(self, mapper: WeatherIconMapper) -> None:
         """Test loading with an exception."""
-        with patch("rpi_weather_display.server.weather_icon_mapper.path_resolver.get_data_file") as mock_path:
-            with patch("rpi_weather_display.server.weather_icon_mapper.file_utils.file_exists") as mock_exists:
-                with patch("rpi_weather_display.server.weather_icon_mapper.file_utils.read_text") as mock_read:
-                    mock_path.return_value = "/path/to/owm_icon_map.csv"
-                    mock_exists.return_value = True
-                    mock_read.side_effect = Exception("Read error")
-                    
-                    mapper._ensure_mappings_loaded()
-                    
-                    assert mapper._loaded is True
-                    assert mapper._weather_icon_map == {}
-                    assert mapper._weather_id_to_icon == {}
+        with (
+            patch("rpi_weather_display.server.weather_icon_mapper.path_resolver.get_data_file") as mock_path,
+            patch("rpi_weather_display.server.weather_icon_mapper.file_utils.file_exists") as mock_exists,
+            patch("rpi_weather_display.server.weather_icon_mapper.file_utils.read_text") as mock_read
+        ):
+            mock_path.return_value = "/path/to/owm_icon_map.csv"
+            mock_exists.return_value = True
+            mock_read.side_effect = Exception("Read error")
+            
+            mapper._ensure_mappings_loaded()
+            
+            assert mapper._loaded is True
+            assert mapper._weather_icon_map == {}
+            assert mapper._weather_id_to_icon == {}
 
     def test_get_icon_for_code(self, mapper: WeatherIconMapper) -> None:
         """Test getting icon for OpenWeatherMap icon codes."""
@@ -153,81 +161,87 @@ class TestWeatherIconMapper:
     ) -> None:
         """Test getting icon for condition with CSV mappings loaded."""
         # Load CSV mappings
-        with patch("rpi_weather_display.server.weather_icon_mapper.path_resolver.get_data_file") as mock_path:
-            with patch("rpi_weather_display.server.weather_icon_mapper.file_utils.file_exists") as mock_exists:
-                with patch("rpi_weather_display.server.weather_icon_mapper.file_utils.read_text") as mock_read:
-                    mock_path.return_value = "/path/to/owm_icon_map.csv"
-                    mock_exists.return_value = True
-                    mock_read.return_value = sample_csv_content
-                    
-                    # Test exact match
-                    weather_condition = Mock()
-                    weather_condition.id = 200
-                    weather_condition.icon = "11d"
-                    
-                    result = mapper.get_icon_for_condition(weather_condition)
-                    assert result == "wi-thunderstorm"
-                    
-                    # Test ID-only fallback
-                    weather_condition.id = 500
-                    weather_condition.icon = "99x"  # Unknown icon code
-                    
-                    result = mapper.get_icon_for_condition(weather_condition)
-                    assert result == "wi-rain"
+        with (
+            patch("rpi_weather_display.server.weather_icon_mapper.path_resolver.get_data_file") as mock_path,
+            patch("rpi_weather_display.server.weather_icon_mapper.file_utils.file_exists") as mock_exists,
+            patch("rpi_weather_display.server.weather_icon_mapper.file_utils.read_text") as mock_read
+        ):
+            mock_path.return_value = "/path/to/owm_icon_map.csv"
+            mock_exists.return_value = True
+            mock_read.return_value = sample_csv_content
+            
+            # Test exact match
+            weather_condition = Mock()
+            weather_condition.id = 200
+            weather_condition.icon = "11d"
+            
+            result = mapper.get_icon_for_condition(weather_condition)
+            assert result == "wi-thunderstorm"
+            
+            # Test ID-only fallback
+            weather_condition.id = 500
+            weather_condition.icon = "99x"  # Unknown icon code
+            
+            result = mapper.get_icon_for_condition(weather_condition)
+            assert result == "wi-rain"
 
     def test_get_icon_for_condition_clear_cloudy_variants(
         self, mapper: WeatherIconMapper, sample_csv_content: str
     ) -> None:
         """Test getting icon for clear/cloudy conditions with day/night variants."""
         # Load CSV mappings
-        with patch("rpi_weather_display.server.weather_icon_mapper.path_resolver.get_data_file") as mock_path:
-            with patch("rpi_weather_display.server.weather_icon_mapper.file_utils.file_exists") as mock_exists:
-                with patch("rpi_weather_display.server.weather_icon_mapper.file_utils.read_text") as mock_read:
-                    mock_path.return_value = "/path/to/owm_icon_map.csv"
-                    mock_exists.return_value = True
-                    mock_read.return_value = sample_csv_content
-                    
-                    # Test day variant
-                    weather_condition = Mock()
-                    weather_condition.id = 800
-                    weather_condition.icon = "01d"
-                    
-                    result = mapper.get_icon_for_condition(weather_condition)
-                    assert result == "wi-day-sunny"
-                    
-                    # Test night variant
-                    weather_condition.icon = "01n"
-                    
-                    result = mapper.get_icon_for_condition(weather_condition)
-                    assert result == "wi-night-clear"
-                    
-                    # Test other clear/cloudy IDs
-                    weather_condition.id = 802
-                    weather_condition.icon = "03d"
-                    
-                    result = mapper.get_icon_for_condition(weather_condition)
-                    assert result == "wi-cloud"
+        with (
+            patch("rpi_weather_display.server.weather_icon_mapper.path_resolver.get_data_file") as mock_path,
+            patch("rpi_weather_display.server.weather_icon_mapper.file_utils.file_exists") as mock_exists,
+            patch("rpi_weather_display.server.weather_icon_mapper.file_utils.read_text") as mock_read
+        ):
+            mock_path.return_value = "/path/to/owm_icon_map.csv"
+            mock_exists.return_value = True
+            mock_read.return_value = sample_csv_content
+            
+            # Test day variant
+            weather_condition = Mock()
+            weather_condition.id = 800
+            weather_condition.icon = "01d"
+            
+            result = mapper.get_icon_for_condition(weather_condition)
+            assert result == "wi-day-sunny"
+            
+            # Test night variant
+            weather_condition.icon = "01n"
+            
+            result = mapper.get_icon_for_condition(weather_condition)
+            assert result == "wi-night-clear"
+            
+            # Test other clear/cloudy IDs
+            weather_condition.id = 802
+            weather_condition.icon = "03d"
+            
+            result = mapper.get_icon_for_condition(weather_condition)
+            assert result == "wi-cloud"
 
     def test_get_icon_for_condition_fallback_to_code(self, mapper: WeatherIconMapper) -> None:
         """Test fallback to icon code when no mappings match."""
         # Don't load any CSV mappings
-        with patch("rpi_weather_display.server.weather_icon_mapper.path_resolver.get_data_file") as mock_path:
-            with patch("rpi_weather_display.server.weather_icon_mapper.file_utils.file_exists") as mock_exists:
-                mock_path.return_value = "/path/to/owm_icon_map.csv"
-                mock_exists.return_value = False
-                
-                weather_condition = Mock()
-                weather_condition.id = 999  # Unknown ID
-                weather_condition.icon = "10d"  # Known icon code
-                
-                result = mapper.get_icon_for_condition(weather_condition)
-                assert result == "wi-day-rain"
-                
-                # Test with unknown ID and unknown icon code
-                weather_condition.icon = "99x"
-                
-                result = mapper.get_icon_for_condition(weather_condition)
-                assert result == "wi-cloud"
+        with (
+            patch("rpi_weather_display.server.weather_icon_mapper.path_resolver.get_data_file") as mock_path,
+            patch("rpi_weather_display.server.weather_icon_mapper.file_utils.file_exists") as mock_exists
+        ):
+            mock_path.return_value = "/path/to/owm_icon_map.csv"
+            mock_exists.return_value = False
+            
+            weather_condition = Mock()
+            weather_condition.id = 999  # Unknown ID
+            weather_condition.icon = "10d"  # Known icon code
+            
+            result = mapper.get_icon_for_condition(weather_condition)
+            assert result == "wi-day-rain"
+            
+            # Test with unknown ID and unknown icon code
+            weather_condition.icon = "99x"
+            
+            result = mapper.get_icon_for_condition(weather_condition)
+            assert result == "wi-cloud"
 
     def test_get_icon_for_condition_string_conversion(self, mapper: WeatherIconMapper) -> None:
         """Test that weather ID is converted to string."""
@@ -246,18 +260,20 @@ class TestWeatherIconMapper:
         200  ,  11d  ,  wi-thunderstorm  
         201,11d,wi-thunderstorm"""
         
-        with patch("rpi_weather_display.server.weather_icon_mapper.path_resolver.get_data_file") as mock_path:
-            with patch("rpi_weather_display.server.weather_icon_mapper.file_utils.file_exists") as mock_exists:
-                with patch("rpi_weather_display.server.weather_icon_mapper.file_utils.read_text") as mock_read:
-                    mock_path.return_value = "/path/to/owm_icon_map.csv"
-                    mock_exists.return_value = True
-                    mock_read.return_value = csv_with_whitespace
-                    
-                    mapper._ensure_mappings_loaded()
-                    
-                    # Check that whitespace was stripped
-                    assert mapper._weather_icon_map["200_11d"] == "wi-thunderstorm"
-                    assert mapper._weather_id_to_icon["200"] == "wi-thunderstorm"
+        with (
+            patch("rpi_weather_display.server.weather_icon_mapper.path_resolver.get_data_file") as mock_path,
+            patch("rpi_weather_display.server.weather_icon_mapper.file_utils.file_exists") as mock_exists,
+            patch("rpi_weather_display.server.weather_icon_mapper.file_utils.read_text") as mock_read
+        ):
+            mock_path.return_value = "/path/to/owm_icon_map.csv"
+            mock_exists.return_value = True
+            mock_read.return_value = csv_with_whitespace
+            
+            mapper._ensure_mappings_loaded()
+            
+            # Check that whitespace was stripped
+            assert mapper._weather_icon_map["200_11d"] == "wi-thunderstorm"
+            assert mapper._weather_id_to_icon["200"] == "wi-thunderstorm"
 
     def test_special_clear_cloudy_key_generation(self, mapper: WeatherIconMapper) -> None:
         """Test the special key generation for 800-804 weather IDs."""

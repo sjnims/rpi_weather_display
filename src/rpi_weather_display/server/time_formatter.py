@@ -64,14 +64,12 @@ class TimeFormatter:
             # Check for time_format in config
             if hasattr(self.display_config, "time_format") and self.display_config.time_format:
                 return dt.strftime(self.display_config.time_format)
-            else:
-                # Default: 12-hour format without leading zeros
-                hour = dt.hour % 12
-                if hour == 0:
-                    hour = 12  # 12-hour clock shows 12 for noon/midnight
-                return f"{hour}:{dt.minute:02d} {dt.strftime('%p')}"
-        else:
-            return dt.strftime(format_str)
+            # Default: 12-hour format without leading zeros
+            hour = dt.hour % 12
+            if hour == 0:
+                hour = 12  # 12-hour clock shows 12 for noon/midnight
+            return f"{hour}:{dt.minute:02d} {dt.strftime('%p')}"
+        return dt.strftime(format_str)
     
     def format_datetime_display(self, dt: datetime | int, format_str: str | None = None) -> str:
         """Format a datetime for prominent display.

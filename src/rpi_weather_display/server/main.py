@@ -379,11 +379,10 @@ class WeatherDisplayServer:
         """
         try:
             # Get weather data
-            weather_data = await self.api_client.get_weather_data()
+            return await self.api_client.get_weather_data()
 
             # Return the Pydantic model directly
             # FastAPI will automatically serialize it to JSON with proper datetime handling
-            return weather_data
         except Exception as e:
             error_location = get_error_location()
             self.logger.error(f"Error getting weather data [{error_location}]: {e}")

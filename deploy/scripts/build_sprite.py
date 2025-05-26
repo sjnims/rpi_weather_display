@@ -29,10 +29,10 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
 # Using ElementTree to parse our own trusted SVG files
-import xml.etree.ElementTree as ElementTree
-from pathlib import Path
+from xml.etree import ElementTree
 from xml.etree.ElementTree import Element
 
 

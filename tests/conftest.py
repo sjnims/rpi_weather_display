@@ -95,11 +95,8 @@ def mock_server(test_config_path: Path) -> TestClient:
     # Create a test server with the test config
     server = WeatherDisplayServer(test_config_path)
 
-    # Create a test client
-    client = TestClient(server.app)
-
-    # Return the test client
-    return client
+    # Create and return the test client
+    return TestClient(server.app)
 
 
 @pytest.fixture()

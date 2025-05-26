@@ -97,15 +97,17 @@ class TestPathResolver:
         resolver = PathResolver()
         
         # Mock exists and is_dir to return False
-        with patch.object(Path, "exists", return_value=False):
-            with patch.object(Path, "is_dir", return_value=False):
-                # Test with no resource name (directory only)
-                resource_dir = resolver.get_resource_path("nonexistent_dir")
-                assert resource_dir == resolver.project_root / "nonexistent_dir"
-                
-                # Test with resource name (file path)
-                resource_file = resolver.get_resource_path("nonexistent_dir", "file.txt")
-                assert resource_file == resolver.project_root / "nonexistent_dir" / "file.txt"
+        with (
+            patch.object(Path, "exists", return_value=False),
+            patch.object(Path, "is_dir", return_value=False)
+        ):
+            # Test with no resource name (directory only)
+            resource_dir = resolver.get_resource_path("nonexistent_dir")
+            assert resource_dir == resolver.project_root / "nonexistent_dir"
+            
+            # Test with resource name (file path)
+            resource_file = resolver.get_resource_path("nonexistent_dir", "file.txt")
+            assert resource_file == resolver.project_root / "nonexistent_dir" / "file.txt"
 
     def test_get_templates_dir(self):
         """Test getting the templates directory."""
@@ -198,14 +200,16 @@ class TestPathResolver:
         test_dir = Path("/test/dir")
 
         # Mock the necessary methods
-        with patch.object(Path, "mkdir") as mock_mkdir:
-            with patch.object(resolver, "normalize_path", return_value=test_dir):
-                # Call the method under test
-                result = resolver.ensure_dir_exists(test_dir)
+        with (
+            patch.object(Path, "mkdir") as mock_mkdir,
+            patch.object(resolver, "normalize_path", return_value=test_dir)
+        ):
+            # Call the method under test
+            result = resolver.ensure_dir_exists(test_dir)
 
-                # Verify the directory is created with appropriate parameters
-                mock_mkdir.assert_called_once_with(exist_ok=True, parents=True)
-                assert result == test_dir
+            # Verify the directory is created with appropriate parameters
+            mock_mkdir.assert_called_once_with(exist_ok=True, parents=True)
+            assert result == test_dir
 
     def test_get_bin_path(self):
         """Test getting paths to system binaries."""
@@ -266,20 +270,22 @@ class TestPathResolver:
         # Create a custom command name that won't be in constants
         command_name = "custom-command-test"
         
-        # Mock the import to return a module without our command constants
-        with patch.object(
-            __import__('builtins'), '__import__',
-            return_value=type('Module', (), {'constants': type('Constants', (), {})})
+        # Mock the import to return a module without our command constants,
+        # mock Path.exists to return True for a specific path,
+        # and mock os.access to return True for executable permission
+        with (
+            patch.object(
+                __import__('builtins'), '__import__',
+                return_value=type('Module', (), {'constants': type('Constants', (), {})})
+            ),
+            patch.object(Path, "exists", lambda p: str(p) == "/usr/bin/custom-command-test"),
+            patch("os.access", return_value=True)
         ):
-            # Mock Path.exists to return True for a specific path
-            with patch.object(Path, "exists", lambda p: str(p) == "/usr/bin/custom-command-test"):
-                # Mock os.access to return True for executable permission
-                with patch("os.access", return_value=True):
-                    # Call the method under test
-                    bin_path = resolver.get_bin_path(command_name)
-                    
-                    # Should find the executable in /usr/bin
-                    assert bin_path == Path("/usr/bin/custom-command-test")
+            # Call the method under test
+            bin_path = resolver.get_bin_path(command_name)
+            
+            # Should find the executable in /usr/bin
+            assert bin_path == Path("/usr/bin/custom-command-test")
                     
     def test_get_bin_path_default(self):
         """Test get_bin_path default behavior when no path is found."""
@@ -289,17 +295,19 @@ class TestPathResolver:
         command_name = "nonexistent-command"
         
         # Mock the import to return a module without our command constants
-        with patch.object(
-            __import__('builtins'), '__import__',
-            return_value=type('Module', (), {'constants': type('Constants', (), {})})
+        # and mock Path.exists to always return False
+        with (
+            patch.object(
+                __import__('builtins'), '__import__',
+                return_value=type('Module', (), {'constants': type('Constants', (), {})})
+            ),
+            patch.object(Path, "exists", return_value=False)
         ):
-            # Mock Path.exists to always return False
-            with patch.object(Path, "exists", return_value=False):
-                # Call the method under test
-                bin_path = resolver.get_bin_path(command_name)
-                
-                # Should return the command name itself
-                assert bin_path == Path(command_name)
+            # Call the method under test
+            bin_path = resolver.get_bin_path(command_name)
+            
+            # Should return the command name itself
+            assert bin_path == Path(command_name)
 
     def test_find_project_root_fallback(self):
         """Test fallback behavior for project root finding."""

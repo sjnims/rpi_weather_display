@@ -48,8 +48,7 @@ def test_server(test_config_path: str) -> WeatherDisplayServer:
     """Create a test server instance."""
     with patch("pathlib.Path.exists", return_value=True):
         config_path = path_resolver.normalize_path(test_config_path)
-        server = WeatherDisplayServer(config_path)
-    return server
+        return WeatherDisplayServer(config_path)
 
 
 @pytest.fixture()

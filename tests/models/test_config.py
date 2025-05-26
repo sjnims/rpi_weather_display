@@ -442,9 +442,8 @@ class TestAppConfig:
         """
 
         # Mock open to return our test YAML
-        with patch("builtins.open", mock_open(read_data=yaml_content)):
-            # Mock yaml.safe_load to return parsed test data
-            with patch("yaml.safe_load", return_value=yaml.safe_load(yaml_content)):
+        with patch("builtins.open", mock_open(read_data=yaml_content)), \
+             patch("yaml.safe_load", return_value=yaml.safe_load(yaml_content)):
                 config = AppConfig.from_yaml("dummy_path.yaml")
 
                 assert config.weather.api_key == "test_yaml_key"
@@ -566,9 +565,9 @@ class TestAppConfig:
         """Test handling of empty configuration file."""
         empty_yaml = ""
         
-        with patch("builtins.open", mock_open(read_data=empty_yaml)):
-            # yaml.safe_load returns None for empty files
-            with patch("yaml.safe_load", return_value=None):
+        with patch("builtins.open", mock_open(read_data=empty_yaml)), patch(
+            "yaml.safe_load", return_value=None
+        ):
                 with pytest.raises(InvalidConfigError) as excinfo:
                     AppConfig.from_yaml("config.yaml")
                 
@@ -583,8 +582,8 @@ class TestAppConfig:
             "power": {}
         }
         
-        with patch("builtins.open", mock_open(read_data="dummy")):
-            with patch("yaml.safe_load", return_value=config_dict):
+        with patch("builtins.open", mock_open(read_data="dummy")), \
+             patch("yaml.safe_load", return_value=config_dict):
                 with pytest.raises(MissingConfigError) as excinfo:
                     AppConfig.from_yaml("config.yaml")
                 
@@ -612,8 +611,8 @@ class TestAppConfig:
             }
         }
         
-        with patch("builtins.open", mock_open(read_data="dummy")):
-            with patch("yaml.safe_load", return_value=invalid_config_dict):
+        with patch("builtins.open", mock_open(read_data="dummy")), \
+             patch("yaml.safe_load", return_value=invalid_config_dict):
                 with pytest.raises(InvalidConfigError) as excinfo:
                     AppConfig.from_yaml("config.yaml")
                 

@@ -230,52 +230,43 @@ class TestFileUtils:
         (sub_dir / "subfile.txt").touch()
 
         # Test listing all files (non-recursive)
-        with patch("pathlib.Path.is_dir", return_value=True):
-            with patch("pathlib.Path.glob") as mock_glob:
-                # Mock the glob result for non-recursive call
-                mock_files = [
-                    temp_dir / "file1.txt",
-                    temp_dir / "file2.txt",
-                    temp_dir / "image.png",
-                ]
-                mock_glob.return_value = mock_files
+        with patch("pathlib.Path.is_dir", return_value=True), patch("pathlib.Path.glob") as mock_glob, patch("pathlib.Path.is_file", return_value=True):
+            # Mock the glob result for non-recursive call
+            mock_files = [
+                temp_dir / "file1.txt",
+                temp_dir / "file2.txt",
+                temp_dir / "image.png",
+            ]
+            mock_glob.return_value = mock_files
 
-                # Mock is_file to return True for all files
-                with patch("pathlib.Path.is_file", return_value=True):
-                    files = file_utils.list_files(temp_dir)
-                    assert len(files) == 3
-                    mock_glob.assert_called_once_with("*")
+            files = file_utils.list_files(temp_dir)
+            assert len(files) == 3
+            mock_glob.assert_called_once_with("*")
 
         # Test listing with pattern
-        with patch("pathlib.Path.is_dir", return_value=True):
-            with patch("pathlib.Path.glob") as mock_glob:
-                # Mock the glob result for pattern call
-                mock_files = [temp_dir / "file1.txt", temp_dir / "file2.txt"]
-                mock_glob.return_value = mock_files
+        with patch("pathlib.Path.is_dir", return_value=True), patch("pathlib.Path.glob") as mock_glob, patch("pathlib.Path.is_file", return_value=True):
+            # Mock the glob result for pattern call
+            mock_files = [temp_dir / "file1.txt", temp_dir / "file2.txt"]
+            mock_glob.return_value = mock_files
 
-                # Mock is_file to return True for all files
-                with patch("pathlib.Path.is_file", return_value=True):
-                    txt_files = file_utils.list_files(temp_dir, pattern="*.txt")
-                    assert len(txt_files) == 2
-                    mock_glob.assert_called_once_with("*.txt")
+            txt_files = file_utils.list_files(temp_dir, pattern="*.txt")
+            assert len(txt_files) == 2
+            mock_glob.assert_called_once_with("*.txt")
 
         # Test recursive listing
-        with patch("pathlib.Path.is_dir", return_value=True):
-            with patch("pathlib.Path.glob") as mock_glob:
-                # Mock the glob result for recursive call
-                mock_files = [
-                    temp_dir / "file1.txt",
-                    temp_dir / "file2.txt",
-                    temp_dir / "image.png",
-                    sub_dir / "subfile.txt",
-                ]
-                mock_glob.return_value = mock_files
+        with patch("pathlib.Path.is_dir", return_value=True), patch("pathlib.Path.glob") as mock_glob, patch("pathlib.Path.is_file", return_value=True):
+            # Mock the glob result for recursive call
+            mock_files = [
+                temp_dir / "file1.txt",
+                temp_dir / "file2.txt",
+                temp_dir / "image.png",
+                sub_dir / "subfile.txt",
+            ]
+            mock_glob.return_value = mock_files
 
-                # Mock is_file to return True for all files
-                with patch("pathlib.Path.is_file", return_value=True):
-                    all_files = file_utils.list_files(temp_dir, recursive=True)
-                    assert len(all_files) == 4  # 3 in root + 1 in subdir
-                    mock_glob.assert_called_once_with("**/*")
+            all_files = file_utils.list_files(temp_dir, recursive=True)
+            assert len(all_files) == 4  # 3 in root + 1 in subdir
+            mock_glob.assert_called_once_with("**/*")
 
         # Test with nonexistent directory
         mock_paths_exist.return_value = False
@@ -284,9 +275,8 @@ class TestFileUtils:
 
         # Test with file instead of directory
         mock_paths_exist.return_value = True
-        with patch("pathlib.Path.is_dir", return_value=False):
-            with pytest.raises(NotADirectoryError):
-                file_utils.list_files(temp_dir / "file1.txt")
+        with patch("pathlib.Path.is_dir", return_value=False), pytest.raises(NotADirectoryError):
+            file_utils.list_files(temp_dir / "file1.txt")
 
     def test_copy_file(self, tmpdir: Any):
         """Test copying a file."""
@@ -331,13 +321,12 @@ class TestFileUtils:
 
         # Move the file with make_dirs=True
         mock_paths_exist.return_value = True
-        with patch("rpi_weather_display.utils.file_utils.ensure_dir_exists") as mock_ensure_dir:
-            with patch("shutil.move") as mock_move:
-                file_utils.move_file(src_file, dst_file, make_dirs=True)
-                # Verify ensure_dir_exists was called
-                mock_ensure_dir.assert_called_once()
-                # Verify move was called
-                mock_move.assert_called_once_with(src_file, dst_file)
+        with patch("rpi_weather_display.utils.file_utils.ensure_dir_exists") as mock_ensure_dir, patch("shutil.move") as mock_move:
+            file_utils.move_file(src_file, dst_file, make_dirs=True)
+            # Verify ensure_dir_exists was called
+            mock_ensure_dir.assert_called_once()
+            # Verify move was called
+            mock_move.assert_called_once_with(src_file, dst_file)
 
         # Test moving nonexistent file
         mock_paths_exist.return_value = False
@@ -352,11 +341,10 @@ class TestFileUtils:
 
         # Delete the file
         mock_paths_exist.return_value = True
-        with patch("pathlib.Path.is_dir", return_value=False):
-            with patch("pathlib.Path.unlink") as mock_unlink:
-                file_utils.delete_file(temp_file)
-                # Verify the file deletion was attempted
-                mock_unlink.assert_called_once()
+        with patch("pathlib.Path.is_dir", return_value=False), patch("pathlib.Path.unlink") as mock_unlink:
+            file_utils.delete_file(temp_file)
+            # Verify the file deletion was attempted
+            mock_unlink.assert_called_once()
 
         # Try to delete a nonexistent file
         mock_paths_exist.return_value = False
@@ -368,9 +356,8 @@ class TestFileUtils:
         temp_dir.mkdir()
 
         mock_paths_exist.return_value = True
-        with patch("pathlib.Path.is_dir", return_value=True):
-            with pytest.raises(IsADirectoryError):
-                file_utils.delete_file(temp_dir)
+        with patch("pathlib.Path.is_dir", return_value=True), pytest.raises(IsADirectoryError):
+            file_utils.delete_file(temp_dir)
 
     def test_delete_dir(self, tmpdir: Any, mock_paths_exist: MagicMock):
         """Test deleting a directory."""
@@ -380,11 +367,10 @@ class TestFileUtils:
 
         # Delete the empty directory
         mock_paths_exist.return_value = True
-        with patch("pathlib.Path.is_dir", return_value=True):
-            with patch("pathlib.Path.rmdir") as mock_rmdir:
-                file_utils.delete_dir(temp_dir)
-                # Verify directory deletion was attempted
-                mock_rmdir.assert_called_once()
+        with patch("pathlib.Path.is_dir", return_value=True), patch("pathlib.Path.rmdir") as mock_rmdir:
+            file_utils.delete_dir(temp_dir)
+            # Verify directory deletion was attempted
+            mock_rmdir.assert_called_once()
 
         # Create a directory with contents
         temp_dir = Path(tmpdir) / "non_empty_dir"
@@ -393,18 +379,15 @@ class TestFileUtils:
 
         # Try to delete non-empty directory without recursive flag
         mock_paths_exist.return_value = True
-        with patch("pathlib.Path.is_dir", return_value=True):
-            with patch("pathlib.Path.rmdir", side_effect=OSError("Directory not empty")):
-                with pytest.raises(OSError, match="Directory not empty"):
-                    file_utils.delete_dir(temp_dir, recursive=False)
+        with patch("pathlib.Path.is_dir", return_value=True), patch("pathlib.Path.rmdir", side_effect=OSError("Directory not empty")), pytest.raises(OSError, match="Directory not empty"):
+            file_utils.delete_dir(temp_dir, recursive=False)
 
         # Delete with recursive flag
         mock_paths_exist.return_value = True
-        with patch("pathlib.Path.is_dir", return_value=True):
-            with patch("shutil.rmtree") as mock_rmtree:
-                file_utils.delete_dir(temp_dir, recursive=True)
-                # Verify rmtree was called
-                mock_rmtree.assert_called_once()
+        with patch("pathlib.Path.is_dir", return_value=True), patch("shutil.rmtree") as mock_rmtree:
+            file_utils.delete_dir(temp_dir, recursive=True)
+            # Verify rmtree was called
+            mock_rmtree.assert_called_once()
 
         # Try to delete a nonexistent directory
         mock_paths_exist.return_value = False
@@ -416,9 +399,8 @@ class TestFileUtils:
         temp_file.touch()
 
         mock_paths_exist.return_value = True
-        with patch("pathlib.Path.is_dir", return_value=False):
-            with pytest.raises(NotADirectoryError):
-                file_utils.delete_dir(temp_file)
+        with patch("pathlib.Path.is_dir", return_value=False), pytest.raises(NotADirectoryError):
+            file_utils.delete_dir(temp_file)
 
     def test_get_file_size(self, tmpdir: Any):
         """Test getting file size."""
@@ -565,13 +547,10 @@ class TestFileUtils:
             assert f.read() == content
 
         # Test error handling during write
-        with patch("rpi_weather_display.utils.file_utils.write_text", side_effect=PermissionError):
-            with patch("pathlib.Path.unlink") as mock_unlink:
-                with patch("pathlib.Path.exists", return_value=True):
-                    with pytest.raises(PermissionError):
-                        file_utils.atomic_write(file_path, content)
-                    # Verify temp file cleanup was attempted
-                    assert mock_unlink.called
+        with patch("rpi_weather_display.utils.file_utils.write_text", side_effect=PermissionError), patch("pathlib.Path.unlink") as mock_unlink, patch("pathlib.Path.exists", return_value=True), pytest.raises(PermissionError):
+            file_utils.atomic_write(file_path, content)
+        # Verify temp file cleanup was attempted
+        assert mock_unlink.called
 
     def test_write_text_without_make_dirs(self, tmpdir: Any):
         """Test writing text to a file without creating parent directories."""
@@ -692,11 +671,7 @@ class TestFileUtils:
         content = "Test content"
 
         # Mock write_text to raise an error
-        with patch("rpi_weather_display.utils.file_utils.write_text", side_effect=PermissionError):
-            # Mock temp file existence check to return False
-            with patch("pathlib.Path.exists", return_value=False):
-                with patch("pathlib.Path.unlink") as mock_unlink:
-                    with pytest.raises(PermissionError):
-                        file_utils.atomic_write(file_path, content)
-                    # Verify unlink was NOT called since temp file doesn't exist
-                    mock_unlink.assert_not_called()
+        with patch("rpi_weather_display.utils.file_utils.write_text", side_effect=PermissionError), patch("pathlib.Path.exists", return_value=False), patch("pathlib.Path.unlink") as mock_unlink, pytest.raises(PermissionError):
+            file_utils.atomic_write(file_path, content)
+        # Verify unlink was NOT called since temp file doesn't exist
+        mock_unlink.assert_not_called()

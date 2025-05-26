@@ -32,4 +32,3 @@ def _suppress_logging(monkeypatch) -> None:
 
     monkeypatch.setattr("logging.StreamHandler", SilentStreamHandler)
 
-    return

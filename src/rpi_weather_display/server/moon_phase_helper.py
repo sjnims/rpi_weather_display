@@ -98,20 +98,26 @@ class MoonPhaseHelper:
         if phase is None:
             return "New Moon"
 
-        # Get the general phase category
+        # Define phase thresholds and their corresponding labels
+        phase_thresholds = [
+            (MOON_PHASE_NEW_THRESHOLD, 0),  # New Moon
+            (MOON_PHASE_FIRST_QUARTER_MIN, 1),  # Waxing Crescent
+            (MOON_PHASE_FIRST_QUARTER_MAX, 2),  # First Quarter
+            (MOON_PHASE_FULL_MIN, 3),  # Waxing Gibbous
+            (MOON_PHASE_FULL_MAX, 4),  # Full Moon
+            (MOON_PHASE_LAST_QUARTER_MIN, 5),  # Waning Gibbous
+            (MOON_PHASE_LAST_QUARTER_MAX, 6),  # Last Quarter
+            (1 - MOON_PHASE_NEW_THRESHOLD, 7),  # Waning Crescent
+        ]
+        
+        # Special case: phases very close to 0 or 1 are New Moon
         if phase < MOON_PHASE_NEW_THRESHOLD or phase >= (1 - MOON_PHASE_NEW_THRESHOLD):
-            return cls.PHASE_LABELS[0]  # New Moon
-        elif phase < MOON_PHASE_FIRST_QUARTER_MIN:
-            return cls.PHASE_LABELS[1]  # Waxing Crescent
-        elif phase < MOON_PHASE_FIRST_QUARTER_MAX:
-            return cls.PHASE_LABELS[2]  # First Quarter
-        elif phase < MOON_PHASE_FULL_MIN:
-            return cls.PHASE_LABELS[3]  # Waxing Gibbous
-        elif phase < MOON_PHASE_FULL_MAX:
-            return cls.PHASE_LABELS[4]  # Full Moon
-        elif phase < MOON_PHASE_LAST_QUARTER_MIN:
-            return cls.PHASE_LABELS[5]  # Waning Gibbous
-        elif phase < MOON_PHASE_LAST_QUARTER_MAX:
-            return cls.PHASE_LABELS[6]  # Last Quarter
-        else:
-            return cls.PHASE_LABELS[7]  # Waning Crescent
+            return cls.PHASE_LABELS[0]
+        
+        # Find the appropriate phase label
+        for threshold, label_index in phase_thresholds:
+            if phase < threshold:
+                return cls.PHASE_LABELS[label_index]
+        
+        # Default to Waning Crescent (should not reach here)
+        return cls.PHASE_LABELS[7]

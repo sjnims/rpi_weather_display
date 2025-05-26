@@ -31,12 +31,11 @@ class BatteryState(str, Enum):
         value_upper = value.upper()
         if "CHARGING" in value_upper:
             return cls.CHARGING
-        elif "NORMAL" in value_upper or "DISCHARGING" in value_upper:
+        if "NORMAL" in value_upper or "DISCHARGING" in value_upper:
             return cls.DISCHARGING
-        elif "CHARGED" in value_upper or "FULL" in value_upper:
+        if "CHARGED" in value_upper or "FULL" in value_upper:
             return cls.FULL
-        else:
-            return cls.UNKNOWN
+        return cls.UNKNOWN
 
 
 class BatteryStatus(BaseModel):

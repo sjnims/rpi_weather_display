@@ -103,16 +103,15 @@ def get_battery_icon(status: BatteryStatus) -> str:
     """
     if status.state == BatteryState.CHARGING:
         return "battery-charging-bold"
-    elif status.level >= BATTERY_FULL_THRESHOLD:
+    if status.level >= BATTERY_FULL_THRESHOLD:
         return "battery-full-bold"
-    elif status.level > BATTERY_HIGH_THRESHOLD:
+    if status.level > BATTERY_HIGH_THRESHOLD:
         return "battery-high-bold"
-    elif status.level > BATTERY_LOW_THRESHOLD:
+    if status.level > BATTERY_LOW_THRESHOLD:
         return "battery-medium-bold"
-    elif status.level > BATTERY_EMPTY_THRESHOLD:
+    if status.level > BATTERY_EMPTY_THRESHOLD:
         return "battery-low-bold"
-    else:
-        return "battery-empty-bold"
+    return "battery-empty-bold"
 
 
 def get_battery_text_description(status: BatteryStatus) -> str:

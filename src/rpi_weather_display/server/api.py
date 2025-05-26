@@ -420,10 +420,9 @@ class WeatherAPIClient:
                     ),
                     e,
                 ) from e
-            else:
-                raise chain_exception(
-                    WeatherAPIError(
-                        "Geocoding API request failed",
+            raise chain_exception(
+                WeatherAPIError(
+                    "Geocoding API request failed",
                         {"endpoint": self.GEOCODING_URL, "city": self.config.city_name},
                         status_code=e.response.status_code,
                         response_body=e.response.text,
@@ -596,7 +595,7 @@ class WeatherAPIClient:
                     ),
                     e,
                 ) from e
-            elif e.response.status_code == 429:
+            if e.response.status_code == 429:
                 retry_after = e.response.headers.get("Retry-After", "3600")
                 raise chain_exception(
                     APIRateLimitError(
@@ -607,10 +606,9 @@ class WeatherAPIClient:
                     ),
                     e,
                 ) from e
-            else:
-                raise chain_exception(
-                    WeatherAPIError(
-                        "Weather API request failed",
+            raise chain_exception(
+                WeatherAPIError(
+                    "Weather API request failed",
                         {"endpoint": self.BASE_URL, "lat": lat, "lon": lon},
                         status_code=e.response.status_code,
                         response_body=e.response.text,
@@ -663,10 +661,9 @@ class WeatherAPIClient:
                     ),
                     e,
                 ) from e
-            else:
-                raise chain_exception(
-                    WeatherAPIError(
-                        "Air pollution API request failed",
+            raise chain_exception(
+                WeatherAPIError(
+                    "Air pollution API request failed",
                         {"endpoint": self.AIR_POLLUTION_URL, "lat": lat, "lon": lon},
                         status_code=e.response.status_code,
                         response_body=e.response.text,

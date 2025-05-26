@@ -69,18 +69,18 @@ class BatteryThresholdManager:
         # Determine threshold based on battery state and level
         if battery.state == BatteryState.CHARGING:
             return self.config.pixel_diff_threshold
-        elif (
+        if (
             battery.state == BatteryState.DISCHARGING 
             and battery.level <= BATTERY_EMPTY_THRESHOLD
         ):
             return self.config.pixel_diff_threshold_critical_battery
-        elif (
+        if (
             battery.state == BatteryState.DISCHARGING 
             and battery.level <= BATTERY_WARNING_THRESHOLD
         ):
             return self.config.pixel_diff_threshold_low_battery
-        else:
-            return self.config.pixel_diff_threshold
+        
+        return self.config.pixel_diff_threshold
             
     def get_min_changed_pixels(self) -> int:
         """Get minimum changed pixels required based on battery status.
@@ -108,18 +108,18 @@ class BatteryThresholdManager:
         # Determine minimum based on battery state and level
         if battery.state == BatteryState.CHARGING:
             return self.config.min_changed_pixels
-        elif (
+        if (
             battery.state == BatteryState.DISCHARGING 
             and battery.level <= BATTERY_EMPTY_THRESHOLD
         ):
             return self.config.min_changed_pixels_critical_battery
-        elif (
+        if (
             battery.state == BatteryState.DISCHARGING 
             and battery.level <= BATTERY_WARNING_THRESHOLD
         ):
             return self.config.min_changed_pixels_low_battery
-        else:
-            return self.config.min_changed_pixels
+        
+        return self.config.min_changed_pixels
             
     def _should_use_battery_aware_thresholds(self) -> bool:
         """Check if battery-aware thresholds should be used.

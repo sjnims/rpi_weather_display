@@ -107,8 +107,7 @@ class BrowserManager:
         if self._context is None:
             self._context = await browser.new_context()  # type: ignore
 
-        page = await self._context.new_page(viewport={"width": width, "height": height})  # type: ignore
-        return page  # type: ignore
+        return await self._context.new_page(viewport={"width": width, "height": height})  # type: ignore
 
     async def cleanup(self) -> None:
         """Clean up browser resources."""

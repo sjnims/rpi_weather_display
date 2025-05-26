@@ -118,8 +118,7 @@ class TestEPaperDisplay:
         with patch(
             "rpi_weather_display.client.display._import_it8951",
             return_value=None
-        ):
-            with patch("builtins.print") as mock_print:
+        ), patch("builtins.print") as mock_print:
                 self.display.initialize()
                 
                 assert not self.display._initialized

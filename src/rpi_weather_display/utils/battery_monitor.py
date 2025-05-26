@@ -111,7 +111,7 @@ class BatteryMonitor:
             data = response.get("data")
             if isinstance(data, int | float):
                 return float(data) / divisor
-            elif isinstance(data, str):
+            if isinstance(data, str):
                 try:
                     return float(data) / divisor
                 except ValueError:

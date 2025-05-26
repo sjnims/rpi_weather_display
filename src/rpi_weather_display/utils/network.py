@@ -595,12 +595,11 @@ class AsyncNetworkManager:
         if battery_level <= self.config.critical_battery_threshold:
             # Use aggressive power saving when battery is critically low
             return "aggressive"
-        elif battery_level <= self.config.low_battery_threshold:
+        if battery_level <= self.config.low_battery_threshold:
             # Use regular power saving when battery is low
             return "on"
-        else:
-            # Disable power saving when battery is good
-            return "off"
+        # Disable power saving when battery is good
+        return "off"
     
     @staticmethod
     def _is_valid_power_save_mode(mode: str) -> bool:

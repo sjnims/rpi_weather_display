@@ -110,19 +110,19 @@ class TestWeatherCalculator:
             hourly.uvi = hour * 0.5 if hour < 14 else (24 - hour) * 0.5  # Peak at 13:00
             sample_weather_data.hourly.append(hourly)
         
-        with patch("rpi_weather_display.server.weather_calculator.path_resolver.get_cache_file") as mock_cache:
-            with patch("rpi_weather_display.server.weather_calculator.file_utils.file_exists") as mock_exists:
-                with patch("rpi_weather_display.server.weather_calculator.file_utils.write_json") as mock_write:
-                    mock_cache.return_value = Path("/tmp/uvi_cache.json")
-                    mock_exists.return_value = False
-                    
-                    max_uvi, timestamp = calculator.get_daily_max_uvi(sample_weather_data, now)
-                    
-                    assert max_uvi == 6.5  # Max at 13:00
-                    assert timestamp == sample_weather_data.hourly[13].dt
-                    
-                    # Verify cache was written
-                    mock_write.assert_called_once()
+        with patch("rpi_weather_display.server.weather_calculator.path_resolver.get_cache_file") as mock_cache, patch(
+            "rpi_weather_display.server.weather_calculator.file_utils.file_exists"
+        ) as mock_exists, patch("rpi_weather_display.server.weather_calculator.file_utils.write_json") as mock_write:
+            mock_cache.return_value = Path("/tmp/uvi_cache.json")
+            mock_exists.return_value = False
+            
+            max_uvi, timestamp = calculator.get_daily_max_uvi(sample_weather_data, now)
+            
+            assert max_uvi == 6.5  # Max at 13:00
+            assert timestamp == sample_weather_data.hourly[13].dt
+            
+            # Verify cache was written
+            mock_write.assert_called_once()
 
     def test_get_daily_max_uvi_with_valid_cache(
         self, calculator: WeatherCalculator, sample_weather_data: Mock
@@ -133,24 +133,24 @@ class TestWeatherCalculator:
         # Set current UVI lower than cached
         sample_weather_data.current.uvi = 3.0
         
-        with patch("rpi_weather_display.server.weather_calculator.path_resolver.get_cache_file") as mock_cache:
-            with patch("rpi_weather_display.server.weather_calculator.file_utils.file_exists") as mock_exists:
-                with patch("rpi_weather_display.server.weather_calculator.file_utils.read_json") as mock_read:
-                    mock_cache.return_value = Path("/tmp/uvi_cache.json")
-                    mock_exists.return_value = True
-                    
-                    # Cache has higher UVI from earlier today
-                    cache_data = {
-                        "date": "2024-01-15",
-                        "max_uvi": 8.5,
-                        "timestamp": int(datetime(2024, 1, 15, 12, 0, 0).timestamp())
-                    }
-                    mock_read.return_value = cache_data
-                    
-                    max_uvi, timestamp = calculator.get_daily_max_uvi(sample_weather_data, now)
-                    
-                    assert max_uvi == 8.5  # Cached value
-                    assert timestamp == cache_data["timestamp"]
+        with patch("rpi_weather_display.server.weather_calculator.path_resolver.get_cache_file") as mock_cache, patch(
+            "rpi_weather_display.server.weather_calculator.file_utils.file_exists"
+        ) as mock_exists, patch("rpi_weather_display.server.weather_calculator.file_utils.read_json") as mock_read:
+            mock_cache.return_value = Path("/tmp/uvi_cache.json")
+            mock_exists.return_value = True
+            
+            # Cache has higher UVI from earlier today
+            cache_data = {
+                "date": "2024-01-15",
+                "max_uvi": 8.5,
+                "timestamp": int(datetime(2024, 1, 15, 12, 0, 0).timestamp())
+            }
+            mock_read.return_value = cache_data
+            
+            max_uvi, timestamp = calculator.get_daily_max_uvi(sample_weather_data, now)
+            
+            assert max_uvi == 8.5  # Cached value
+            assert timestamp == cache_data["timestamp"]
 
     def test_get_daily_max_uvi_with_outdated_cache(
         self, calculator: WeatherCalculator, sample_weather_data: Mock
@@ -158,28 +158,29 @@ class TestWeatherCalculator:
         """Test getting daily max UVI with outdated cache."""
         now = datetime(2024, 1, 15, 12, 0, 0)
         
-        with patch("rpi_weather_display.server.weather_calculator.path_resolver.get_cache_file") as mock_cache:
-            with patch("rpi_weather_display.server.weather_calculator.file_utils.file_exists") as mock_exists:
-                with patch("rpi_weather_display.server.weather_calculator.file_utils.read_json") as mock_read:
-                    with patch("rpi_weather_display.server.weather_calculator.file_utils.write_json") as mock_write:
-                        mock_cache.return_value = Path("/tmp/uvi_cache.json")
-                        mock_exists.return_value = True
-                        
-                        # Cache from yesterday
-                        cache_data = {
-                            "date": "2024-01-14",
-                            "max_uvi": 10.0,
-                            "timestamp": int(datetime(2024, 1, 14, 12, 0, 0).timestamp())
-                        }
-                        mock_read.return_value = cache_data
-                        
-                        max_uvi, timestamp = calculator.get_daily_max_uvi(sample_weather_data, now)
-                        
-                        assert max_uvi == 5.5  # Current value (cache ignored)
-                        assert timestamp == int(now.timestamp())
-                        
-                        # Verify new cache was written
-                        mock_write.assert_called_once()
+        with patch("rpi_weather_display.server.weather_calculator.path_resolver.get_cache_file") as mock_cache, patch(
+            "rpi_weather_display.server.weather_calculator.file_utils.file_exists"
+        ) as mock_exists, patch(
+            "rpi_weather_display.server.weather_calculator.file_utils.read_json"
+        ) as mock_read, patch("rpi_weather_display.server.weather_calculator.file_utils.write_json") as mock_write:
+            mock_cache.return_value = Path("/tmp/uvi_cache.json")
+            mock_exists.return_value = True
+            
+            # Cache from yesterday
+            cache_data = {
+                "date": "2024-01-14",
+                "max_uvi": 10.0,
+                "timestamp": int(datetime(2024, 1, 14, 12, 0, 0).timestamp())
+            }
+            mock_read.return_value = cache_data
+            
+            max_uvi, timestamp = calculator.get_daily_max_uvi(sample_weather_data, now)
+            
+            assert max_uvi == 5.5  # Current value (cache ignored)
+            assert timestamp == int(now.timestamp())
+            
+            # Verify new cache was written
+            mock_write.assert_called_once()
 
     def test_calculate_current_max_uvi_no_current_uvi(
         self, calculator: WeatherCalculator
@@ -234,15 +235,16 @@ class TestWeatherCalculator:
         cache_file = Path("/tmp/uvi_cache.json")
         today = date(2024, 1, 15)
         
-        with patch("rpi_weather_display.server.weather_calculator.file_utils.file_exists") as mock_exists:
-            with patch("rpi_weather_display.server.weather_calculator.file_utils.read_json") as mock_read:
-                mock_exists.return_value = True
-                mock_read.side_effect = Exception("Invalid JSON")
-                
-                uvi, timestamp = calculator._read_uvi_cache(cache_file, today)
-                
-                assert uvi is None
-                assert timestamp is None
+        with patch("rpi_weather_display.server.weather_calculator.file_utils.file_exists") as mock_exists, patch(
+            "rpi_weather_display.server.weather_calculator.file_utils.read_json"
+        ) as mock_read:
+            mock_exists.return_value = True
+            mock_read.side_effect = Exception("Invalid JSON")
+            
+            uvi, timestamp = calculator._read_uvi_cache(cache_file, today)
+            
+            assert uvi is None
+            assert timestamp is None
 
     def test_read_uvi_cache_invalid_structure(
         self, calculator: WeatherCalculator
@@ -251,37 +253,38 @@ class TestWeatherCalculator:
         cache_file = Path("/tmp/uvi_cache.json")
         today = date(2024, 1, 15)
         
-        with patch("rpi_weather_display.server.weather_calculator.file_utils.file_exists") as mock_exists:
-            with patch("rpi_weather_display.server.weather_calculator.file_utils.read_json") as mock_read:
-                mock_exists.return_value = True
-                
-                # Test non-dict cache data
-                mock_read.return_value = []
-                uvi, timestamp = calculator._read_uvi_cache(cache_file, today)
-                assert uvi is None
-                assert timestamp is None
-                
-                # Test missing date
-                mock_read.return_value = {"max_uvi": 5.0, "timestamp": 12345}
-                uvi, timestamp = calculator._read_uvi_cache(cache_file, today)
-                assert uvi is None
-                assert timestamp is None
-                
-                # Test invalid date type
-                mock_read.return_value = {"date": 12345, "max_uvi": 5.0, "timestamp": 12345}
-                uvi, timestamp = calculator._read_uvi_cache(cache_file, today)
-                assert uvi is None
-                assert timestamp is None
-                
-                # Test invalid value types
-                mock_read.return_value = {
-                    "date": "2024-01-15", 
-                    "max_uvi": "not a number", 
-                    "timestamp": 12345
-                }
-                uvi, timestamp = calculator._read_uvi_cache(cache_file, today)
-                assert uvi is None
-                assert timestamp is None
+        with patch("rpi_weather_display.server.weather_calculator.file_utils.file_exists") as mock_exists, patch(
+            "rpi_weather_display.server.weather_calculator.file_utils.read_json"
+        ) as mock_read:
+            mock_exists.return_value = True
+            
+            # Test non-dict cache data
+            mock_read.return_value = []
+            uvi, timestamp = calculator._read_uvi_cache(cache_file, today)
+            assert uvi is None
+            assert timestamp is None
+            
+            # Test missing date
+            mock_read.return_value = {"max_uvi": 5.0, "timestamp": 12345}
+            uvi, timestamp = calculator._read_uvi_cache(cache_file, today)
+            assert uvi is None
+            assert timestamp is None
+            
+            # Test invalid date type
+            mock_read.return_value = {"date": 12345, "max_uvi": 5.0, "timestamp": 12345}
+            uvi, timestamp = calculator._read_uvi_cache(cache_file, today)
+            assert uvi is None
+            assert timestamp is None
+            
+            # Test invalid value types
+            mock_read.return_value = {
+                "date": "2024-01-15", 
+                "max_uvi": "not a number", 
+                "timestamp": 12345
+            }
+            uvi, timestamp = calculator._read_uvi_cache(cache_file, today)
+            assert uvi is None
+            assert timestamp is None
 
     def test_write_uvi_cache_exception(
         self, calculator: WeatherCalculator
@@ -310,19 +313,19 @@ class TestWeatherCalculator:
         
         now = datetime(2024, 1, 15, 12, 0, 0)
         
-        with patch("rpi_weather_display.server.weather_calculator.path_resolver.get_cache_file") as mock_cache:
-            with patch("rpi_weather_display.server.weather_calculator.file_utils.file_exists") as mock_exists:
-                with patch("rpi_weather_display.server.weather_calculator.file_utils.write_json") as mock_write:
-                    mock_cache.return_value = Path("/tmp/uvi_cache.json")
-                    mock_exists.return_value = False
-                    
-                    max_uvi, timestamp = calculator.get_daily_max_uvi(weather_data, now)
-                    
-                    assert max_uvi == 0.0
-                    assert timestamp == int(now.timestamp())
-                    
-                    # Should not write to cache with zero UVI
-                    mock_write.assert_not_called()
+        with patch("rpi_weather_display.server.weather_calculator.path_resolver.get_cache_file") as mock_cache, patch(
+            "rpi_weather_display.server.weather_calculator.file_utils.file_exists"
+        ) as mock_exists, patch("rpi_weather_display.server.weather_calculator.file_utils.write_json") as mock_write:
+            mock_cache.return_value = Path("/tmp/uvi_cache.json")
+            mock_exists.return_value = False
+            
+            max_uvi, timestamp = calculator.get_daily_max_uvi(weather_data, now)
+            
+            assert max_uvi == 0.0
+            assert timestamp == int(now.timestamp())
+            
+            # Should not write to cache with zero UVI
+            mock_write.assert_not_called()
 
     def test_calculate_current_max_uvi_no_uvi_in_hourly(
         self, calculator: WeatherCalculator
@@ -352,22 +355,23 @@ class TestWeatherCalculator:
         cache_file = Path("/tmp/uvi_cache.json")
         today = date(2024, 1, 15)
         
-        with patch("rpi_weather_display.server.weather_calculator.file_utils.file_exists") as mock_exists:
-            with patch("rpi_weather_display.server.weather_calculator.file_utils.read_json") as mock_read:
-                mock_exists.return_value = True
-                
-                # Test with int max_uvi
-                cache_data = {
-                    "date": "2024-01-15",
-                    "max_uvi": 8,  # int
-                    "timestamp": 12345
-                }
-                mock_read.return_value = cache_data
-                
-                uvi, timestamp = calculator._read_uvi_cache(cache_file, today)
-                
-                assert uvi == 8.0  # Converted to float
-                assert timestamp == 12345
+        with patch("rpi_weather_display.server.weather_calculator.file_utils.file_exists") as mock_exists, patch(
+            "rpi_weather_display.server.weather_calculator.file_utils.read_json"
+        ) as mock_read:
+            mock_exists.return_value = True
+            
+            # Test with int max_uvi
+            cache_data = {
+                "date": "2024-01-15",
+                "max_uvi": 8,  # int
+                "timestamp": 12345
+            }
+            mock_read.return_value = cache_data
+            
+            uvi, timestamp = calculator._read_uvi_cache(cache_file, today)
+            
+            assert uvi == 8.0  # Converted to float
+            assert timestamp == 12345
 
     def test_calculate_daylight_hours_edge_cases(self, calculator: WeatherCalculator) -> None:
         """Test daylight calculation edge cases."""

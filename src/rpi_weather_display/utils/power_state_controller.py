@@ -242,10 +242,11 @@ class PowerStateController:
         # Check if this is an invalid transition
         if (old_state, new_state) in invalid_transitions:
             # Special check for CRITICAL -> QUIET_HOURS
-            if old_state == PowerState.CRITICAL and new_state == PowerState.QUIET_HOURS:
-                # Allow if battery is no longer critical
-                if battery_status.level > self.config.power.critical_battery_threshold:
-                    return
+            # Allow if battery is no longer critical
+            if (old_state == PowerState.CRITICAL and 
+                new_state == PowerState.QUIET_HOURS and 
+                battery_status.level > self.config.power.critical_battery_threshold):
+                return
                     
             raise PowerStateError(
                 f"Invalid power state transition: {old_state.name} -> {new_state.name}",
@@ -356,12 +357,11 @@ class PowerStateController:
             return False
 
         # In critical state, only update if really old
-        if self._current_state == PowerState.CRITICAL:
-            if self._last_weather_update:
-                elapsed = datetime.now() - self._last_weather_update
-                if elapsed < timedelta(hours=1):
-                    logger.info("Critical power state, skipping frequent weather updates")
-                    return False
+        if self._current_state == PowerState.CRITICAL and self._last_weather_update:
+            elapsed = datetime.now() - self._last_weather_update
+            if elapsed < timedelta(hours=1):
+                logger.info("Critical power state, skipping frequent weather updates")
+                return False
 
         return True
 
@@ -468,17 +468,15 @@ class PowerStateController:
             else:
                 # Not in quiet hours, calculate time until start
                 end_time = today_start
+        elif quiet_start <= now.time() < quiet_end:
+            # In quiet hours, calculate time until end
+            end_time = today_end
+        elif now.time() < quiet_start:
+            # Before quiet hours, calculate time until start
+            end_time = today_start
         else:
-            # Normal quiet hours (don't span midnight)
-            if quiet_start <= now.time() < quiet_end:
-                # In quiet hours, calculate time until end
-                end_time = today_end
-            elif now.time() < quiet_start:
-                # Before quiet hours, calculate time until start
-                end_time = today_start
-            else:
-                # After quiet hours, calculate time until tomorrow's start
-                end_time = today_start + timedelta(days=1)
+            # After quiet hours, calculate time until tomorrow's start
+            end_time = today_start + timedelta(days=1)
 
         # Calculate minutes
         delta = end_time - now

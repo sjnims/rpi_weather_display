@@ -42,9 +42,8 @@ def is_quiet_hours(quiet_hours_start: str, quiet_hours_end: str) -> bool:
         if start_time <= end_time:
             # Simple case: start time is before end time
             return start_time <= now <= end_time
-        else:
-            # Complex case: quiet hours span midnight
-            return now >= start_time or now <= end_time
+        # Complex case: quiet hours span midnight
+        return now >= start_time or now <= end_time
     except ValueError:
         logger.error(f"Invalid quiet hours format: {quiet_hours_start} - {quiet_hours_end}")
         return False

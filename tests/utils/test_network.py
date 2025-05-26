@@ -101,20 +101,18 @@ class TestAsyncNetworkManager:
     def patch_wifi_script(sudo_exists: bool = True, script_exists: bool = True) -> Any:
         """Helper to patch wifi-sleep.sh script and sudo checks."""
         def get_bin_path(cmd: str) -> str:
-            if cmd == "sudo":
-                return "/usr/bin/sudo"
-            elif cmd == "ifconfig":
-                return "/usr/bin/ifconfig"
-            elif cmd == "iw":
-                return "/usr/bin/iw"
-            elif cmd == "iwconfig":
-                return "/usr/bin/iwconfig"
-            return f"/usr/bin/{cmd}"
+            cmd_paths = {
+                "sudo": "/usr/bin/sudo",
+                "ifconfig": "/usr/bin/ifconfig",
+                "iw": "/usr/bin/iw",
+                "iwconfig": "/usr/bin/iwconfig",
+            }
+            return cmd_paths.get(cmd, f"/usr/bin/{cmd}")
         
         def file_exists_check(path: str) -> bool:
             if "sudo" in path:
                 return sudo_exists
-            elif "wifi-sleep.sh" in path:
+            if "wifi-sleep.sh" in path:
                 return script_exists
             return True
         
@@ -148,27 +146,29 @@ class TestAsyncNetworkManager:
     async def test_get_network_status_connected(self, network_manager):
         """Test getting network status when connected."""
         # Mock the internal methods
-        with patch.object(network_manager, "_check_connectivity", return_value=True) as mock_check:
-            with patch.object(network_manager, "_get_ssid", return_value="TestSSID") as mock_ssid:
-                with patch.object(
-                    network_manager, "_get_ip_address", return_value="192.168.1.100"
-                ) as mock_ip:
-                    with patch.object(
-                        network_manager, "_get_signal_strength", return_value=-50
-                    ) as mock_signal:
-                        status = await network_manager.get_network_status()
+        with (
+            patch.object(network_manager, "_check_connectivity", return_value=True) as mock_check,
+            patch.object(network_manager, "_get_ssid", return_value="TestSSID") as mock_ssid,
+            patch.object(
+                network_manager, "_get_ip_address", return_value="192.168.1.100"
+            ) as mock_ip,
+            patch.object(
+                network_manager, "_get_signal_strength", return_value=-50
+            ) as mock_signal,
+        ):
+            status = await network_manager.get_network_status()
 
-                        assert status.state == NetworkState.CONNECTED
-                        assert status.ssid == "TestSSID"
-                        assert status.ip_address == "192.168.1.100"
-                        assert status.signal_strength == -50
-                        assert isinstance(status.last_connection, datetime)
+            assert status.state == NetworkState.CONNECTED
+            assert status.ssid == "TestSSID"
+            assert status.ip_address == "192.168.1.100"
+            assert status.signal_strength == -50
+            assert isinstance(status.last_connection, datetime)
 
-                        # Verify all methods were called
-                        mock_check.assert_called_once()
-                        mock_ssid.assert_called_once()
-                        mock_ip.assert_called_once()
-                        mock_signal.assert_called_once()
+            # Verify all methods were called
+            mock_check.assert_called_once()
+            mock_ssid.assert_called_once()
+            mock_ip.assert_called_once()
+            mock_signal.assert_called_once()
 
     @pytest.mark.asyncio()
     async def test_get_network_status_disconnected(self, network_manager):
@@ -339,16 +339,18 @@ class TestAsyncNetworkManager:
     @pytest.mark.asyncio()
     async def test_get_ssid_success(self, network_manager):
         """Test getting SSID successfully."""
-        with self.patch_file_command("/usr/bin/iwgetid", exists=True):
-            with patch.object(
+        with (
+            self.patch_file_command("/usr/bin/iwgetid", exists=True),
+            patch.object(
                 network_manager,
                 "_run_subprocess",
                 return_value=Mock(returncode=0, stdout="TestNetwork\n", stderr=""),
-            ) as mock_run:
-                ssid = await network_manager._get_ssid()
+            ) as mock_run,
+        ):
+            ssid = await network_manager._get_ssid()
 
-                assert ssid == "TestNetwork"
-                mock_run.assert_called_once()
+            assert ssid == "TestNetwork"
+            mock_run.assert_called_once()
 
     @pytest.mark.asyncio()
     async def test_get_ssid_command_not_found(self, network_manager):
@@ -360,14 +362,16 @@ class TestAsyncNetworkManager:
     @pytest.mark.asyncio()
     async def test_get_ssid_failure(self, network_manager):
         """Test getting SSID failure."""
-        with self.patch_file_command("/usr/bin/iwgetid", exists=True):
-            with patch.object(
+        with (
+            self.patch_file_command("/usr/bin/iwgetid", exists=True),
+            patch.object(
                 network_manager,
                 "_run_subprocess",
                 return_value=Mock(returncode=1, stdout="", stderr="Error"),
-            ):
-                ssid = await network_manager._get_ssid()
-                assert ssid is None
+            ),
+        ):
+            ssid = await network_manager._get_ssid()
+            assert ssid is None
 
     @pytest.mark.asyncio()
     async def test_get_ip_address_success(self, network_manager):
@@ -397,52 +401,60 @@ wlan0     IEEE 802.11  ESSID:"TestNetwork"
           Bit Rate=72.2 Mb/s   Tx-Power=20 dBm
           Link Quality=70/70  Signal level=-40 dBm
 """
-        with self.patch_file_command("/usr/bin/iwconfig", exists=True):
-            with patch.object(
+        with (
+            self.patch_file_command("/usr/bin/iwconfig", exists=True),
+            patch.object(
                 network_manager,
                 "_run_subprocess",
                 return_value=Mock(returncode=0, stdout=output, stderr=""),
-            ):
-                signal = await network_manager._get_signal_strength()
-                assert signal == -40
+            ),
+        ):
+            signal = await network_manager._get_signal_strength()
+            assert signal == -40
 
     @pytest.mark.asyncio()
     async def test_get_signal_strength_not_found(self, network_manager):
         """Test getting signal strength when not found in output."""
-        with self.patch_file_command("/usr/bin/iwconfig", exists=True):
-            with patch.object(
+        with (
+            self.patch_file_command("/usr/bin/iwconfig", exists=True),
+            patch.object(
                 network_manager,
                 "_run_subprocess",
                 return_value=Mock(returncode=0, stdout="No signal info", stderr=""),
-            ):
-                signal = await network_manager._get_signal_strength()
-                assert signal is None
+            ),
+        ):
+            signal = await network_manager._get_signal_strength()
+            assert signal is None
 
     @pytest.mark.asyncio()
     async def test_get_signal_strength_parse_error(self, network_manager):
         """Test getting signal strength with parse error."""
         output = "Signal level=invalid"
-        with self.patch_file_command("/usr/bin/iwconfig", exists=True):
-            with patch.object(
+        with (
+            self.patch_file_command("/usr/bin/iwconfig", exists=True),
+            patch.object(
                 network_manager,
                 "_run_subprocess",
                 return_value=Mock(returncode=0, stdout=output, stderr=""),
-            ):
-                signal = await network_manager._get_signal_strength()
-                assert signal is None
+            ),
+        ):
+            signal = await network_manager._get_signal_strength()
+            assert signal is None
 
     @pytest.mark.asyncio()
     async def test_ensure_connectivity_already_connected(self, network_manager):
         """Test ensure_connectivity when already connected."""
-        with patch.object(network_manager, "_check_connectivity", return_value=True):
-            with patch.object(
+        with (
+            patch.object(network_manager, "_check_connectivity", return_value=True),
+            patch.object(
                 network_manager, "_disable_wifi", new_callable=AsyncMock
-            ) as mock_disable:
-                async with network_manager.ensure_connectivity() as connected:
-                    assert connected is True
+            ) as mock_disable,
+        ):
+            async with network_manager.ensure_connectivity() as connected:
+                assert connected is True
 
-                # WiFi should be disabled after context exit
-                mock_disable.assert_called_once()
+            # WiFi should be disabled after context exit
+            mock_disable.assert_called_once()
 
     @pytest.mark.asyncio()
     async def test_ensure_connectivity_connect_success(self, network_manager):
@@ -457,29 +469,33 @@ wlan0     IEEE 802.11  ESSID:"TestNetwork"
             check_call_count += 1
             return result
 
-        with patch.object(network_manager, "_check_connectivity", side_effect=mock_check):
-            with patch.object(
+        with (
+            patch.object(network_manager, "_check_connectivity", side_effect=mock_check),
+            patch.object(
                 network_manager, "_enable_wifi", new_callable=AsyncMock
-            ) as mock_enable:
-                with patch.object(
-                    network_manager, "_disable_wifi", new_callable=AsyncMock
-                ) as mock_disable:
-                    with patch.object(network_manager, "_try_connect", return_value=True):
-                        async with network_manager.ensure_connectivity() as connected:
-                            assert connected is True
+            ) as mock_enable,
+            patch.object(
+                network_manager, "_disable_wifi", new_callable=AsyncMock
+            ) as mock_disable,
+            patch.object(network_manager, "_try_connect", return_value=True),
+        ):
+            async with network_manager.ensure_connectivity() as connected:
+                assert connected is True
 
-                        mock_enable.assert_called_once()
-                        mock_disable.assert_called_once()
+            mock_enable.assert_called_once()
+            mock_disable.assert_called_once()
 
     @pytest.mark.asyncio()
     async def test_ensure_connectivity_connect_failure(self, network_manager):
         """Test ensure_connectivity with connection failure."""
-        with patch.object(network_manager, "_check_connectivity", return_value=False):
-            with patch.object(network_manager, "_enable_wifi", new_callable=AsyncMock):
-                with patch.object(network_manager, "_disable_wifi", new_callable=AsyncMock):
-                    with patch.object(network_manager, "with_retry", return_value=None):
-                        async with network_manager.ensure_connectivity() as connected:
-                            assert connected is False
+        with (
+            patch.object(network_manager, "_check_connectivity", return_value=False),
+            patch.object(network_manager, "_enable_wifi", new_callable=AsyncMock),
+            patch.object(network_manager, "_disable_wifi", new_callable=AsyncMock),
+            patch.object(network_manager, "with_retry", return_value=None),
+        ):
+            async with network_manager.ensure_connectivity() as connected:
+                assert connected is False
 
     @pytest.mark.asyncio()
     async def test_try_connect_success(self, network_manager):
@@ -492,11 +508,13 @@ wlan0     IEEE 802.11  ESSID:"TestNetwork"
             # Succeed on second try
             return check_count >= 2
             
-        with patch.object(network_manager, "_check_connectivity", side_effect=mock_check):
-            with patch("asyncio.sleep", new_callable=AsyncMock):
-                result = await network_manager._try_connect()
-                assert result is True
-                assert check_count >= 2
+        with (
+            patch.object(network_manager, "_check_connectivity", side_effect=mock_check),
+            patch("asyncio.sleep", new_callable=AsyncMock),
+        ):
+            result = await network_manager._try_connect()
+            assert result is True
+            assert check_count >= 2
 
     @pytest.mark.asyncio()
     async def test_try_connect_timeout(self, network_manager):
@@ -504,14 +522,16 @@ wlan0     IEEE 802.11  ESSID:"TestNetwork"
         from rpi_weather_display.exceptions import NetworkTimeoutError
         
         # Always return False to simulate no connectivity
-        with patch.object(network_manager, "_check_connectivity", return_value=False):
-            with patch("asyncio.sleep", new_callable=AsyncMock):
-                with patch("time.time", side_effect=[0, 5, 10, 15]):  # Simulate time passing
-                    with pytest.raises(NetworkTimeoutError) as exc_info:
-                        await network_manager._try_connect()
-                        
-                    assert "Connection attempt timed out" in str(exc_info.value)
-                    assert exc_info.value.details["timeout"] == network_manager.config.wifi_timeout_seconds
+        with (
+            patch.object(network_manager, "_check_connectivity", return_value=False),
+            patch("asyncio.sleep", new_callable=AsyncMock),
+            patch("time.time", side_effect=[0, 5, 10, 15]),  # Simulate time passing
+        ):
+            with pytest.raises(NetworkTimeoutError) as exc_info:
+                await network_manager._try_connect()
+                
+            assert "Connection attempt timed out" in str(exc_info.value)
+            assert exc_info.value.details["timeout"] == network_manager.config.wifi_timeout_seconds
 
     @pytest.mark.asyncio()
     async def test_ensure_connectivity_debug_mode(self, network_manager, app_config):
@@ -519,78 +539,88 @@ wlan0     IEEE 802.11  ESSID:"TestNetwork"
         app_config.debug = True
         network_manager.set_app_config(app_config)
 
-        with patch.object(network_manager, "_check_connectivity", return_value=True):
-            with patch.object(
+        with (
+            patch.object(network_manager, "_check_connectivity", return_value=True),
+            patch.object(
                 network_manager, "_disable_wifi", new_callable=AsyncMock
-            ) as mock_disable:
-                async with network_manager.ensure_connectivity() as connected:
-                    assert connected is True
+            ) as mock_disable,
+        ):
+            async with network_manager.ensure_connectivity() as connected:
+                assert connected is True
 
-                # WiFi should NOT be disabled in debug mode
-                mock_disable.assert_not_called()
+            # WiFi should NOT be disabled in debug mode
+            mock_disable.assert_not_called()
 
 
 
     @pytest.mark.asyncio()
     async def test_enable_wifi_with_script(self, network_manager):
         """Test enabling WiFi with wifi-sleep.sh script."""
-        with self.patch_wifi_script(sudo_exists=True, script_exists=True):
-            with patch.object(
+        with (
+            self.patch_wifi_script(sudo_exists=True, script_exists=True),
+            patch.object(
                 network_manager, "_run_subprocess", new_callable=AsyncMock
-            ) as mock_run:
-                with patch.object(
-                    network_manager, "_apply_power_save_mode", new_callable=AsyncMock
-                ) as mock_power:
-                    await network_manager._enable_wifi()
+            ) as mock_run,
+            patch.object(
+                network_manager, "_apply_power_save_mode", new_callable=AsyncMock
+            ) as mock_power,
+        ):
+            await network_manager._enable_wifi()
 
-                    mock_run.assert_called_once()
-                    args = mock_run.call_args[0][0]
-                    assert "sudo" in args[0]
-                    assert "wifi-sleep.sh" in args[1]
-                    assert args[2] == "on"
-                    mock_power.assert_called_once()
+            mock_run.assert_called_once()
+            args = mock_run.call_args[0][0]
+            assert "sudo" in args[0]
+            assert "wifi-sleep.sh" in args[1]
+            assert args[2] == "on"
+            mock_power.assert_called_once()
 
     @pytest.mark.asyncio()
     async def test_enable_wifi_script_not_found(self, network_manager):
         """Test enabling WiFi when script not found."""
-        with self.patch_wifi_script(sudo_exists=True, script_exists=False):
-            with patch.object(
+        with (
+            self.patch_wifi_script(sudo_exists=True, script_exists=False),
+            patch.object(
                 network_manager, "_enable_wifi_legacy", new_callable=AsyncMock
-            ) as mock_legacy:
-                await network_manager._enable_wifi()
-                mock_legacy.assert_called_once()
+            ) as mock_legacy,
+        ):
+            await network_manager._enable_wifi()
+            mock_legacy.assert_called_once()
 
     @pytest.mark.asyncio()
     async def test_enable_wifi_script_error(self, network_manager):
         """Test enabling WiFi when script fails."""
-        with self.patch_wifi_script(sudo_exists=True, script_exists=True):
-            with patch.object(
+        with (
+            self.patch_wifi_script(sudo_exists=True, script_exists=True),
+            patch.object(
                 network_manager, "_run_subprocess", side_effect=subprocess.SubprocessError("Failed")
-            ):
-                with patch.object(
-                    network_manager, "_enable_wifi_legacy", new_callable=AsyncMock
-                ) as mock_legacy:
-                    await network_manager._enable_wifi()
-                    mock_legacy.assert_called_once()
+            ),
+            patch.object(
+                network_manager, "_enable_wifi_legacy", new_callable=AsyncMock
+            ) as mock_legacy,
+        ):
+            await network_manager._enable_wifi()
+            mock_legacy.assert_called_once()
 
     @pytest.mark.asyncio()
     async def test_enable_wifi_legacy(self, network_manager):
         """Test enabling WiFi with legacy method."""
-        with self.patch_wifi_script(sudo_exists=True, script_exists=True):
-            with patch.object(
+        with (
+            self.patch_wifi_script(sudo_exists=True, script_exists=True),
+            patch.object(
                 network_manager, "_run_subprocess", new_callable=AsyncMock
-            ) as mock_run:
-                with patch.object(
-                    network_manager, "_apply_power_save_mode", new_callable=AsyncMock
-                ):
-                    await network_manager._enable_wifi_legacy()
+            ) as mock_run,
+            patch.object(
+                network_manager, "_apply_power_save_mode", new_callable=AsyncMock
+            ),
+        ):
+            await network_manager._enable_wifi_legacy()
 
-                    mock_run.assert_called_once()
-                    args = mock_run.call_args[0][0]
-                    assert "sudo" in args[0]
-                    assert "ifconfig" in args[1]
-                    assert WIFI_INTERFACE_NAME in args[2]
-                    assert "up" in args[3]
+            mock_run.assert_called_once()
+            args = mock_run.call_args[0][0]
+            assert "sudo" in args[0]
+            assert "ifconfig" in args[1]
+            assert WIFI_INTERFACE_NAME in args[2]
+            assert "up" in args[3]
 
     @pytest.mark.asyncio()
     async def test_apply_power_save_mode(self, network_manager):
@@ -606,50 +636,56 @@ wlan0     IEEE 802.11  ESSID:"TestNetwork"
     @pytest.mark.asyncio()
     async def test_disable_wifi_with_script(self, network_manager):
         """Test disabling WiFi with wifi-sleep.sh script."""
-        with self.patch_wifi_script(sudo_exists=True, script_exists=True):
-            with patch.object(
+        with (
+            self.patch_wifi_script(sudo_exists=True, script_exists=True),
+            patch.object(
                 network_manager, "_run_subprocess", new_callable=AsyncMock
-            ) as mock_run:
-                await network_manager._disable_wifi()
+            ) as mock_run,
+        ):
+            await network_manager._disable_wifi()
 
-                mock_run.assert_called_once()
-                args = mock_run.call_args[0][0]
-                assert "sudo" in args[0]
-                assert "wifi-sleep.sh" in args[1]
-                assert args[2] == "off"
+            mock_run.assert_called_once()
+            args = mock_run.call_args[0][0]
+            assert "sudo" in args[0]
+            assert "wifi-sleep.sh" in args[1]
+            assert args[2] == "off"
 
     @pytest.mark.asyncio()
     async def test_disable_wifi_legacy(self, network_manager):
         """Test disabling WiFi with legacy method."""
-        with self.patch_wifi_script(sudo_exists=True, script_exists=True):
-            with patch.object(
+        with (
+            self.patch_wifi_script(sudo_exists=True, script_exists=True),
+            patch.object(
                 network_manager, "_run_subprocess", new_callable=AsyncMock
-            ) as mock_run:
-                await network_manager._disable_wifi_legacy()
+            ) as mock_run,
+        ):
+            await network_manager._disable_wifi_legacy()
 
-                mock_run.assert_called_once()
-                args = mock_run.call_args[0][0]
-                assert "sudo" in args[0]
-                assert "ifconfig" in args[1]
-                assert WIFI_INTERFACE_NAME in args[2]
-                assert "down" in args[3]
+            mock_run.assert_called_once()
+            args = mock_run.call_args[0][0]
+            assert "sudo" in args[0]
+            assert "ifconfig" in args[1]
+            assert WIFI_INTERFACE_NAME in args[2]
+            assert "down" in args[3]
 
     @pytest.mark.asyncio()
     async def test_set_wifi_power_save_mode_default(self, network_manager):
         """Test setting WiFi power save mode with default."""
         network_manager.config.wifi_power_save_mode = "on"
 
-        with self.patch_wifi_script(sudo_exists=True, script_exists=True):
-            with patch.object(
+        with (
+            self.patch_wifi_script(sudo_exists=True, script_exists=True),
+            patch.object(
                 network_manager, "_run_subprocess", new_callable=AsyncMock
-            ) as mock_run:
-                result = await network_manager.set_wifi_power_save_mode()
+            ) as mock_run,
+        ):
+            result = await network_manager.set_wifi_power_save_mode()
 
-                assert result is True
-                mock_run.assert_called_once()
-                args = mock_run.call_args[0][0]
-                assert "power_save" in args
-                assert "on" in args
+            assert result is True
+            mock_run.assert_called_once()
+            args = mock_run.call_args[0][0]
+            assert "power_save" in args
+            assert "on" in args
 
     @pytest.mark.asyncio()
     async def test_set_wifi_power_save_mode_auto_critical(self, network_manager, battery_status):
@@ -658,15 +694,17 @@ wlan0     IEEE 802.11  ESSID:"TestNetwork"
         network_manager.update_battery_status(battery_status)
         network_manager.config.wifi_power_save_mode = "auto"
 
-        with self.patch_wifi_script(sudo_exists=True, script_exists=True):
-            with patch.object(
+        with (
+            self.patch_wifi_script(sudo_exists=True, script_exists=True),
+            patch.object(
                 network_manager, "_run_subprocess", new_callable=AsyncMock
-            ) as mock_run:
-                result = await network_manager.set_wifi_power_save_mode("auto")
+            ) as mock_run,
+        ):
+            result = await network_manager.set_wifi_power_save_mode("auto")
 
-                assert result is True
-                # Should use aggressive mode
-                assert mock_run.call_count >= 1  # May have additional calls for aggressive mode
+            assert result is True
+            # Should use aggressive mode
+            assert mock_run.call_count >= 1  # May have additional calls for aggressive mode
 
     @pytest.mark.asyncio()
     async def test_set_wifi_power_save_mode_auto_low(self, network_manager, battery_status):
@@ -674,15 +712,17 @@ wlan0     IEEE 802.11  ESSID:"TestNetwork"
         battery_status.level = 15  # Low but not critical
         network_manager.update_battery_status(battery_status)
 
-        with self.patch_wifi_script(sudo_exists=True, script_exists=True):
-            with patch.object(
+        with (
+            self.patch_wifi_script(sudo_exists=True, script_exists=True),
+            patch.object(
                 network_manager, "_run_subprocess", new_callable=AsyncMock
-            ) as mock_run:
-                result = await network_manager.set_wifi_power_save_mode("auto")
+            ) as mock_run,
+        ):
+            result = await network_manager.set_wifi_power_save_mode("auto")
 
-                assert result is True
-                args = mock_run.call_args[0][0]
-                assert "on" in args  # Should use regular power saving
+            assert result is True
+            args = mock_run.call_args[0][0]
+            assert "on" in args  # Should use regular power saving
 
     @pytest.mark.asyncio()
     async def test_set_wifi_power_save_mode_auto_good(self, network_manager, battery_status):
@@ -690,15 +730,17 @@ wlan0     IEEE 802.11  ESSID:"TestNetwork"
         battery_status.level = 80  # Good battery
         network_manager.update_battery_status(battery_status)
 
-        with self.patch_wifi_script(sudo_exists=True, script_exists=True):
-            with patch.object(
+        with (
+            self.patch_wifi_script(sudo_exists=True, script_exists=True),
+            patch.object(
                 network_manager, "_run_subprocess", new_callable=AsyncMock
-            ) as mock_run:
-                result = await network_manager.set_wifi_power_save_mode("auto")
+            ) as mock_run,
+        ):
+            result = await network_manager.set_wifi_power_save_mode("auto")
 
-                assert result is True
-                args = mock_run.call_args[0][0]
-                assert "off" in args  # Should disable power saving
+            assert result is True
+            args = mock_run.call_args[0][0]
+            assert "off" in args  # Should disable power saving
 
     @pytest.mark.asyncio()
     async def test_set_wifi_power_save_mode_invalid(self, network_manager):
@@ -716,12 +758,14 @@ wlan0     IEEE 802.11  ESSID:"TestNetwork"
     @pytest.mark.asyncio()
     async def test_set_wifi_power_save_mode_error(self, network_manager):
         """Test setting WiFi power save mode with error."""
-        with self.patch_wifi_script(sudo_exists=True, script_exists=True):
-            with patch.object(
+        with (
+            self.patch_wifi_script(sudo_exists=True, script_exists=True),
+            patch.object(
                 network_manager, "_run_subprocess", side_effect=subprocess.SubprocessError("Failed")
-            ):
-                result = await network_manager.set_wifi_power_save_mode("on")
-                assert result is False
+            ),
+        ):
+            result = await network_manager.set_wifi_power_save_mode("on")
+            assert result is False
 
     @pytest.mark.asyncio()
     async def test_subprocess_semaphore_limits_concurrency(self, network_manager):
@@ -731,7 +775,7 @@ wlan0     IEEE 802.11  ESSID:"TestNetwork"
 
         call_order = []
 
-        async def mock_create_subprocess(*_args: str, **_kwargs: Any) -> Mock:
+        async def mock_create_subprocess(*args: Any, **kwargs: Any) -> Mock:  # pyright: ignore[reportUnusedParameter]
             call_order.append("start")
             await asyncio.sleep(0.1)  # Simulate work
             call_order.append("end")
@@ -754,25 +798,29 @@ wlan0     IEEE 802.11  ESSID:"TestNetwork"
     @pytest.mark.asyncio()
     async def test_disable_wifi_script_not_found(self, network_manager):
         """Test disabling WiFi when script not found."""
-        with self.patch_wifi_script(sudo_exists=True, script_exists=False):
-            with patch.object(
+        with (
+            self.patch_wifi_script(sudo_exists=True, script_exists=False),
+            patch.object(
                 network_manager, "_disable_wifi_legacy", new_callable=AsyncMock
-            ) as mock_legacy:
-                await network_manager._disable_wifi()
-                mock_legacy.assert_called_once()
+            ) as mock_legacy,
+        ):
+            await network_manager._disable_wifi()
+            mock_legacy.assert_called_once()
 
     @pytest.mark.asyncio()
     async def test_disable_wifi_script_error(self, network_manager):
         """Test disabling WiFi when script fails."""
-        with self.patch_wifi_script(sudo_exists=True, script_exists=True):
-            with patch.object(
+        with (
+            self.patch_wifi_script(sudo_exists=True, script_exists=True),
+            patch.object(
                 network_manager, "_run_subprocess", side_effect=subprocess.SubprocessError("Failed")
-            ):
-                with patch.object(
-                    network_manager, "_disable_wifi_legacy", new_callable=AsyncMock
-                ) as mock_legacy:
-                    await network_manager._disable_wifi()
-                    mock_legacy.assert_called_once()
+            ),
+            patch.object(
+                network_manager, "_disable_wifi_legacy", new_callable=AsyncMock
+            ) as mock_legacy,
+        ):
+            await network_manager._disable_wifi()
+            mock_legacy.assert_called_once()
 
     @pytest.mark.asyncio()
     async def test_enable_wifi_legacy_no_commands(self, network_manager):
@@ -791,63 +839,73 @@ wlan0     IEEE 802.11  ESSID:"TestNetwork"
     @pytest.mark.asyncio()
     async def test_enable_wifi_legacy_error(self, network_manager):
         """Test enabling WiFi legacy with error."""
-        with self.patch_wifi_script(sudo_exists=True, script_exists=True):
-            with patch.object(
+        with (
+            self.patch_wifi_script(sudo_exists=True, script_exists=True),
+            patch.object(
                 network_manager, "_run_subprocess", side_effect=subprocess.SubprocessError("Failed")
-            ):
-                await network_manager._enable_wifi_legacy()
-                # Should log error but not raise exception
+            ),
+        ):
+            await network_manager._enable_wifi_legacy()
+            # Should log error but not raise exception
 
     @pytest.mark.asyncio()
     async def test_disable_wifi_legacy_error(self, network_manager):
         """Test disabling WiFi legacy with error."""
-        with self.patch_wifi_script(sudo_exists=True, script_exists=True):
-            with patch.object(
+        with (
+            self.patch_wifi_script(sudo_exists=True, script_exists=True),
+            patch.object(
                 network_manager, "_run_subprocess", side_effect=subprocess.SubprocessError("Failed")
-            ):
-                await network_manager._disable_wifi_legacy()
-                # Should log error but not raise exception
+            ),
+        ):
+            await network_manager._disable_wifi_legacy()
+            # Should log error but not raise exception
 
     @pytest.mark.asyncio()
     async def test_set_wifi_power_save_mode_aggressive(self, network_manager):
         """Test setting WiFi power save mode to aggressive."""
         network_manager.config.wifi_power_save_mode = "aggressive"
 
-        with self.patch_wifi_script(sudo_exists=True, script_exists=True):
-            with patch.object(
+        with (
+            self.patch_wifi_script(sudo_exists=True, script_exists=True),
+            patch.object(
                 network_manager, "_run_subprocess", new_callable=AsyncMock
-            ) as mock_run:
-                result = await network_manager.set_wifi_power_save_mode("aggressive")
+            ) as mock_run,
+        ):
+            result = await network_manager.set_wifi_power_save_mode("aggressive")
 
-                assert result is True
-                # Should have multiple calls for aggressive mode
-                assert mock_run.call_count >= 2
+            assert result is True
+            # Should have multiple calls for aggressive mode
+            assert mock_run.call_count >= 2
 
     @pytest.mark.asyncio()
     async def test_set_wifi_power_save_mode_auto_no_battery(self, network_manager):
         """Test setting WiFi power save mode auto without battery status."""
         network_manager.current_battery_status = None
 
-        with self.patch_wifi_script(sudo_exists=True, script_exists=True):
-            with patch.object(
+        with (
+            self.patch_wifi_script(sudo_exists=True, script_exists=True),
+            patch.object(
                 network_manager, "_run_subprocess", new_callable=AsyncMock
-            ) as mock_run:
-                result = await network_manager.set_wifi_power_save_mode("auto")
+            ) as mock_run,
+        ):
+            result = await network_manager.set_wifi_power_save_mode("auto")
 
-                assert result is True
-                args = mock_run.call_args[0][0]
-                assert "on" in args  # Should default to on
+            assert result is True
+            args = mock_run.call_args[0][0]
+            assert "on" in args  # Should default to on
 
     @pytest.mark.asyncio()
     async def test_get_ssid_subprocess_error(self, network_manager):
         """Test getting SSID with subprocess error."""
-        with self.patch_file_command("/usr/bin/iwgetid", exists=True):
-            with patch.object(
+        with (
+            self.patch_file_command("/usr/bin/iwgetid", exists=True),
+            patch.object(
                 network_manager, "_run_subprocess",
                 side_effect=subprocess.SubprocessError("Failed")
-            ):
-                ssid = await network_manager._get_ssid()
-                assert ssid is None
+            ),
+        ):
+            ssid = await network_manager._get_ssid()
+            assert ssid is None
 
     @pytest.mark.asyncio()
     async def test_get_signal_strength_command_not_found(self, network_manager):
