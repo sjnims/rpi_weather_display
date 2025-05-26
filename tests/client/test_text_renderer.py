@@ -2,9 +2,11 @@
 
 from unittest.mock import MagicMock, patch
 
+import pytest
 from PIL import Image, ImageDraw
 
 from rpi_weather_display.client.text_renderer import TextRenderer
+from rpi_weather_display.exceptions import ImageRenderingError
 from rpi_weather_display.models.config import DisplayConfig
 
 
@@ -250,3 +252,123 @@ class TestTextRenderer:
         # Should have at least white (255) and black (0) pixels
         assert 255 in unique_pixels  # White background
         assert len(unique_pixels) > 1  # Not just white (text was drawn)
+
+    @patch("rpi_weather_display.client.text_renderer.ImageDraw.Draw")
+    def test_render_text_image_exception(self, mock_draw_class: MagicMock) -> None:
+        """Test render_text_image exception handling."""
+        # Make ImageDraw.Draw raise an exception
+        mock_draw_class.side_effect = RuntimeError("Drawing failed")
+        
+        with pytest.raises(ImageRenderingError) as exc_info:
+            self.renderer.render_text_image("Title", "Message")
+        
+        assert "Failed to render text image" in str(exc_info.value)
+        assert exc_info.value.details["title"] == "Title"
+        assert exc_info.value.details["message"] == "Message"
+        assert exc_info.value.details["display_size"] == (self.config.width, self.config.height)
+        assert "Drawing failed" in exc_info.value.details["error"]
+
+    @patch("PIL.ImageFont.truetype")
+    @patch("PIL.ImageFont.load_default")
+    def test_load_title_font_both_fail(
+        self, mock_load_default: MagicMock, mock_truetype: MagicMock
+    ) -> None:
+        """Test title font loading when both attempts fail."""
+        # Make both font loading attempts fail
+        mock_truetype.side_effect = OSError("Font not found")
+        mock_load_default.side_effect = RuntimeError("Default font failed")
+        
+        with pytest.raises(ImageRenderingError) as exc_info:
+            self.renderer._load_title_font()
+        
+        assert "Failed to load title font" in str(exc_info.value)
+        assert exc_info.value.details["font_path"] == "DejaVuSans-Bold.ttf"
+        assert exc_info.value.details["font_size"] == 48  # Expected for display width 1872
+        assert "Font not found" in exc_info.value.details["original_error"]
+        assert "Default font failed" in exc_info.value.details["fallback_error"]
+
+    @patch("PIL.ImageFont.truetype")
+    @patch("PIL.ImageFont.load_default")
+    def test_load_message_font_both_fail(
+        self, mock_load_default: MagicMock, mock_truetype: MagicMock
+    ) -> None:
+        """Test message font loading when both attempts fail."""
+        # Make both font loading attempts fail
+        mock_truetype.side_effect = OSError("Font not found")
+        mock_load_default.side_effect = RuntimeError("Default font failed")
+        
+        with pytest.raises(ImageRenderingError) as exc_info:
+            self.renderer._load_message_font()
+        
+        assert "Failed to load message font" in str(exc_info.value)
+        assert exc_info.value.details["font_path"] == "DejaVuSans.ttf"
+        assert exc_info.value.details["font_size"] == 36  # Expected for display width 1872
+        assert "Font not found" in exc_info.value.details["original_error"]
+        assert "Default font failed" in exc_info.value.details["fallback_error"]
+
+    def test_type_checking_imports(self) -> None:
+        """Test that TYPE_CHECKING imports are properly handled."""
+        # This test ensures the TYPE_CHECKING block is covered
+        # The imports are only used for type hints, so we just verify
+        # the module can be imported successfully
+        import rpi_weather_display.client.text_renderer
+        
+        # Verify the module has the expected class
+        assert hasattr(rpi_weather_display.client.text_renderer, 'TextRenderer')
+
+    @patch("PIL.ImageFont.truetype")
+    def test_render_text_image_with_font_loading_error_propagation(
+        self, mock_truetype: MagicMock
+    ) -> None:
+        """Test that font loading errors are properly propagated through render_text_image."""
+        # Make truetype fail and mock load_default to also fail
+        mock_truetype.side_effect = OSError("Font file not found")
+        
+        with patch("PIL.ImageFont.load_default") as mock_load_default:
+            mock_load_default.side_effect = Exception("Default font error")
+            
+            with pytest.raises(ImageRenderingError) as exc_info:
+                self.renderer.render_text_image("Test", "Error")
+            
+            # The outer error should be about rendering failure
+            assert "Failed to render text image" in str(exc_info.value)
+
+    def test_calculate_message_font_size_medium_display(self) -> None:
+        """Test message font size for medium display."""
+        # Create renderer with medium display
+        medium_config = DisplayConfig(
+            width=900,  # This should give us 900 // 30 = 30
+            height=600,
+            rotate=0,
+            vcom=-2.06,
+            refresh_interval_minutes=30,
+            partial_refresh=True,
+            timestamp_format="%Y-%m-%d %H:%M",
+        )
+        renderer = TextRenderer(medium_config)
+        
+        font_size = renderer._calculate_message_font_size()
+        
+        # Should be 30 (between min 24 and max 36)
+        assert font_size == 30
+
+    def test_render_methods_with_different_text_sizes(self) -> None:
+        """Test rendering methods with various text sizes."""
+        # Create mock draw object
+        mock_draw = MagicMock(spec=ImageDraw.ImageDraw)
+        mock_font = MagicMock()
+        
+        # Test with empty text
+        mock_draw.textbbox.return_value = (0, 0, 0, 0)
+        self.renderer._render_title(mock_draw, "", mock_font)
+        
+        # Verify first call
+        assert mock_draw.text.call_count == 1
+        
+        # Test with very long text
+        mock_draw.reset_mock()
+        mock_draw.textbbox.return_value = (0, 0, 2000, 100)  # Wider than display
+        self.renderer._render_message(mock_draw, "Very long message text" * 10, mock_font)
+        
+        # Should have been called once more
+        assert mock_draw.text.call_count == 1

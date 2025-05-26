@@ -443,9 +443,9 @@ class TestPartialRefreshManager:
             self.manager.update_display(image, mock_display)
 
         # Check the error details
-        assert "Failed to update display" in str(exc_info.value)
-        assert exc_info.value.details["partial_refresh_enabled"] is True
-        assert exc_info.value.details["has_last_image"] is False
+        assert "Failed to perform full refresh" in str(exc_info.value)
+        assert exc_info.value.details["image_size"] == (100, 100)
+        assert exc_info.value.details["image_mode"] == "L"
         assert "Something went wrong" in exc_info.value.details["error"]
 
     def test_handle_partial_refresh_exception_handling(self) -> None:
