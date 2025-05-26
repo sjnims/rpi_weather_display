@@ -252,8 +252,6 @@ class WeatherAPIClient:
     Attributes:
         config: Weather API configuration including API key and preferences
         logger: Logger instance for tracking API operations
-        _last_forecast: Cached weather forecast data
-        _last_update: Timestamp of last successful API update
         BASE_URL: One Call API endpoint for comprehensive weather data
         AIR_POLLUTION_URL: API endpoint for air quality data
         GEOCODING_URL: API endpoint for converting city names to coordinates
@@ -820,25 +818,3 @@ class WeatherAPIClient:
 
         return icon_map.get(icon_code, "cloud-bold")  # Default to cloud if icon not found
 
-    def set_forecast_for_testing(
-        self, forecast: WeatherData, update_time: datetime | None = None
-    ) -> None:
-        """Set forecast data for testing purposes.
-
-        Allows test code to inject mock forecast data into the client
-        without making actual API calls. This method should only be used
-        in testing environments and not in production code.
-
-        Args:
-            forecast: Weather forecast data to use for testing.
-            update_time: Time of the update, defaults to current time.
-                         Used to simulate specific cache timing scenarios
-                         for testing cache expiration behavior.
-
-        Warning:
-            This method is intended only for testing purposes. Using it in
-            production code may lead to stale or incorrect weather data
-            being displayed to users.
-        """
-        self._last_forecast = forecast
-        self._last_update = update_time or datetime.now()

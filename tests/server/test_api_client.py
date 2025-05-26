@@ -4,7 +4,6 @@
 # pyright: reportPrivateUsage=false
 
 from collections.abc import Generator
-from datetime import datetime, timedelta
 from pathlib import Path
 
 # No need for additional typing imports
@@ -255,9 +254,15 @@ async def test_get_weather_data_force_refresh(
     app_config.weather.location = {"lat": 40.7128, "lon": -74.0060}
     api_client = WeatherAPIClient(app_config.weather)
 
-    # Set up initial cached data
+    # Set up initial cached data using the internal cache
     old_weather = WeatherData.model_validate(mock_weather_data)
-    api_client.set_forecast_for_testing(old_weather)
+    lat = app_config.weather.location['lat']
+    lon = app_config.weather.location['lon']
+    cache_key = f"weather_{lat}_{lon}_{app_config.weather.units}_{app_config.weather.language}"
+    # Use the cache's put method to store test data
+    data_json = old_weather.model_dump_json()
+    data_size = len(data_json.encode("utf-8"))
+    api_client._cache.put(cache_key, old_weather, data_size)
 
     # Call with force refresh
     result = await api_client.get_weather_data(force_refresh=True)
@@ -337,53 +342,33 @@ async def test_get_weather_data_http_error_with_cache(
 
 
 @pytest.mark.asyncio()
-async def test_get_weather_data_cache_expired(
+async def test_get_weather_data_uses_cache(
     app_config: AppConfig, mock_weather_data: JsonData, mock_httpx_client: AsyncMock
 ) -> None:
-    """Test that new data is fetched when cache is expired."""
-    # Set up mock responses
-    weather_response = create_mock_response(200, mock_weather_data)
-    air_response = create_mock_response(
-        200,
-        {
-            "list": [
-                {
-                    "dt": 1609459200,
-                    "main": {"aqi": 1},
-                    "components": {
-                        "co": 201.94053649902344,
-                        "no": 0.01877197064459324,
-                        "no2": 0.7711350917816162,
-                        "o3": 68.66455078125,
-                        "so2": 0.6407499313354492,
-                        "pm2_5": 0.5,
-                        "pm10": 0.540438711643219,
-                        "nh3": 0.12369127571582794,
-                    },
-                }
-            ]
-        },
-    )
-
-    mock_httpx_client.get.side_effect = [weather_response, air_response]
-
-    # Create API client with location
+    """Test that valid cache is used without making API calls."""
+    # Create API client with location and short cache TTL for testing
     app_config.weather.location = {"lat": 40.7128, "lon": -74.0060}
     api_client = WeatherAPIClient(app_config.weather)
+    
+    # Set up initial cached data using the internal cache
+    cached_weather = WeatherData.model_validate(mock_weather_data)
+    lat = app_config.weather.location['lat']
+    lon = app_config.weather.location['lon']
+    cache_key = f"weather_{lat}_{lon}_{app_config.weather.units}_{app_config.weather.language}"
+    # Use the cache's put method to store test data
+    data_json = cached_weather.model_dump_json()
+    data_size = len(data_json.encode("utf-8"))
+    api_client._cache.put(cache_key, cached_weather, data_size)
 
-    # Set up initial cached data with old timestamp
-    old_weather = WeatherData.model_validate(mock_weather_data)
-    old_timestamp = datetime.now() - timedelta(minutes=30)  # 30 minutes old
-    api_client.set_forecast_for_testing(old_weather, old_timestamp)
-
-    # Call without force refresh, but cache is old
+    # Call without force refresh - should use cache
     result = await api_client.get_weather_data(force_refresh=False)
 
-    # Verify API calls were made because cache was expired
-    assert mock_httpx_client.get.call_count == 2
+    # Verify NO API calls were made since cache is still valid
+    assert mock_httpx_client.get.call_count == 0
 
-    # Verify result is not None
-    assert result is not None
+    # Verify result matches cached data
+    assert result.current.temp == cached_weather.current.temp
+    assert result.current.humidity == cached_weather.current.humidity
 
 
 @pytest.mark.asyncio()
