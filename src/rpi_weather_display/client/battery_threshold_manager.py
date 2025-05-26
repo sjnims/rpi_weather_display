@@ -4,7 +4,7 @@ Provides intelligent threshold adjustments based on battery status to
 optimize power consumption during display updates.
 """
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from rpi_weather_display.constants import BATTERY_EMPTY_THRESHOLD, BATTERY_WARNING_THRESHOLD
 from rpi_weather_display.models.system import BatteryState, BatteryStatus
@@ -62,9 +62,9 @@ class BatteryThresholdManager:
         if not self._should_use_battery_aware_thresholds():
             return self.config.pixel_diff_threshold
             
-        battery = self._current_battery_status
-        if battery is None:
-            return self.config.pixel_diff_threshold
+        # Battery status is guaranteed to be non-None when battery-aware thresholds are active
+        # due to the check in _should_use_battery_aware_thresholds()
+        battery = cast(BatteryStatus, self._current_battery_status)
             
         # Determine threshold based on battery state and level
         if battery.state == BatteryState.CHARGING:
@@ -101,9 +101,9 @@ class BatteryThresholdManager:
         if not self._should_use_battery_aware_thresholds():
             return self.config.min_changed_pixels
             
-        battery = self._current_battery_status
-        if battery is None:
-            return self.config.min_changed_pixels
+        # Battery status is guaranteed to be non-None when battery-aware thresholds are active
+        # due to the check in _should_use_battery_aware_thresholds()
+        battery = cast(BatteryStatus, self._current_battery_status)
             
         # Determine minimum based on battery state and level
         if battery.state == BatteryState.CHARGING:
