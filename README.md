@@ -102,7 +102,7 @@ poetry install --with dev --extras server
 # Run server
 poetry run server --config config.yaml
 
-# Run client  
+# Run client
 poetry run client --config config.yaml
 
 # Run tests
@@ -128,7 +128,7 @@ http://localhost:8000/preview
 rpi-weather-display/
 ├── src/rpi_weather_display/
 │   ├── client/        # Raspberry Pi client code
-│   ├── server/        # FastAPI server code  
+│   ├── server/        # FastAPI server code
 │   ├── models/        # Pydantic data models
 │   └── utils/         # Shared utilities
 ├── templates/         # Jinja2 HTML templates
@@ -156,7 +156,7 @@ Key requirements:
 - The Raspberry Pi and e-paper display communities for inspiration
 
 Special thanks to:
-- [Kimmo Brunfeldt](https://github.com/kimmobrunfeldt/eink-weather-display) 
+- [Kimmo Brunfeldt](https://github.com/kimmobrunfeldt/eink-weather-display)
 - [Faith Ak](https://github.com/fatihak/InkyPi)
 
 ## License
