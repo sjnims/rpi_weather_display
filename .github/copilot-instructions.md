@@ -1,4 +1,4 @@
-# copilot-instrutions.md
+# copilot-instructions.md
 
 This file provides guidance to Copilot when working with this weather display project.
 
