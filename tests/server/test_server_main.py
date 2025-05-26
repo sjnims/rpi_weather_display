@@ -688,7 +688,7 @@ class TestServerConfiguration:
         with (
             patch("argparse.ArgumentParser.parse_args") as mock_parse_args,
             patch("pathlib.Path.exists", return_value=False),
-            patch("builtins.print") as mock_print,
+            patch("rpi_weather_display.server.main.handle_startup_error") as mock_handle_error,
             patch("rpi_weather_display.server.main.WeatherDisplayServer") as mock_server,
         ):
             mock_args = MagicMock()
@@ -703,9 +703,9 @@ class TestServerConfiguration:
 
             assert exc_info.value.code == 1
 
-            mock_print.assert_called()
-            print_calls = [call[0][0] for call in mock_print.call_args_list]
-            assert any("Configuration Error" in str(call) for call in print_calls)
+            mock_handle_error.assert_called()
+            args = mock_handle_error.call_args[0]
+            assert args[0] == "CONFIG_NOT_FOUND"
 
     def test_main_function_with_config_path(self) -> None:
         """Test the main function when a config path is provided."""
@@ -762,7 +762,7 @@ class TestServerConfiguration:
         with (
             patch("argparse.ArgumentParser.parse_args") as mock_parse_args,
             patch("rpi_weather_display.server.main.validate_config_path") as mock_validate,
-            patch("builtins.print") as mock_print,
+            patch("rpi_weather_display.server.main.handle_startup_error") as mock_handle_error,
             patch("rpi_weather_display.server.main.WeatherDisplayServer") as mock_server,
         ):
             mock_args = MagicMock()
@@ -783,13 +783,9 @@ class TestServerConfiguration:
 
             mock_validate.assert_called_once_with(None)
 
-            mock_print.assert_called()
-            print_calls = [call[0][0] for call in mock_print.call_args_list]
-            assert any("Configuration Error" in str(call) for call in print_calls)
-
-            mock_print.assert_any_call(
-                "Configuration Error: Configuration file not found: /mock/path/config.yaml - Details: {'path': '/mock/path/config.yaml'}"
-            )
+            mock_handle_error.assert_called()
+            args = mock_handle_error.call_args[0]
+            assert args[0] == "CONFIG_NOT_FOUND"
 
             mock_server.assert_not_called()
 

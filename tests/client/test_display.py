@@ -115,17 +115,20 @@ class TestEPaperDisplay:
 
     def test_initialize_no_library(self) -> None:
         """Test initialization when IT8951 library is not available."""
-        with patch(
-            "rpi_weather_display.client.display._import_it8951",
-            return_value=None
-        ), patch("builtins.print") as mock_print:
-                self.display.initialize()
-                
-                assert not self.display._initialized
-                assert self.display._display is None
-                mock_print.assert_called_with(
-                    "Warning: IT8951 library not available. Using mock display."
-                )
+        with (
+            patch(
+                "rpi_weather_display.client.display._import_it8951",
+                return_value=None
+            ),
+            patch.object(self.display.logger, "warning") as mock_warning
+        ):
+            self.display.initialize()
+            
+            assert not self.display._initialized
+            assert self.display._display is None
+            mock_warning.assert_called_with(
+                "IT8951 library not available. Using mock display."
+            )
 
     def test_initialize_exception(self) -> None:
         """Test initialization with exception."""
@@ -272,7 +275,7 @@ class TestEPaperDisplay:
         processed_image = Image.new("L", (self.config.width, self.config.height), 128)
         
         with (
-            patch("builtins.print") as mock_print,
+            patch.object(self.display.logger, "info") as mock_info,
             patch.object(
                 self.display.image_processor,
                 "preprocess_image",
@@ -285,7 +288,7 @@ class TestEPaperDisplay:
         ):
             self.display._handle_mock_display(image)
             
-            mock_print.assert_called_with("Mock display: would display image of size (100, 100)")
+            mock_info.assert_called_with("Mock display: would display image of size (100, 100)")
             mock_update.assert_called_once_with(processed_image, None)
 
     def test_display_text(self) -> None:

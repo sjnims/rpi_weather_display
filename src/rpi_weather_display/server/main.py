@@ -40,6 +40,11 @@ from rpi_weather_display.server.browser_manager import browser_manager
 from rpi_weather_display.server.renderer import WeatherRenderer
 from rpi_weather_display.utils import path_resolver
 from rpi_weather_display.utils.cache_manager import FileCache
+from rpi_weather_display.utils.early_error_handler import (
+    handle_keyboard_interrupt,
+    handle_startup_error,
+    handle_unexpected_error,
+)
 from rpi_weather_display.utils.error_utils import get_error_location
 from rpi_weather_display.utils.logging import setup_logging
 from rpi_weather_display.utils.memory_profiler import MemoryReportDict, memory_profiler
@@ -420,8 +425,8 @@ class WeatherDisplayServer:
 
         self.logger.info(f"Starting Weather Display Server on {bind_host}:{bind_port}")
 
-        # Force Uvicorn to use standard logging
-        print(f"Starting Uvicorn on http://{bind_host}:{bind_port}")
+        # Log startup via logger (Uvicorn will also log to the same handler)
+        self.logger.info(f"Starting Uvicorn on http://{bind_host}:{bind_port}")
 
         uvicorn.run(self.app, host=bind_host, port=bind_port)
 
@@ -463,18 +468,24 @@ def main() -> None:
         server.run(host=args.host, port=args.port)
         
     except ConfigFileNotFoundError as e:
-        print(f"Configuration Error: {e}")
+        handle_startup_error(
+            "CONFIG_NOT_FOUND",
+            str(e),
+            {"config_path": str(args.config)} if args.config else None
+        )
         sys.exit(1)
     except (InvalidConfigError, MissingConfigError) as e:
-        print(f"Configuration Error: {e}")
-        if e.details:
-            print(f"Details: {e.details}")
+        handle_startup_error(
+            "CONFIG_VALIDATION_ERROR",
+            str(e),
+            e.details if hasattr(e, 'details') and e.details else None
+        )
         sys.exit(1)
     except KeyboardInterrupt:
-        print("\nShutdown requested by user")
+        handle_keyboard_interrupt()
         sys.exit(0)
     except Exception as e:
-        print(f"Unexpected error: {e}")
+        handle_unexpected_error(e)
         sys.exit(1)
 
 

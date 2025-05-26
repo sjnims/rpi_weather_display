@@ -8,6 +8,7 @@ reducing overall power consumption.
 
 import argparse
 import asyncio
+import sys
 import time
 from pathlib import Path
 
@@ -29,9 +30,19 @@ from rpi_weather_display.constants import (
     TWELVE_HOURS_IN_MINUTES,
     WRITE_TIMEOUT,
 )
+from rpi_weather_display.exceptions import (
+    ConfigFileNotFoundError,
+    InvalidConfigError,
+    MissingConfigError,
+)
 from rpi_weather_display.models.config import AppConfig
 from rpi_weather_display.utils import PowerStateManager, path_resolver
 from rpi_weather_display.utils.battery_utils import is_charging
+from rpi_weather_display.utils.early_error_handler import (
+    handle_keyboard_interrupt,
+    handle_startup_error,
+    handle_unexpected_error,
+)
 from rpi_weather_display.utils.file_utils import file_exists, write_bytes
 from rpi_weather_display.utils.logging import setup_logging
 from rpi_weather_display.utils.memory_profiler import memory_profiler
@@ -156,7 +167,7 @@ class AsyncWeatherDisplayClient:
 
         self.logger.info("Hardware initialization complete")
 
-    def _handle_power_state_change(self, _old_state: PowerState, new_state: PowerState) -> None:
+    def _handle_power_state_change(self, old_state: PowerState, new_state: PowerState) -> None:
         """Handle power state changes, particularly for critical battery events.
 
         Manages transitions between power states, with special handling for the
@@ -540,14 +551,6 @@ def main() -> None:
     Parses command line arguments, loads configuration, and starts the async client.
     This is the function called when the async client is invoked from the command line.
     """
-    import sys
-
-    from rpi_weather_display.exceptions import (
-        ConfigFileNotFoundError,
-        InvalidConfigError,
-        MissingConfigError,
-    )
-    
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="Async Weather Display Client")
     parser.add_argument(
@@ -569,21 +572,24 @@ def main() -> None:
         asyncio.run(client.run())
         
     except ConfigFileNotFoundError as e:
-        print(f"Configuration Error: {e}")
-        if e.details and "searched_locations" in e.details:
-            # Details are already in the error message
-            pass
+        handle_startup_error(
+            "CONFIG_NOT_FOUND",
+            str(e),
+            {"config_path": str(args.config)} if args.config else None
+        )
         sys.exit(1)
     except (InvalidConfigError, MissingConfigError) as e:
-        print(f"Configuration Error: {e}")
-        if e.details:
-            print(f"Details: {e.details}")
+        handle_startup_error(
+            "CONFIG_VALIDATION_ERROR",
+            str(e),
+            e.details if hasattr(e, 'details') and e.details else None
+        )
         sys.exit(1)
     except KeyboardInterrupt:
-        print("\nShutdown requested by user")
+        handle_keyboard_interrupt()
         sys.exit(0)
     except Exception as e:
-        print(f"Unexpected error: {e}")
+        handle_unexpected_error(e)
         sys.exit(1)
 
 

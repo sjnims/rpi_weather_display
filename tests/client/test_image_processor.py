@@ -215,14 +215,14 @@ class TestImageProcessor:
         with patch("rpi_weather_display.client.image_processor._import_numpy") as mock_import:
             mock_import.side_effect = Exception("Test error")
             
-            # Capture print output to verify error message
-            with patch("builtins.print") as mock_print:
+            # Capture logger output to verify error message
+            with patch.object(self.processor.logger, "debug") as mock_debug:
                 result = self.processor.calculate_diff_bbox(old_image, new_image, 10, 100)
                 
             assert result is None
-            # Verify error was printed
-            mock_print.assert_called_once()
-            args = mock_print.call_args[0]
+            # Verify error was logged
+            mock_debug.assert_called_once()
+            args = mock_debug.call_args[0]
             assert "Error calculating diff bbox" in args[0]
             assert "Test error" in args[0]
 

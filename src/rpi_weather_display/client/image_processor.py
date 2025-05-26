@@ -4,6 +4,7 @@ Handles image preprocessing, format conversion, and difference calculations
 for efficient display updates.
 """
 
+import logging
 from types import ModuleType
 from typing import TYPE_CHECKING
 
@@ -46,6 +47,7 @@ class ImageProcessor:
             config: Display configuration containing dimensions
         """
         self.config = config
+        self.logger = logging.getLogger(__name__)
         
     def preprocess_image(self, image: Image.Image) -> Image.Image:
         """Preprocess image for e-paper display.
@@ -151,7 +153,7 @@ class ImageProcessor:
             return bbox
             
         except Exception as e:
-            print(f"Error calculating diff bbox: {e}")
+            self.logger.debug(f"Error calculating diff bbox: {e}")
             return None
             
     def _calculate_bbox_dimensions(

@@ -13,6 +13,7 @@ from structlog.stdlib import ProcessorFormatter
 
 from rpi_weather_display.constants import BYTES_PER_MEGABYTE
 from rpi_weather_display.models.config import LoggingConfig
+from rpi_weather_display.utils.early_error_handler import handle_startup_error
 from rpi_weather_display.utils.path_utils import path_resolver
 
 
@@ -97,7 +98,7 @@ def setup_logging(config: LoggingConfig, name: str) -> logging.Logger:
             logger.addHandler(file_handler)
         except Exception as e:
             error_msg = f"Failed to set up file logging: {e}"
-            print(error_msg, file=sys.stderr)
+            handle_startup_error("LOGGING_FILE_ERROR", error_msg, {"log_file": str(config.file)})
 
             # Fall back to console logging if file logging fails
             console_handler = logging.StreamHandler(sys.stdout)

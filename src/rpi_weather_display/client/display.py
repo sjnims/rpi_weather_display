@@ -10,6 +10,7 @@ handling image rendering, partial refreshes, and power management.
 # pyright: reportUnknownVariableType=false
 # pyright: reportUnknownMemberType=false
 
+import logging
 from collections.abc import Callable
 from io import BytesIO
 from typing import TYPE_CHECKING, Protocol, TypeVar
@@ -118,6 +119,7 @@ class EPaperDisplay:
         self.config = config
         self._display: EPDDisplayProtocol | None = None
         self._initialized = False
+        self.logger = logging.getLogger(__name__)
         
         # Initialize component managers
         self.battery_threshold_manager = BatteryThresholdManager(config)
@@ -141,7 +143,7 @@ class EPaperDisplay:
         try:
             auto_epd_display = _import_it8951()
             if not auto_epd_display:
-                print("Warning: IT8951 library not available. Using mock display.")
+                self.logger.warning("IT8951 library not available. Using mock display.")
                 self._initialized = False
                 return
 
@@ -242,7 +244,7 @@ class EPaperDisplay:
         Args:
             image: Image that would be displayed
         """
-        print(f"Mock display: would display image of size {image.size}")
+        self.logger.info(f"Mock display: would display image of size {image.size}")
         # Update partial refresh manager's state
         processed = self.image_processor.preprocess_image(image)
         self.partial_refresh_manager.update_display(processed, None)
