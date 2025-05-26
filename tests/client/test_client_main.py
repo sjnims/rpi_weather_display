@@ -411,9 +411,10 @@ debug: false
         # Mock the shutdown method to prevent async issues
         async_client.shutdown = AsyncMock()
         
-        # Mock asyncio event loop creation
+        # Mock asyncio event loop creation and skip the 5-second sleep
         with patch("rpi_weather_display.client.main.asyncio.new_event_loop") as mock_loop_fn, \
-             patch("rpi_weather_display.client.main.asyncio.set_event_loop"):
+             patch("rpi_weather_display.client.main.asyncio.set_event_loop"), \
+             patch("rpi_weather_display.client.main.time.sleep"):
             
             mock_loop = Mock()
             mock_loop_fn.return_value = mock_loop
@@ -584,7 +585,7 @@ debug: false
         )
         async_client.power_manager.should_update_weather.return_value = False
         async_client.power_manager.should_refresh_display.return_value = False
-        async_client.power_manager.calculate_sleep_time.return_value = 1  # 1 second
+        async_client.power_manager.calculate_sleep_time.return_value = 0.01  # Very short sleep
         
         async_client.display = Mock()
         
@@ -801,7 +802,7 @@ debug: false
         )
         async_client.power_manager.should_update_weather.return_value = False
         async_client.power_manager.should_refresh_display.return_value = False
-        async_client.power_manager.calculate_sleep_time.return_value = 1
+        async_client.power_manager.calculate_sleep_time.return_value = 0.01
         
         async_client.display = Mock()
         
