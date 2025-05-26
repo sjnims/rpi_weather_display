@@ -7,7 +7,7 @@ all external API communication for the weather display system.
 
 import logging
 from datetime import datetime
-from typing import Any
+from typing import TypedDict
 
 import httpx
 
@@ -30,6 +30,7 @@ from rpi_weather_display.exceptions import (
 )
 from rpi_weather_display.models.config import WeatherConfig
 from rpi_weather_display.models.weather import (
+    AirPollution,
     AirPollutionData,
     CurrentWeather,
     DailyWeather,
@@ -38,6 +39,206 @@ from rpi_weather_display.models.weather import (
 )
 from rpi_weather_display.utils.cache_manager import MemoryAwareCache
 from rpi_weather_display.utils.error_utils import get_error_location
+
+# Type definitions for API responses
+# These TypedDicts represent the exact JSON structure from OpenWeatherMap API.
+# They use 'Response' suffix to distinguish from Pydantic models while showing
+# the mapping relationship (e.g., WeatherConditionResponse -> WeatherCondition model)
+
+class WeatherConditionResponse(TypedDict):
+    """Weather condition from API response.
+    
+    Maps to WeatherCondition Pydantic model.
+    Represents elements in the 'weather' array.
+    """
+
+    id: int
+    main: str
+    description: str
+    icon: str
+
+
+class CurrentWeatherResponse(TypedDict):
+    """Current weather data from API response.
+    
+    Maps to CurrentWeather Pydantic model.
+    """
+
+    dt: int
+    sunrise: int
+    sunset: int
+    temp: float
+    feels_like: float
+    pressure: int
+    humidity: int
+    dew_point: float
+    uvi: float
+    clouds: int
+    visibility: int
+    wind_speed: float
+    wind_deg: int
+    weather: list[WeatherConditionResponse]
+    wind_gust: float | None  # Optional field
+    rain: dict[str, float] | None  # Optional field, e.g. {"1h": 0.5}
+    snow: dict[str, float] | None  # Optional field, e.g. {"1h": 0.5}
+
+
+class HourlyWeatherResponse(TypedDict):
+    """Hourly weather forecast from API response.
+    
+    Maps to HourlyWeather Pydantic model.
+    """
+
+    dt: int
+    temp: float
+    feels_like: float
+    pressure: int
+    humidity: int
+    dew_point: float
+    uvi: float
+    clouds: int
+    visibility: int
+    wind_speed: float
+    wind_deg: int
+    wind_gust: float | None
+    weather: list[WeatherConditionResponse]
+    pop: float  # Probability of precipitation (0-1)
+    rain: dict[str, float] | None  # e.g. {"1h": 0.5}
+    snow: dict[str, float] | None  # e.g. {"1h": 0.5}
+
+
+class DailyTempResponse(TypedDict):
+    """Daily temperature data from API response.
+    
+    Maps to DailyTemp Pydantic model.
+    Represents the 'temp' object in daily forecast.
+    """
+
+    day: float
+    min: float
+    max: float
+    night: float
+    eve: float
+    morn: float
+
+
+class DailyFeelsLikeResponse(TypedDict):
+    """Daily feels-like temperature data from API response.
+    
+    Maps to DailyFeelsLike Pydantic model.
+    Represents the 'feels_like' object in daily forecast.
+    """
+
+    day: float
+    night: float
+    eve: float
+    morn: float
+
+
+class DailyWeatherResponse(TypedDict):
+    """Daily weather forecast from API response.
+    
+    Maps to DailyWeather Pydantic model.
+    """
+
+    dt: int
+    sunrise: int
+    sunset: int
+    moonrise: int
+    moonset: int
+    moon_phase: float
+    temp: DailyTempResponse
+    feels_like: DailyFeelsLikeResponse
+    pressure: int
+    humidity: int
+    dew_point: float
+    wind_speed: float
+    wind_deg: int
+    wind_gust: float | None
+    weather: list[WeatherConditionResponse]
+    clouds: int
+    pop: float
+    rain: float | None
+    snow: float | None
+    uvi: float
+
+
+class AirPollutionComponents(TypedDict):
+    """Air pollution components data.
+    
+    Matches the 'components' object in the air pollution API response.
+    All values are in μg/m³.
+    """
+
+    co: float      # Carbon monoxide
+    no: float      # Nitrogen monoxide
+    no2: float     # Nitrogen dioxide
+    o3: float      # Ozone
+    so2: float     # Sulphur dioxide
+    pm2_5: float   # Fine particles matter (note: API uses pm2_5, not pm25)
+    pm10: float    # Coarse particulate matter
+    nh3: float     # Ammonia
+
+
+class AirPollutionMain(TypedDict):
+    """Air quality index data."""
+
+    aqi: int
+
+
+class AirPollutionDataResponse(TypedDict):
+    """Single air pollution data point."""
+
+    dt: int
+    main: AirPollutionMain
+    components: AirPollutionComponents
+
+
+class AirPollutionAPIResponse(TypedDict):
+    """Air pollution API response."""
+
+    coord: dict[str, float]
+    list: list[AirPollutionDataResponse]
+
+
+class WeatherAPIResponse(TypedDict):
+    """Complete weather API response from OpenWeatherMap."""
+
+    lat: float
+    lon: float
+    timezone: str
+    timezone_offset: int
+    current: CurrentWeatherResponse
+    hourly: list[HourlyWeatherResponse]
+    daily: list[DailyWeatherResponse]
+
+
+class CombinedWeatherResponse(TypedDict):
+    """Weather API response combined with air pollution data.
+    
+    This is our internal representation after fetching both
+    weather and air pollution data.
+    """
+
+    lat: float
+    lon: float
+    timezone: str
+    timezone_offset: int
+    current: CurrentWeatherResponse
+    hourly: list[HourlyWeatherResponse]
+    daily: list[DailyWeatherResponse]
+    air_pollution: AirPollutionDataResponse | None
+
+
+class GeocodingLocationResponse(TypedDict):
+    """Geocoding API location response."""
+
+    name: str
+    local_names: dict[str, str] | None
+    lat: float
+    lon: float
+    country: str
+    state: str | None
 
 
 class WeatherAPIClient:
@@ -100,46 +301,46 @@ class WeatherAPIClient:
 
         # Get coordinates from geocoding API
         return await self._geocode_city()
-    
+
     def _get_configured_coordinates(self) -> tuple[float, float] | None:
         """Get coordinates from configuration if available.
-        
+
         Returns:
             Tuple of (latitude, longitude) if configured, None otherwise.
         """
         lat = self.config.location.get("lat")
         lon = self.config.location.get("lon")
-        
+
         if lat and lon:
             return (lat, lon)
         return None
-    
+
     def _validate_city_name(self) -> None:
         """Validate that a city name is configured.
-        
+
         Raises:
             MissingConfigError: If no city name is provided.
         """
         if not self.config.city_name:
             raise MissingConfigError(
                 "No location coordinates or city name provided in configuration",
-                {"field": "city_name", "config_section": "weather.location"}
+                {"field": "city_name", "config_section": "weather.location"},
             )
-    
+
     def _format_city_query(self) -> str:
         """Format city name for geocoding API.
-        
+
         The API expects formats like "London" or "London,GB" without spaces around commas.
         Special handling for US cities with state abbreviations.
-        
+
         Returns:
             Formatted city query string.
         """
         city_query = self.config.city_name or ""
-        
+
         if "," not in city_query:
             return city_query
-            
+
         # Split by comma and clean up spaces
         parts = [part.strip() for part in city_query.split(",")]
 
@@ -150,31 +351,31 @@ class WeatherAPIClient:
         city_query = ",".join(parts)
         self.logger.info(f"Formatted city query: {city_query}")
         return city_query
-    
+
     @staticmethod
     def _is_us_state_format(parts: list[str]) -> bool:
         """Check if parts represent a US city with state abbreviation.
-        
+
         Args:
             parts: List of city name parts split by comma.
-            
+
         Returns:
             True if this appears to be a US state abbreviation format.
         """
         return len(parts) == 2 and len(parts[1]) == 2 and parts[1].isupper()
-    
+
     async def _geocode_city(self) -> tuple[float, float]:
         """Get coordinates for city name using geocoding API.
-        
+
         Returns:
             Tuple of (latitude, longitude).
-            
+
         Raises:
             WeatherAPIError: If the geocoding API request fails.
             InvalidAPIResponseError: If the city cannot be found.
         """
         city_query = self._format_city_query()
-        
+
         try:
             async with httpx.AsyncClient() as client:
                 params = {
@@ -186,7 +387,8 @@ class WeatherAPIClient:
                 response = await client.get(self.GEOCODING_URL, params=params)
                 response.raise_for_status()
 
-                locations = response.json()
+                response_data = response.json()
+                locations: list[GeocodingLocationResponse] = response_data
                 if not locations:
                     raise InvalidAPIResponseError(
                         f"Could not find location for city name: {self.config.city_name}",
@@ -194,14 +396,14 @@ class WeatherAPIClient:
                             "city_name": self.config.city_name,
                             "query": city_query,
                             "expected_fields": ["lat", "lon"],
-                            "received": []
+                            "received": [],
                         },
                         status_code=200,
-                        response_body=str(locations)
+                        response_body=str(locations),
                     )
 
                 return (locations[0]["lat"], locations[0]["lon"])
-                
+
         except httpx.HTTPStatusError as e:
             error_location = get_error_location()
             self.logger.error(f"HTTP error during geocoding [{error_location}]: {e}")
@@ -211,12 +413,12 @@ class WeatherAPIClient:
                         "Invalid API key for geocoding",
                         {
                             "api_key_prefix": self.config.api_key[:8] + "...",
-                            "endpoint": self.GEOCODING_URL
+                            "endpoint": self.GEOCODING_URL,
                         },
                         status_code=401,
-                        response_body=e.response.text
+                        response_body=e.response.text,
                     ),
-                    e
+                    e,
                 ) from e
             else:
                 raise chain_exception(
@@ -224,9 +426,9 @@ class WeatherAPIClient:
                         "Geocoding API request failed",
                         {"endpoint": self.GEOCODING_URL, "city": self.config.city_name},
                         status_code=e.response.status_code,
-                        response_body=e.response.text
+                        response_body=e.response.text,
                     ),
-                    e
+                    e,
                 ) from e
         except httpx.TimeoutException as e:
             error_location = get_error_location()
@@ -234,9 +436,9 @@ class WeatherAPIClient:
             raise chain_exception(
                 APITimeoutError(
                     "Geocoding API request timed out",
-                    {"endpoint": self.GEOCODING_URL, "city": self.config.city_name, "timeout": 30}
+                    {"endpoint": self.GEOCODING_URL, "city": self.config.city_name, "timeout": 30},
                 ),
-                e
+                e,
             ) from e
         except InvalidAPIResponseError:
             # Re-raise our custom exceptions as-is
@@ -247,9 +449,9 @@ class WeatherAPIClient:
             raise chain_exception(
                 WeatherAPIError(
                     f"Failed to geocode location: {self.config.city_name}",
-                    {"city": self.config.city_name, "error": str(e)}
+                    {"city": self.config.city_name, "error": str(e)},
                 ),
-                e
+                e,
             ) from e
 
     async def get_weather_data(self, force_refresh: bool = False) -> WeatherData:
@@ -281,34 +483,34 @@ class WeatherAPIClient:
         try:
             # Fetch fresh weather data
             weather = await self._fetch_weather_data(lat, lon)
-            
+
             # Cache the result
             self._cache_weather_data(cache_key, weather)
-            
+
             self.logger.info("Weather data updated successfully")
             return weather
-            
+
         except (httpx.HTTPError, Exception) as e:
             return self._handle_weather_fetch_error(e, cache_key)
-    
+
     def _generate_cache_key(self, lat: float, lon: float) -> str:
         """Generate cache key for weather data.
-        
+
         Args:
             lat: Latitude
             lon: Longitude
-            
+
         Returns:
             Cache key string
         """
         return f"weather_{lat}_{lon}_{self.config.units}_{self.config.language}"
-    
+
     def _get_cached_weather(self, cache_key: str) -> WeatherData | None:
         """Get weather data from cache if available.
-        
+
         Args:
             cache_key: Cache key to look up
-            
+
         Returns:
             Cached WeatherData or None if not found
         """
@@ -316,17 +518,17 @@ class WeatherAPIClient:
         if cached_data is not None:
             self.logger.info("Using cached weather data")
         return cached_data
-    
+
     async def _fetch_weather_data(self, lat: float, lon: float) -> WeatherData:
         """Fetch weather data from OpenWeatherMap APIs.
-        
+
         Args:
             lat: Latitude
             lon: Longitude
-            
+
         Returns:
             WeatherData object with all weather information
-            
+
         Raises:
             WeatherAPIError: If API request fails
         """
@@ -334,26 +536,35 @@ class WeatherAPIClient:
             # Fetch both weather and air pollution data
             weather_data = await self._fetch_weather_forecast(client, lat, lon)
             air_data = await self._fetch_air_pollution(client, lat, lon)
-            
+
             # Combine air pollution data with weather data
-            weather_data["air_pollution"] = air_data["list"][0] if air_data["list"] else None
-            
+            combined_response: CombinedWeatherResponse = {
+                "lat": weather_data["lat"],
+                "lon": weather_data["lon"],
+                "timezone": weather_data["timezone"],
+                "timezone_offset": weather_data["timezone_offset"],
+                "current": weather_data["current"],
+                "hourly": weather_data["hourly"],
+                "daily": weather_data["daily"],
+                "air_pollution": air_data["list"][0] if air_data["list"] else None,
+            }
+
             # Parse into WeatherData model
-            return self._parse_weather_response(weather_data)
-    
+            return self._parse_weather_response(combined_response)
+
     async def _fetch_weather_forecast(
         self, client: httpx.AsyncClient, lat: float, lon: float
-    ) -> dict[str, Any]:
+    ) -> WeatherAPIResponse:
         """Fetch weather forecast data.
-        
+
         Args:
             client: HTTP client
-            lat: Latitude 
+            lat: Latitude
             lon: Longitude
-            
+
         Returns:
             Weather forecast data dictionary
-            
+
         Raises:
             WeatherAPIError: If API request fails
         """
@@ -365,11 +576,12 @@ class WeatherAPIClient:
             "lang": self.config.language,
             "exclude": "minutely,alerts",
         }
-        
+
         try:
             response = await client.get(self.BASE_URL, params=weather_params)
             response.raise_for_status()
-            return response.json()
+            # Cast JSON response to our typed structure
+            return response.json()  # type: ignore[return-value]
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 401:
                 raise chain_exception(
@@ -377,12 +589,12 @@ class WeatherAPIClient:
                         "Invalid API key for weather data",
                         {
                             "api_key_prefix": self.config.api_key[:8] + "...",
-                            "endpoint": self.BASE_URL
+                            "endpoint": self.BASE_URL,
                         },
                         status_code=401,
-                        response_body=e.response.text
+                        response_body=e.response.text,
                     ),
-                    e
+                    e,
                 ) from e
             elif e.response.status_code == 429:
                 retry_after = e.response.headers.get("Retry-After", "3600")
@@ -391,9 +603,9 @@ class WeatherAPIClient:
                         "Weather API rate limit exceeded",
                         {"endpoint": self.BASE_URL, "retry_after": int(retry_after)},
                         status_code=429,
-                        response_body=e.response.text
+                        response_body=e.response.text,
                     ),
-                    e
+                    e,
                 ) from e
             else:
                 raise chain_exception(
@@ -401,45 +613,42 @@ class WeatherAPIClient:
                         "Weather API request failed",
                         {"endpoint": self.BASE_URL, "lat": lat, "lon": lon},
                         status_code=e.response.status_code,
-                        response_body=e.response.text
+                        response_body=e.response.text,
                     ),
-                    e
+                    e,
                 ) from e
         except httpx.TimeoutException as e:
             raise chain_exception(
                 APITimeoutError(
                     "Weather API request timed out",
-                    {"endpoint": self.BASE_URL, "lat": lat, "lon": lon, "timeout": 30}
+                    {"endpoint": self.BASE_URL, "lat": lat, "lon": lon, "timeout": 30},
                 ),
-                e
+                e,
             ) from e
-    
+
     async def _fetch_air_pollution(
         self, client: httpx.AsyncClient, lat: float, lon: float
-    ) -> dict[str, Any]:
+    ) -> AirPollutionAPIResponse:
         """Fetch air pollution data.
-        
+
         Args:
             client: HTTP client
             lat: Latitude
             lon: Longitude
-            
+
         Returns:
             Air pollution data dictionary
-            
+
         Raises:
             WeatherAPIError: If API request fails
         """
-        air_params = {
-            "lat": lat,
-            "lon": lon,
-            "appid": self.config.api_key
-        }
-        
+        air_params = {"lat": lat, "lon": lon, "appid": self.config.api_key}
+
         try:
             response = await client.get(self.AIR_POLLUTION_URL, params=air_params)
             response.raise_for_status()
-            return response.json()
+            # Cast JSON response to our typed structure
+            return response.json()  # type: ignore[return-value]
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 401:
                 raise chain_exception(
@@ -447,12 +656,12 @@ class WeatherAPIClient:
                         "Invalid API key for air pollution data",
                         {
                             "api_key_prefix": self.config.api_key[:8] + "...",
-                            "endpoint": self.AIR_POLLUTION_URL
+                            "endpoint": self.AIR_POLLUTION_URL,
                         },
                         status_code=401,
-                        response_body=e.response.text
+                        response_body=e.response.text,
                     ),
-                    e
+                    e,
                 ) from e
             else:
                 raise chain_exception(
@@ -460,25 +669,25 @@ class WeatherAPIClient:
                         "Air pollution API request failed",
                         {"endpoint": self.AIR_POLLUTION_URL, "lat": lat, "lon": lon},
                         status_code=e.response.status_code,
-                        response_body=e.response.text
+                        response_body=e.response.text,
                     ),
-                    e
+                    e,
                 ) from e
         except httpx.TimeoutException as e:
             raise chain_exception(
                 APITimeoutError(
                     "Air pollution API request timed out",
-                    {"endpoint": self.AIR_POLLUTION_URL, "lat": lat, "lon": lon, "timeout": 30}
+                    {"endpoint": self.AIR_POLLUTION_URL, "lat": lat, "lon": lon, "timeout": 30},
                 ),
-                e
+                e,
             ) from e
-    
-    def _parse_weather_response(self, weather_data: dict[str, Any]) -> WeatherData:
+
+    def _parse_weather_response(self, weather_data: CombinedWeatherResponse) -> WeatherData:
         """Parse API response into WeatherData model.
-        
+
         Args:
             weather_data: Raw weather data from API
-            
+
         Returns:
             WeatherData model instance
         """
@@ -487,39 +696,59 @@ class WeatherAPIClient:
             lon=weather_data["lon"],
             timezone=weather_data["timezone"],
             timezone_offset=weather_data["timezone_offset"],
-            current=CurrentWeather(**weather_data["current"]),
+            current=CurrentWeather(**weather_data["current"]),  # type: ignore[arg-type]
             hourly=[
-                HourlyWeather(**hour) for hour in weather_data["hourly"][:24]
+                HourlyWeather(**hour)  # type: ignore[arg-type]
+                for hour in weather_data["hourly"][:24]
             ],  # 24 hours
             daily=[
-                DailyWeather(**day)
+                DailyWeather(**day)  # type: ignore[arg-type]
                 for day in weather_data["daily"][: self.config.forecast_days]
             ],
-            air_pollution=self._parse_air_pollution(weather_data.get("air_pollution")),
+            air_pollution=self._parse_air_pollution(weather_data["air_pollution"]),
             last_updated=datetime.now(),
         )
-    
-    def _parse_air_pollution(self, air_data: dict[str, Any] | None) -> AirPollutionData | None:
+
+    def _parse_air_pollution(
+        self, air_data: AirPollutionDataResponse | None
+    ) -> AirPollutionData | None:
         """Parse air pollution data if available.
-        
+
         Args:
             air_data: Raw air pollution data or None
-            
+
         Returns:
             AirPollutionData model or None
         """
         if not air_data:
             return None
-            
+
+        # Convert components to AirPollution model
+        components_data = air_data["components"]
+        components = AirPollution(
+            aqi=air_data["main"].get("aqi"),
+            co=components_data["co"],
+            no=components_data["no"],
+            no2=components_data["no2"],
+            o3=components_data["o3"],
+            so2=components_data["so2"],
+            pm2_5=components_data["pm2_5"],
+            pm10=components_data["pm10"],
+            nh3=components_data["nh3"],
+        )
+
+        # Create proper dict[str, int] from TypedDict
+        main_dict: dict[str, int] = {"aqi": air_data["main"]["aqi"]}
+
         return AirPollutionData(
             dt=air_data["dt"],
-            main=air_data["main"],
-            components=air_data["components"],
+            main=main_dict,
+            components=components,
         )
-    
+
     def _cache_weather_data(self, cache_key: str, weather: WeatherData) -> None:
         """Cache weather data with size estimate.
-        
+
         Args:
             cache_key: Cache key
             weather: Weather data to cache
@@ -529,29 +758,29 @@ class WeatherAPIClient:
         data_json = weather.model_dump_json()
         data_size = len(data_json.encode("utf-8"))
         self._cache.put(cache_key, weather, data_size)
-    
+
     def _handle_weather_fetch_error(self, error: Exception, cache_key: str) -> WeatherData:
         """Handle errors during weather fetch with fallback to cache.
-        
+
         Args:
             error: The exception that occurred
             cache_key: Cache key for fallback lookup
-            
+
         Returns:
             Cached weather data if available
-            
+
         Raises:
             The original exception if no cached data available
         """
         error_location = get_error_location()
         self.logger.error(f"Error during weather data fetch [{error_location}]: {error}")
-        
+
         # Try to return cached data as fallback
         cached_data = self._cache.get(cache_key)
         if cached_data is not None:
             self.logger.warning("Using cached weather data due to error")
             return cached_data
-            
+
         # Re-raise if no cached data available
         raise error
 
