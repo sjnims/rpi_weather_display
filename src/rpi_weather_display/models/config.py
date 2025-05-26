@@ -5,8 +5,16 @@ display parameters, power management options, and server configuration.
 """
 
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
+
+from rpi_weather_display.exceptions import (
+    ConfigFileNotFoundError,
+    InvalidConfigError,
+    MissingConfigError,
+    chain_exception,
+)
 
 # Note: We avoid importing path_resolver directly to prevent circular imports
 # with battery_utils.py which imports PowerConfig from this module
@@ -249,11 +257,12 @@ class AppConfig(BaseModel):
             An initialized AppConfig object with values from the YAML file.
 
         Raises:
-            FileNotFoundError: If the specified config file doesn't exist.
-            yaml.YAMLError: If the YAML file has invalid syntax.
-            ValidationError: If the configuration values don't match the expected schema.
+            ConfigFileNotFoundError: If the specified config file doesn't exist.
+            InvalidConfigError: If the YAML file has invalid syntax or validation fails.
+            MissingConfigError: If required configuration sections are missing.
         """
         import yaml
+        from pydantic import ValidationError
 
         # Use direct import to avoid circular imports
         from rpi_weather_display.utils.file_utils import read_text
@@ -261,8 +270,89 @@ class AppConfig(BaseModel):
         # Use internal normalization to avoid circular imports
         path = _normalize_path(config_path)
 
-        # Read the YAML file
-        yaml_content = read_text(path)
-        config_data = yaml.safe_load(yaml_content)
+        # Check if file exists
+        if not path.exists():
+            raise ConfigFileNotFoundError(
+                f"Configuration file not found: {path}",
+                {"path": str(path), "cwd": str(Path.cwd())}
+            )
 
-        return cls.model_validate(config_data)
+        try:
+            # Read the YAML file
+            yaml_content = read_text(path)
+        except Exception as e:
+            raise chain_exception(
+                ConfigFileNotFoundError(
+                    f"Failed to read configuration file: {path}",
+                    {"path": str(path), "error": str(e)}
+                ),
+                e
+            ) from e
+
+        try:
+            # Parse YAML content
+            config_data = yaml.safe_load(yaml_content)
+        except yaml.YAMLError as e:
+            raise chain_exception(
+                InvalidConfigError(
+                    "Invalid YAML syntax in configuration file",
+                    {"path": str(path), "error": str(e)}
+                ),
+                e
+            ) from e
+
+        # Check for required sections
+        if not config_data:
+            raise InvalidConfigError(
+                "Configuration file is empty",
+                {"path": str(path)}
+            )
+
+        required_sections = ["weather", "display", "power", "server"]
+        missing_sections = [s for s in required_sections if s not in config_data]
+        if missing_sections:
+            raise MissingConfigError(
+                f"Missing required configuration sections: {', '.join(missing_sections)}",
+                {"path": str(path), "missing_sections": missing_sections}
+            )
+
+        try:
+            # Validate and create config object
+            return cls.model_validate(config_data)
+        except ValidationError as e:
+            # Convert Pydantic validation errors to our custom exception
+            error_details: list[dict[str, Any]] = []
+            error_messages: list[str] = []
+            
+            for error in e.errors():
+                field_path = ".".join(str(loc) for loc in error["loc"])
+                error_msg = error["msg"]
+                
+                # Extract the actual error message from the ValueError if present
+                if "ValueError" in error_msg:
+                    # Extract the message between the quotes after ValueError:
+                    import re
+                    match = re.search(r"ValueError: (.+)", error_msg)
+                    if match:
+                        error_msg = match.group(1)
+                
+                error_details.append({
+                    "field": field_path,
+                    "message": error_msg,
+                    "type": error["type"],
+                    "value": error.get("input")
+                })
+                error_messages.append(f"{field_path}: {error_msg}")
+            
+            # Create a comprehensive error message
+            main_msg = "Configuration validation failed"
+            if error_messages:
+                main_msg += ":\n" + "\n".join(f"  - {msg}" for msg in error_messages)
+            
+            raise chain_exception(
+                InvalidConfigError(
+                    main_msg,
+                    {"path": str(path), "errors": error_details}
+                ),
+                e
+            ) from e

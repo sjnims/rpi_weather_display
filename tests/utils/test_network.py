@@ -13,6 +13,7 @@ from rpi_weather_display.constants import (
     GOOGLE_DNS_PORT,
     WIFI_INTERFACE_NAME,
 )
+from rpi_weather_display.exceptions import NetworkTimeoutError
 from rpi_weather_display.models.config import (
     AppConfig,
     DisplayConfig,
@@ -226,6 +227,25 @@ class TestAsyncNetworkManager:
 
             assert result is False
 
+    @pytest.mark.asyncio()
+    async def test_check_connectivity_network_unavailable(self, network_manager):
+        """Test checking connectivity with network unavailable error."""
+        from rpi_weather_display.exceptions import NetworkUnavailableError
+        
+        # Create a mock socket that raises OSError with errno 101 (Network unreachable)
+        mock_socket = Mock()
+        mock_error = OSError("Network is unreachable")
+        mock_error.errno = 101
+        mock_socket.connect_ex = Mock(side_effect=mock_error)
+        
+        with patch("socket.socket", return_value=mock_socket):
+            with pytest.raises(NetworkUnavailableError) as exc_info:
+                await network_manager._check_connectivity()
+                
+            assert "No network connectivity available" in str(exc_info.value)
+            assert exc_info.value.details["error_code"] == 101
+
+
     def test_calculate_backoff_delay(self, network_manager):
         """Test calculating backoff delay."""
         # Test first attempt
@@ -259,7 +279,7 @@ class TestAsyncNetworkManager:
             nonlocal attempt_count
             attempt_count += 1
             if attempt_count < 2:
-                raise ConnectionError("Failed")
+                raise NetworkTimeoutError("Failed", {"attempt": attempt_count})
             return "success"
 
         with patch("asyncio.sleep", new_callable=AsyncMock):  # Speed up test
@@ -272,7 +292,7 @@ class TestAsyncNetworkManager:
         """Test retry mechanism when all attempts fail."""
 
         async def mock_operation() -> None:
-            raise ConnectionError("Always fails")
+            raise NetworkTimeoutError("Always fails", {"reason": "test"})
 
         with patch("asyncio.sleep", new_callable=AsyncMock):  # Speed up test
             result = await network_manager.with_retry(mock_operation)
@@ -308,8 +328,11 @@ class TestAsyncNetworkManager:
         mock_proc.wait = AsyncMock()
 
         with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
-            with pytest.raises(subprocess.TimeoutExpired):
+            with pytest.raises(NetworkTimeoutError) as exc_info:
                 await network_manager._run_subprocess(["sleep", "100"])
+            
+            assert "Subprocess command timed out" in str(exc_info.value)
+            assert exc_info.value.details["command"] == "sleep 100"
 
             mock_proc.kill.assert_called_once()
 
@@ -459,6 +482,38 @@ wlan0     IEEE 802.11  ESSID:"TestNetwork"
                             assert connected is False
 
     @pytest.mark.asyncio()
+    async def test_try_connect_success(self, network_manager):
+        """Test _try_connect succeeds when connectivity is established."""
+        check_count = 0
+        
+        async def mock_check() -> bool:
+            nonlocal check_count
+            check_count += 1
+            # Succeed on second try
+            return check_count >= 2
+            
+        with patch.object(network_manager, "_check_connectivity", side_effect=mock_check):
+            with patch("asyncio.sleep", new_callable=AsyncMock):
+                result = await network_manager._try_connect()
+                assert result is True
+                assert check_count >= 2
+
+    @pytest.mark.asyncio()
+    async def test_try_connect_timeout(self, network_manager):
+        """Test _try_connect raises NetworkTimeoutError when timing out."""
+        from rpi_weather_display.exceptions import NetworkTimeoutError
+        
+        # Always return False to simulate no connectivity
+        with patch.object(network_manager, "_check_connectivity", return_value=False):
+            with patch("asyncio.sleep", new_callable=AsyncMock):
+                with patch("time.time", side_effect=[0, 5, 10, 15]):  # Simulate time passing
+                    with pytest.raises(NetworkTimeoutError) as exc_info:
+                        await network_manager._try_connect()
+                        
+                    assert "Connection attempt timed out" in str(exc_info.value)
+                    assert exc_info.value.details["timeout"] == network_manager.config.wifi_timeout_seconds
+
+    @pytest.mark.asyncio()
     async def test_ensure_connectivity_debug_mode(self, network_manager, app_config):
         """Test ensure_connectivity in debug mode doesn't disable WiFi."""
         app_config.debug = True
@@ -474,22 +529,7 @@ wlan0     IEEE 802.11  ESSID:"TestNetwork"
                 # WiFi should NOT be disabled in debug mode
                 mock_disable.assert_not_called()
 
-    @pytest.mark.asyncio()
-    async def test_try_connect_success(self, network_manager):
-        """Test _try_connect with successful connection."""
-        with patch.object(network_manager, "_check_connectivity", return_value=True):
-            result = await network_manager._try_connect()
-            assert result is True
 
-    @pytest.mark.asyncio()
-    async def test_try_connect_timeout(self, network_manager):
-        """Test _try_connect with timeout."""
-        network_manager.config.wifi_timeout_seconds = 0.1  # Short timeout for test
-
-        with patch.object(network_manager, "_check_connectivity", return_value=False):
-            with patch("asyncio.sleep", new_callable=AsyncMock):
-                with pytest.raises(ConnectionError):
-                    await network_manager._try_connect()
 
     @pytest.mark.asyncio()
     async def test_enable_wifi_with_script(self, network_manager):

@@ -28,6 +28,7 @@ from rpi_weather_display.constants import (
     SYSTEM_HALT_DELAY,
     TWELVE_HOURS_IN_MINUTES,
 )
+from rpi_weather_display.exceptions import CriticalBatteryError, PowerStateError
 from rpi_weather_display.models.config import AppConfig
 from rpi_weather_display.models.system import BatteryStatus
 from rpi_weather_display.utils.battery_monitor import BatteryMonitor
@@ -159,8 +160,9 @@ class PowerStateController:
         # Determine new state
         new_state = self._determine_power_state(battery_status)
 
-        # Update state and notify if changed
+        # Validate state transition
         if new_state != old_state:
+            self._validate_state_transition(old_state, new_state, battery_status)
             self._current_state = new_state
             self._notify_state_change(old_state, new_state)
 
@@ -181,7 +183,20 @@ class PowerStateController:
 
         Returns:
             Appropriate power state
+            
+        Raises:
+            PowerStateError: If state determination results in an invalid state
         """
+        # Validate battery status
+        if battery_status.level < 0 or battery_status.level > 100:
+            raise PowerStateError(
+                "Invalid battery level for state determination",
+                {
+                    "battery_level": battery_status.level,
+                    "valid_range": "0-100"
+                }
+            )
+        
         # Charging takes priority
         if is_charging(battery_status):
             return PowerState.CHARGING
@@ -191,12 +206,56 @@ class PowerStateController:
             return PowerState.QUIET_HOURS
 
         # Check battery levels
-        if self.battery_monitor.is_battery_critical():
+        try:
+            self.battery_monitor.is_battery_critical()
+            # If no exception was raised, battery is not critical
+        except CriticalBatteryError:
+            # Battery is critical
             return PowerState.CRITICAL
-        elif self.battery_monitor.should_conserve_power():
+            
+        if self.battery_monitor.should_conserve_power():
             return PowerState.CONSERVING
 
         return PowerState.NORMAL
+    
+    def _validate_state_transition(
+        self, old_state: PowerState, new_state: PowerState, battery_status: BatteryStatus
+    ) -> None:
+        """Validate that a state transition is allowed.
+        
+        Args:
+            old_state: Current power state
+            new_state: Proposed new power state
+            battery_status: Current battery status
+            
+        Raises:
+            PowerStateError: If the transition is invalid
+        """
+        # Define invalid transitions
+        invalid_transitions = [
+            # Can't go from CRITICAL directly to NORMAL (must go through CONSERVING)
+            (PowerState.CRITICAL, PowerState.NORMAL),
+            # Can't go from CRITICAL to QUIET_HOURS if battery is still critical
+            (PowerState.CRITICAL, PowerState.QUIET_HOURS),
+        ]
+        
+        # Check if this is an invalid transition
+        if (old_state, new_state) in invalid_transitions:
+            # Special check for CRITICAL -> QUIET_HOURS
+            if old_state == PowerState.CRITICAL and new_state == PowerState.QUIET_HOURS:
+                # Allow if battery is no longer critical
+                if battery_status.level > self.config.power.critical_battery_threshold:
+                    return
+                    
+            raise PowerStateError(
+                f"Invalid power state transition: {old_state.name} -> {new_state.name}",
+                {
+                    "from_state": old_state.name,
+                    "to_state": new_state.name,
+                    "battery_level": battery_status.level,
+                    "reason": "Direct transition not allowed"
+                }
+            )
 
     def _notify_state_change(self, old_state: PowerState, new_state: PowerState) -> None:
         """Notify callbacks of state change.

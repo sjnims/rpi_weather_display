@@ -134,6 +134,10 @@ class TestPiJuiceAdapter:
 
     def test_set_alarm(self, mock_pijuice_hardware: MagicMock) -> None:
         """Test setting RTC alarm."""
+        # Configure mock to return success
+        mock_pijuice_hardware.rtcAlarm.SetAlarm.return_value = {"error": "NO_ERROR"}
+        mock_pijuice_hardware.rtcAlarm.SetWakeupEnabled.return_value = {"error": "NO_ERROR"}
+        
         adapter = PiJuiceAdapter(mock_pijuice_hardware)
         wake_time = datetime(2024, 5, 25, 10, 30, 0)
 
@@ -149,9 +153,29 @@ class TestPiJuiceAdapter:
 
     def test_set_alarm_not_initialized(self) -> None:
         """Test setting alarm when not initialized."""
+        from rpi_weather_display.exceptions import WakeupSchedulingError
+        
         adapter = PiJuiceAdapter()
-        result = adapter.set_alarm(datetime.now())
-        assert result is False
+        with pytest.raises(WakeupSchedulingError) as exc_info:
+            adapter.set_alarm(datetime.now())
+        
+        assert "PiJuice not initialized" in str(exc_info.value)
+
+    def test_set_alarm_failure(self, mock_pijuice_hardware: MagicMock) -> None:
+        """Test setting alarm when it fails."""
+        from rpi_weather_display.exceptions import WakeupSchedulingError
+        
+        # Configure mock to return error
+        mock_pijuice_hardware.rtcAlarm.SetAlarm.return_value = {"error": "COMMUNICATION_ERROR"}
+        
+        adapter = PiJuiceAdapter(mock_pijuice_hardware)
+        wake_time = datetime(2024, 5, 25, 10, 30, 0)
+        
+        with pytest.raises(WakeupSchedulingError) as exc_info:
+            adapter.set_alarm(wake_time)
+        
+        assert "Failed to set RTC alarm" in str(exc_info.value)
+        assert exc_info.value.details["target_time"] == wake_time.isoformat()
 
     def test_disable_wakeup(self, mock_pijuice_hardware: MagicMock) -> None:
         """Test disabling wakeup alarm."""
@@ -308,11 +332,16 @@ class TestPiJuiceAdapter:
 
     def test_set_alarm_exception(self, mock_pijuice_hardware: MagicMock) -> None:
         """Test set_alarm with exception."""
+        from rpi_weather_display.exceptions import WakeupSchedulingError
+        
         adapter = PiJuiceAdapter(mock_pijuice_hardware)
         mock_pijuice_hardware.rtcAlarm.SetAlarm.side_effect = Exception("RTC error")
         
-        result = adapter.set_alarm(datetime.now())
-        assert result is False
+        with pytest.raises(WakeupSchedulingError) as exc_info:
+            adapter.set_alarm(datetime.now())
+        
+        assert "Failed to schedule wakeup" in str(exc_info.value)
+        assert "RTC error" in exc_info.value.details["error"]
 
     def test_disable_wakeup_not_initialized(self) -> None:
         """Test disable_wakeup when not initialized."""

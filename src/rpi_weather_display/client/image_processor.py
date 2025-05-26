@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 from PIL import Image
 
 from rpi_weather_display.constants import DISPLAY_MARGIN
+from rpi_weather_display.exceptions import ImageRenderingError, chain_exception
 
 if TYPE_CHECKING:
     from rpi_weather_display.models.config import DisplayConfig
@@ -57,23 +58,41 @@ class ImageProcessor:
             
         Returns:
             Processed PIL Image ready for display
+            
+        Raises:
+            ImageRenderingError: If image preprocessing fails
         """
-        processed_image = image
-        
-        # Resize if necessary
-        if image.size != (self.config.width, self.config.height):
-            # Handle different PIL versions
-            resampling = getattr(Image, "LANCZOS", getattr(Image, "ANTIALIAS", 1))
-            processed_image = image.resize(
-                (self.config.width, self.config.height), 
-                resampling
-            )
+        try:
+            processed_image = image
             
-        # Convert to grayscale
-        if processed_image.mode != "L":
-            processed_image = processed_image.convert("L")
+            # Resize if necessary
+            if image.size != (self.config.width, self.config.height):
+                # Handle different PIL versions
+                resampling = getattr(Image, "LANCZOS", getattr(Image, "ANTIALIAS", 1))
+                processed_image = image.resize(
+                    (self.config.width, self.config.height), 
+                    resampling
+                )
+                
+            # Convert to grayscale
+            if processed_image.mode != "L":
+                processed_image = processed_image.convert("L")
+                
+            return processed_image
             
-        return processed_image
+        except Exception as e:
+            raise chain_exception(
+                ImageRenderingError(
+                    "Failed to preprocess image for display",
+                    {
+                        "original_size": image.size,
+                        "original_mode": image.mode,
+                        "target_size": (self.config.width, self.config.height),
+                        "error": str(e)
+                    }
+                ),
+                e
+            ) from None
         
     def calculate_diff_bbox(
         self, 
@@ -95,6 +114,7 @@ class ImageProcessor:
             
         Returns:
             Bounding box (left, top, right, bottom) or None if no significant changes
+            or if an error occurs during calculation
         """
         try:
             np = _import_numpy()
@@ -148,7 +168,7 @@ class ImageProcessor:
             np: NumPy module
             
         Returns:
-            Bounding box (left, top, right, bottom) or None
+            Bounding box (left, top, right, bottom) or None if calculation fails
         """
         try:
             left = max(0, int(np.min(non_zero[1])) - DISPLAY_MARGIN)

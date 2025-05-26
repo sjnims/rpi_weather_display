@@ -20,6 +20,13 @@ from rpi_weather_display.constants import (
     MOCK_BATTERY_VOLTAGE,
     PIJUICE_STATUS_OK,
 )
+from rpi_weather_display.exceptions import (
+    BatteryMonitoringError,
+    CriticalBatteryError,
+    PiJuiceCommunicationError,
+    PiJuiceInitializationError,
+    chain_exception,
+)
 from rpi_weather_display.models.config import AppConfig
 from rpi_weather_display.models.system import BatteryState, BatteryStatus
 from rpi_weather_display.utils.battery_utils import (
@@ -104,6 +111,14 @@ class BatteryMonitor:
             data = response.get("data")
             if isinstance(data, int | float):
                 return float(data) / divisor
+            elif isinstance(data, str):
+                try:
+                    return float(data) / divisor
+                except ValueError:
+                    logger.warning(
+                        "Invalid string value in PiJuice response",
+                        extra={"value": data, "response": response}
+                    )
         return default
     
     def _get_pijuice_data(self) -> tuple[dict[str, Any], int, float, float, float]:
@@ -114,12 +129,25 @@ class BatteryMonitor:
         """
         # Get all responses from PiJuice
         if self.pijuice is None:
-            raise RuntimeError("PiJuice adapter is not available")
-        status_response = self.pijuice.get_status()
-        charge_response = self.pijuice.get_charge_level()
-        voltage_response = self.pijuice.get_battery_voltage()
-        current_response = self.pijuice.get_battery_current()
-        temp_response = self.pijuice.get_battery_temperature()
+            raise PiJuiceInitializationError(
+                "PiJuice adapter is not available",
+                {"operation": "get_battery_data", "adapter_present": False}
+            )
+        
+        try:
+            status_response = self.pijuice.get_status()
+            charge_response = self.pijuice.get_charge_level()
+            voltage_response = self.pijuice.get_battery_voltage()
+            current_response = self.pijuice.get_battery_current()
+            temp_response = self.pijuice.get_battery_temperature()
+        except Exception as e:
+            raise chain_exception(
+                PiJuiceCommunicationError(
+                    "Failed to communicate with PiJuice hardware",
+                    {"operation": "get_battery_data", "error": str(e)}
+                ),
+                e
+            ) from e
         
         # Extract status data
         status_data = (
@@ -267,16 +295,18 @@ class BatteryMonitor:
 
             return status
 
+        except (PiJuiceInitializationError, PiJuiceCommunicationError):
+            # Re-raise PiJuice-specific errors as they're critical
+            raise
         except Exception as e:
             logger.error(f"Failed to get battery status: {e}")
-            return BatteryStatus(
-                level=0,
-                voltage=0.0,
-                current=0.0,
-                temperature=0.0,
-                state=BatteryState.UNKNOWN,
-                timestamp=datetime.now(),
-            )
+            raise chain_exception(
+                BatteryMonitoringError(
+                    "Failed to read battery status",
+                    {"source": "pijuice", "error": str(e)}
+                ),
+                e
+            ) from e
 
     def get_expected_battery_life(self) -> int | None:
         """Calculate expected battery life in hours based on current drain rate.
@@ -312,9 +342,18 @@ class BatteryMonitor:
 
             return hours_remaining
 
+        except (PiJuiceInitializationError, PiJuiceCommunicationError, BatteryMonitoringError):
+            # Re-raise battery-specific errors
+            raise
         except Exception as e:
             logger.error(f"Failed to calculate battery life: {e}")
-            return None
+            raise chain_exception(
+                BatteryMonitoringError(
+                    "Failed to calculate battery life",
+                    {"source": "battery_life_calculation", "error": str(e)}
+                ),
+                e
+            ) from e
 
     def is_discharge_rate_abnormal(self) -> bool:
         """Check if the current battery discharge rate is abnormal.
@@ -336,9 +375,18 @@ class BatteryMonitor:
             return is_discharge_rate_abnormal(
                 self._current_drain_rate, expected_rate, ABNORMAL_DISCHARGE_FACTOR
             )
+        except (PiJuiceInitializationError, PiJuiceCommunicationError, BatteryMonitoringError):
+            # Re-raise battery-specific errors
+            raise
         except Exception as e:
             logger.error(f"Failed to check discharge rate: {e}")
-            return False
+            raise chain_exception(
+                BatteryMonitoringError(
+                    "Failed to check discharge rate",
+                    {"source": "discharge_rate_check", "error": str(e)}
+                ),
+                e
+            ) from e
 
     def should_conserve_power(self) -> bool:
         """Check if power conservation is needed based on battery status.
@@ -349,9 +397,18 @@ class BatteryMonitor:
         try:
             status = self.get_battery_status()
             return should_conserve_power(status, self.config.power)
+        except (PiJuiceInitializationError, PiJuiceCommunicationError, BatteryMonitoringError):
+            # Re-raise battery-specific errors
+            raise
         except Exception as e:
             logger.error(f"Failed to check power conservation: {e}")
-            return True  # Conserve power on error
+            raise chain_exception(
+                BatteryMonitoringError(
+                    "Failed to check power conservation status",
+                    {"source": "power_conservation_check", "error": str(e)}
+                ),
+                e
+            ) from e
 
     def is_battery_critical(self) -> bool:
         """Check if battery is at critical level.
@@ -361,10 +418,35 @@ class BatteryMonitor:
         """
         try:
             status = self.get_battery_status()
-            return is_battery_critical(status, self.config.power.critical_battery_threshold)
+            is_critical = is_battery_critical(status, self.config.power.critical_battery_threshold)
+            
+            # If battery is critical, raise specific exception
+            if is_critical:
+                raise CriticalBatteryError(
+                    "Battery critically low - immediate action required",
+                    {
+                        "level": status.level,
+                        "threshold": self.config.power.critical_battery_threshold,
+                        "voltage": status.voltage
+                    }
+                )
+            
+            return False
+        except CriticalBatteryError:
+            # Re-raise critical battery errors
+            raise
+        except (PiJuiceInitializationError, PiJuiceCommunicationError, BatteryMonitoringError):
+            # Re-raise battery-specific errors
+            raise
         except Exception as e:
             logger.error(f"Failed to check critical battery: {e}")
-            return False
+            raise chain_exception(
+                BatteryMonitoringError(
+                    "Failed to check critical battery status",
+                    {"source": "critical_battery_check", "error": str(e)}
+                ),
+                e
+            ) from e
 
     def get_battery_history(self) -> list[BatteryStatus]:
         """Get battery history for analysis.
@@ -395,6 +477,15 @@ class BatteryMonitor:
                 "battery_state": status.state.value,
                 "drain_rate": self._current_drain_rate,
             }
+        except (PiJuiceInitializationError, PiJuiceCommunicationError, BatteryMonitoringError):
+            # Re-raise battery-specific errors
+            raise
         except Exception as e:
             logger.error(f"Failed to get diagnostic info: {e}")
-            return {}
+            raise chain_exception(
+                BatteryMonitoringError(
+                    "Failed to get diagnostic information",
+                    {"source": "diagnostic_info", "error": str(e)}
+                ),
+                e
+            ) from e

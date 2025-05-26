@@ -16,6 +16,7 @@ from rpi_weather_display.constants import (
     PIJUICE_STATUS_OK,
     PIJUICE_YEAR_OFFSET,
 )
+from rpi_weather_display.exceptions import WakeupSchedulingError, chain_exception
 
 logger = logging.getLogger(__name__)
 
@@ -237,9 +238,15 @@ class PiJuiceAdapter:
 
         Returns:
             True if alarm set successfully, False otherwise
+            
+        Raises:
+            WakeupSchedulingError: If alarm cannot be set
         """
         if not self.pijuice:
-            return False
+            raise WakeupSchedulingError(
+                "Cannot set alarm: PiJuice not initialized",
+                {"target_time": wakeup_time.isoformat()}
+            )
 
         try:
             alarm_config = {
@@ -251,15 +258,45 @@ class PiJuiceAdapter:
                 "year": wakeup_time.year - PIJUICE_YEAR_OFFSET,
             }
 
-            self.pijuice.rtcAlarm.SetAlarm(alarm_config)
-            self.pijuice.rtcAlarm.SetWakeupEnabled(True)
+            response = self.pijuice.rtcAlarm.SetAlarm(alarm_config)
+            if response.get("error") != PIJUICE_STATUS_OK:
+                raise WakeupSchedulingError(
+                    f"Failed to set RTC alarm: {response.get('error', 'Unknown error')}",
+                    {
+                        "target_time": wakeup_time.isoformat(),
+                        "alarm_config": alarm_config,
+                        "response": response
+                    }
+                )
+                
+            response = self.pijuice.rtcAlarm.SetWakeupEnabled(True)
+            if response.get("error") != PIJUICE_STATUS_OK:
+                raise WakeupSchedulingError(
+                    f"Failed to enable wakeup: {response.get('error', 'Unknown error')}",
+                    {
+                        "target_time": wakeup_time.isoformat(),
+                        "alarm_config": alarm_config,
+                        "response": response
+                    }
+                )
 
             logger.info(f"Alarm set for {wakeup_time}")
             return True
 
+        except WakeupSchedulingError:
+            # Re-raise our exceptions as-is
+            raise
         except Exception as e:
-            logger.error(f"Failed to set alarm: {e}")
-            return False
+            raise chain_exception(
+                WakeupSchedulingError(
+                    "Failed to schedule wakeup",
+                    {
+                        "target_time": wakeup_time.isoformat(),
+                        "error": str(e)
+                    }
+                ),
+                e
+            ) from None
 
     def disable_wakeup(self) -> bool:
         """Disable wakeup alarm.

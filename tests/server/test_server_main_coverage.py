@@ -11,6 +11,7 @@ import pytest
 from fastapi import BackgroundTasks, FastAPI, Response
 
 from rpi_weather_display.constants import DEFAULT_SERVER_HOST
+from rpi_weather_display.exceptions import ConfigFileNotFoundError
 from rpi_weather_display.models.config import LoggingConfig
 from rpi_weather_display.models.system import BatteryState
 from rpi_weather_display.server.main import (
@@ -146,26 +147,10 @@ def test_main_function_no_config_found() -> None:
 
 def test_main_function_no_config() -> None:
     """Test the main function when no config is provided and no default config is found."""
-    mock_path = MagicMock()
-
     with (
         patch("argparse.ArgumentParser.parse_args") as mock_parse_args,
-        patch(
-            "rpi_weather_display.server.main.path_resolver.get_config_path", return_value=mock_path
-        ),
-        patch(
-            "rpi_weather_display.server.main.path_resolver.user_config_dir",
-            Path("/mock/user/config"),
-        ),
-        patch(
-            "rpi_weather_display.server.main.path_resolver.system_config_dir",
-            Path("/mock/system/config"),
-        ),
-        patch(
-            "rpi_weather_display.server.main.path_resolver.project_root", Path("/mock/project/root")
-        ),
-        patch("pathlib.Path.cwd", return_value=Path("/mock/cwd")),
-        patch("builtins.print") as mock_print,  # Keep this one as it's used for assertion
+        patch("rpi_weather_display.server.main.validate_config_path") as mock_validate,
+        patch("builtins.print") as mock_print,
         patch("rpi_weather_display.server.main.WeatherDisplayServer") as mock_server,
     ):
         # Configure mock args with config=None to trigger the path resolver path
@@ -175,28 +160,33 @@ def test_main_function_no_config() -> None:
         mock_args.port = None
         mock_parse_args.return_value = mock_args
 
-        # Set up a return value for the server class
-        mock_instance = MagicMock()
-        mock_server.return_value = mock_instance
+        # Mock validate_config_path to raise ConfigFileNotFoundError
+        mock_validate.side_effect = ConfigFileNotFoundError(
+            "Configuration file not found: /mock/path/config.yaml",
+            {"path": "/mock/path/config.yaml"}
+        )
 
-        # The path returned should not exist to trigger error branch
-        mock_path.exists.return_value = False
-
-        # Call main function
+        # Call main function and expect SystemExit
         from rpi_weather_display.server.main import main
 
-        main()
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+        
+        assert exc_info.value.code == 1
 
-        # Verify path_resolver.get_config_path was called with "config.yaml"
-        path_resolver.get_config_path.assert_called_once_with("config.yaml")
+        # Verify validate_config_path was called with None
+        mock_validate.assert_called_once_with(None)
+        
+        # Verify error was printed
+        mock_print.assert_called()
+        print_calls = [call[0][0] for call in mock_print.call_args_list]
+        assert any("Configuration Error" in str(call) for call in print_calls)
 
-        # Verify the error message about config not found was printed
-        mock_print.assert_any_call(f"Error: Configuration file not found at {mock_path}")
+        # Verify the correct error message was printed
+        mock_print.assert_any_call("Configuration Error: Configuration file not found: /mock/path/config.yaml - Details: {'path': '/mock/path/config.yaml'}")
 
-        # In the main() function, we check config_path.exists() before creating a server,
-        # but sometimes during testing, the mock behavior can be inconsistent or the behavior
-        # may vary when asserting not_called. What's most important is verifying that
-        # the error message was printed, which we've done above.
+        # Verify server was not created
+        mock_server.assert_not_called()
 
 
 @pytest.mark.asyncio()

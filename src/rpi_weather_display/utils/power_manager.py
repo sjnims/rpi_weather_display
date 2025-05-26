@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 
     from rpi_weather_display.utils.power_state_controller import PowerStateCallback
 
+from rpi_weather_display.exceptions import WakeupSchedulingError
 from rpi_weather_display.models.config import AppConfig
 from rpi_weather_display.models.system import BatteryStatus
 from rpi_weather_display.utils.battery_monitor import BatteryMonitor
@@ -196,6 +197,9 @@ class PowerStateManager:
 
         Returns:
             True if wakeup was scheduled successfully, False otherwise
+            
+        Raises:
+            WakeupSchedulingError: If wakeup scheduling fails
         """
         if not self._pijuice_adapter:
             logger.info(f"Mock wakeup: Would schedule wakeup in {minutes} minutes")
@@ -206,7 +210,12 @@ class PowerStateManager:
             minutes = self._power_controller.calculate_sleep_time()
 
         wake_time = datetime.now() + timedelta(minutes=minutes)
-        return self._pijuice_adapter.set_alarm(wake_time)
+        
+        try:
+            return self._pijuice_adapter.set_alarm(wake_time)
+        except WakeupSchedulingError:
+            logger.error(f"Failed to schedule wakeup for {wake_time}")
+            raise
 
     # System metrics
     def get_system_metrics(self) -> dict[str, float]:

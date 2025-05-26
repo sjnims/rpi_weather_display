@@ -10,6 +10,7 @@ import pytest
 from fastapi import BackgroundTasks, FastAPI, Response
 
 from rpi_weather_display.constants import DEFAULT_SERVER_HOST
+from rpi_weather_display.exceptions import ConfigFileNotFoundError
 from rpi_weather_display.models.config import LoggingConfig
 from rpi_weather_display.models.system import BatteryState
 from rpi_weather_display.server.main import (
@@ -212,110 +213,79 @@ def test_main_function_no_config_found() -> None:
 
 
 def test_validate_config_path_in_tests() -> None:
-    """Test that validate_config_path doesn't exit in test environment."""
-    # Let's patch the actual validate_config_path for test observation
+    """Test that validate_config_path raises ConfigFileNotFoundError when file not found."""
     with (
         patch("pathlib.Path.exists", return_value=False),
-        patch("sys.exit") as mock_exit,
         patch("builtins.print"),
     ):
         # Create a non-existent path that we can check with our patched Path.exists
         test_path = Path("/test/config.yaml")
-
-        # From our docstring analysis, validate_config_path does the following:
-        # 1. If path is None, it uses path_resolver.get_config_path() (we'll mock that)
-        # 2. It checks if path exists, and if not, prints error messages
-        # 3. In a test environment, it returns the path without exiting
-        # 4. In production, it would exit with code 1
 
         # Create a test double for path_resolver.get_config_path
         with patch(
             "rpi_weather_display.utils.path_utils.path_resolver.get_config_path",
             return_value=test_path,
         ):
-            # Make sure we recognize we're in a test environment
-            with patch("inspect.stack") as mock_stack:
-                mock_frame = MagicMock()
-                mock_frame.filename = "/path/containing/pytest/file.py"
-                mock_stack.return_value = [mock_frame]
+            # Now import and use the real function
+            from rpi_weather_display.utils.path_utils import validate_config_path
 
-                # Now import and use the real function
-                from rpi_weather_display.utils.path_utils import validate_config_path
-
-                # Call with None to test auto-resolution
-                result = validate_config_path(None)
-
-                # Should return the path even though it doesn't exist
-                assert result == test_path
-
-                # Should NOT have called sys.exit in a test environment
-                mock_exit.assert_not_called()
+            # Call with None to test auto-resolution
+            # Should raise ConfigFileNotFoundError since path doesn't exist
+            with pytest.raises(ConfigFileNotFoundError) as excinfo:
+                validate_config_path(None)
+            
+            # Verify the exception contains the right path
+            assert "/test/config.yaml" in str(excinfo.value)
+            assert excinfo.value.details["path"] == "/test/config.yaml"
 
 
 def test_validate_config_path_exit_behavior() -> None:
-    """Test that validate_config_path calls sys.exit when not in a test environment."""
-    # We'll replace the entire in_test check function to control behavior
+    """Test that validate_config_path raises ConfigFileNotFoundError when file not found."""
     from rpi_weather_display.utils.path_utils import validate_config_path
 
-    # Create a version of the function with mocked test environment detection
-    with patch("inspect.stack") as mock_stack:
-        # First, make it return non-test environment
-        mock_stack.return_value = []  # No frames at all, so 'pytest' won't be found
+    # Mock Path.exists to return False
+    with patch("pathlib.Path.exists", return_value=False):
+        # Test with a non-existent path
+        non_existent_path = Path("/fake/path.yaml")
 
-        # Also mock sys.exit and Path.exists
-        with patch("sys.exit") as mock_exit, patch("pathlib.Path.exists", return_value=False):
-            # Test with a non-existent path in "production" mode
-            non_existent_path = Path("/fake/path.yaml")
-
-            # This should try to call sys.exit(1) due to our mocked production environment
+        # This should raise ConfigFileNotFoundError
+        with pytest.raises(ConfigFileNotFoundError) as excinfo:
             validate_config_path(non_existent_path)
-
-            # Verify sys.exit was called as expected
-            mock_exit.assert_called_once_with(1)
+        
+        # Verify the exception contains the correct path
+        assert "/fake/path.yaml" in str(excinfo.value)
+        assert excinfo.value.details["path"] == "/fake/path.yaml"
 
 
 def test_validate_config_path_search_locations() -> None:
-    """Test that validate_config_path shows search locations only for None paths."""
-    # For this test, we need to patch print and check what's printed
-    with patch("builtins.print") as mock_print:
-        from rpi_weather_display.utils.path_utils import validate_config_path
+    """Test that validate_config_path includes search locations in error for None paths."""
+    from rpi_weather_display.utils.path_utils import validate_config_path
 
-        # Make all paths appear not to exist
-        with patch("pathlib.Path.exists", return_value=False):
-            # Make sure we're in a test env so sys.exit isn't called
-            with patch("inspect.stack") as mock_stack:
-                # Force test environment detection
-                mock_frame = MagicMock()
-                mock_frame.filename = "/path/with/pytest/test_file.py"
-                mock_stack.return_value = [mock_frame]
+    # Make all paths appear not to exist
+    with patch("pathlib.Path.exists", return_value=False):
+        # Test auto-resolved path (None)
+        auto_path = Path("/auto/config.yaml")
+        with patch(
+            "rpi_weather_display.utils.path_utils.path_resolver.get_config_path",
+            return_value=auto_path,
+        ):
+            # Call with None to use auto-resolution
+            with pytest.raises(ConfigFileNotFoundError) as excinfo:
+                validate_config_path(None)
 
-                # Test auto-resolved path (None)
-                auto_path = Path("/auto/config.yaml")
-                with patch(
-                    "rpi_weather_display.utils.path_utils.path_resolver.get_config_path",
-                    return_value=auto_path,
-                ):
-                    # Call with None to use auto-resolution
-                    validate_config_path(None)
+            # Should have included search locations in the error
+            assert "Searched in the following locations:" in str(excinfo.value)
+            assert excinfo.value.details["searched_locations"] is not None
+            assert len(excinfo.value.details["searched_locations"]) > 0
 
-                    # Should have printed search locations
-                    printed_messages = [call[0][0] for call in mock_print.call_args_list]
-                    assert any(
-                        "Searched in the following locations:" in msg for msg in printed_messages
-                    )
+        # Test explicit path
+        explicit_path = Path("/explicit/config.yaml")
+        with pytest.raises(ConfigFileNotFoundError) as excinfo:
+            validate_config_path(explicit_path)
 
-                # Reset the mock_print
-                mock_print.reset_mock()
-
-                # Test explicit path
-                explicit_path = Path("/explicit/config.yaml")
-                validate_config_path(explicit_path)
-
-                # Should NOT have printed search locations
-                printed_messages = [call[0][0] for call in mock_print.call_args_list]
-                assert not any(
-                    "Searched in the following locations:" in msg for msg in printed_messages
-                )
+        # Should NOT have included search locations for explicit path
+        assert "Searched in the following locations:" not in str(excinfo.value)
+        assert excinfo.value.details["searched_locations"] is None
 
 
 # End of validate_config_path tests

@@ -959,5 +959,6 @@ logging:
     def test_main_config_not_found(self) -> None:
         """Test main with missing config file."""
         with patch("sys.argv", ["async-client", "--config", "/nonexistent/config.yaml"]), \
-             pytest.raises(FileNotFoundError):
+             pytest.raises(SystemExit) as exc_info:
             main()
+        assert exc_info.value.code == 1

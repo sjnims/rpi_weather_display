@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from rpi_weather_display.exceptions import CriticalBatteryError
 from rpi_weather_display.models.config import AppConfig, DisplayConfig, PowerConfig
 from rpi_weather_display.models.system import BatteryState, BatteryStatus
 from rpi_weather_display.utils.battery_monitor import BatteryMonitor
@@ -56,7 +57,7 @@ def mock_battery_monitor() -> MagicMock:
         state=BatteryState.DISCHARGING,
         timestamp=datetime.now(),
     )
-    monitor.is_battery_critical.return_value = False
+    # is_battery_critical now raises exception when critical, no need to mock return value
     monitor.should_conserve_power.return_value = False
     monitor.is_discharge_rate_abnormal.return_value = False
     return monitor
@@ -173,7 +174,9 @@ class TestPowerStateController:
         """Test power state when battery is critical."""
         # Mock datetime to be during normal hours (not quiet hours)
         with patch("rpi_weather_display.utils.power_state_controller.is_quiet_hours", return_value=False):
-            mock_battery_monitor.is_battery_critical.return_value = True
+            mock_battery_monitor.is_battery_critical.side_effect = CriticalBatteryError(
+                "Battery critically low", {"level": 5, "threshold": 10}
+            )
 
             controller = PowerStateController(mock_config, mock_battery_monitor)
             controller.initialize()
@@ -216,7 +219,9 @@ class TestPowerStateController:
 
             # Force a state change
             controller._current_state = PowerState.NORMAL
-            mock_battery_monitor.is_battery_critical.return_value = True
+            mock_battery_monitor.is_battery_critical.side_effect = CriticalBatteryError(
+                "Battery critically low", {"level": 5, "threshold": 10}
+            )
             controller.update_power_state()
 
             assert callback_called
@@ -460,7 +465,9 @@ class TestPowerStateControllerCoverage:
 
             # Force a state change
             controller._current_state = PowerState.NORMAL
-            mock_battery_monitor.is_battery_critical.return_value = True
+            mock_battery_monitor.is_battery_critical.side_effect = CriticalBatteryError(
+                "Battery critically low", {"level": 5, "threshold": 10}
+            )
             controller.update_power_state()
 
             # Normal callback should still have been called despite error in first

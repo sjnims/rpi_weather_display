@@ -3,6 +3,7 @@
 from pathlib import Path
 from unittest.mock import MagicMock, create_autospec, patch
 
+import pytest
 from PIL import Image
 
 from rpi_weather_display.client.battery_threshold_manager import BatteryThresholdManager
@@ -15,6 +16,7 @@ from rpi_weather_display.client.display import (
 from rpi_weather_display.client.image_processor import ImageProcessor
 from rpi_weather_display.client.partial_refresh_manager import PartialRefreshManager
 from rpi_weather_display.client.text_renderer import TextRenderer
+from rpi_weather_display.exceptions import DisplayInitializationError, DisplayUpdateError
 from rpi_weather_display.models.config import DisplayConfig
 from rpi_weather_display.models.system import BatteryState, BatteryStatus
 
@@ -132,12 +134,13 @@ class TestEPaperDisplay:
             "rpi_weather_display.client.display._import_it8951",
             side_effect=Exception("Test error")
         ):
-            with patch("builtins.print") as mock_print:
+            with pytest.raises(DisplayInitializationError) as exc_info:
                 self.display.initialize()
                 
-                assert not self.display._initialized
-                assert self.display._display is None
-                mock_print.assert_called_with("Error initializing display: Test error")
+            assert not self.display._initialized
+            assert self.display._display is None
+            assert "Failed to initialize e-paper display" in str(exc_info.value)
+            assert exc_info.value.details["error"] == "Test error"
 
     def test_set_rotation(self) -> None:
         """Test display rotation setting."""
@@ -250,19 +253,19 @@ class TestEPaperDisplay:
     def test_display_pil_image_exception(self) -> None:
         """Test display_pil_image with exception."""
         self.display._initialized = True
+        self.display._display = MagicMock()
         image = Image.new("L", (100, 100), 128)
         
-        with (
-            patch.object(
-                self.display.image_processor,
-                "preprocess_image",
-                side_effect=Exception("Test error")
-            ),
-            patch("builtins.print") as mock_print
+        with patch.object(
+            self.display.image_processor,
+            "preprocess_image",
+            side_effect=Exception("Test error")
         ):
-            self.display.display_pil_image(image)
+            with pytest.raises(DisplayUpdateError) as exc_info:
+                self.display.display_pil_image(image)
             
-            mock_print.assert_called_with("Error displaying image: Test error")
+            assert "Failed to display image" in str(exc_info.value)
+            assert exc_info.value.details["error"] == "Test error"
 
     def test_handle_mock_display(self) -> None:
         """Test _handle_mock_display method."""
@@ -310,19 +313,18 @@ class TestEPaperDisplay:
         title = "Test Title"
         message = "Test Message"
         
-        with (
-            patch.object(
-                self.display.text_renderer,
-                "render_text_image",
-                side_effect=Exception("Render error")
-            ),
-            patch("builtins.print") as mock_print
+        with patch.object(
+            self.display.text_renderer,
+            "render_text_image",
+            side_effect=Exception("Render error")
         ):
-            self.display.display_text(title, message)
+            with pytest.raises(DisplayUpdateError) as exc_info:
+                self.display.display_text(title, message)
             
-            assert mock_print.call_count == 2
-            mock_print.assert_any_call("Error displaying text: Render error")
-            mock_print.assert_any_call("Message: Test Title - Test Message")
+            assert "Failed to display text" in str(exc_info.value)
+            assert exc_info.value.details["title"] == title
+            assert exc_info.value.details["message"] == message
+            assert exc_info.value.details["error"] == "Render error"
 
     def test_update_battery_status(self) -> None:
         """Test update_battery_status method."""

@@ -21,6 +21,12 @@ from rpi_weather_display.client.image_processor import ImageProcessor
 from rpi_weather_display.client.partial_refresh_manager import PartialRefreshManager
 from rpi_weather_display.client.text_renderer import TextRenderer
 from rpi_weather_display.constants import VALID_ROTATION_ANGLES
+from rpi_weather_display.exceptions import (
+    DisplayError,
+    DisplayInitializationError,
+    DisplayUpdateError,
+    chain_exception,
+)
 from rpi_weather_display.models.config import DisplayConfig
 from rpi_weather_display.models.system import BatteryStatus
 from rpi_weather_display.utils.file_utils import PathLike, read_bytes
@@ -128,6 +134,9 @@ class EPaperDisplay:
 
         Attempts to connect to the IT8951 display driver and configure it.
         Falls back to mock mode if hardware is not available.
+        
+        Raises:
+            DisplayInitializationError: If display hardware initialization fails
         """
         try:
             auto_epd_display = _import_it8951()
@@ -144,17 +153,36 @@ class EPaperDisplay:
 
             self._initialized = True
         except Exception as e:
-            print(f"Error initializing display: {e}")
             self._initialized = False
+            raise chain_exception(
+                DisplayInitializationError(
+                    "Failed to initialize e-paper display",
+                    {"vcom": self.config.vcom, "error": str(e)}
+                ),
+                e
+            ) from None
 
     def _set_rotation(self) -> None:
-        """Set display rotation if configured."""
+        """Set display rotation if configured.
+        
+        Raises:
+            DisplayError: If setting rotation fails
+        """
         if (
             self._display 
             and self.config.rotate in VALID_ROTATION_ANGLES
             and hasattr(self._display, "epd")
         ):
-            self._display.epd.set_rotation(self.config.rotate // 90)
+            try:
+                self._display.epd.set_rotation(self.config.rotate // 90)
+            except Exception as e:
+                raise chain_exception(
+                    DisplayError(
+                        f"Failed to set display rotation to {self.config.rotate} degrees",
+                        {"rotation": self.config.rotate, "error": str(e)}
+                    ),
+                    e
+                ) from None
 
     def clear(self) -> None:
         """Clear the display and reset state."""
@@ -177,6 +205,9 @@ class EPaperDisplay:
 
         Args:
             image: PIL Image object to display
+            
+        Raises:
+            DisplayUpdateError: If displaying the image fails
         """
         if not self._initialized:
             self._handle_mock_display(image)
@@ -197,7 +228,13 @@ class EPaperDisplay:
                 processed_image.close()
                 
         except Exception as e:
-            print(f"Error displaying image: {e}")
+            raise chain_exception(
+                DisplayUpdateError(
+                    "Failed to display image on e-paper display",
+                    {"image_size": image.size, "mode": image.mode, "error": str(e)}
+                ),
+                e
+            ) from None
 
     def _handle_mock_display(self, image: Image.Image) -> None:
         """Handle display operations in mock mode.
@@ -216,6 +253,9 @@ class EPaperDisplay:
         Args:
             title: Title text
             message: Main message text
+            
+        Raises:
+            DisplayUpdateError: If displaying the text fails
         """
         try:
             # Generate text image
@@ -224,9 +264,18 @@ class EPaperDisplay:
             # Display it
             self.display_pil_image(image)
             
+        except DisplayUpdateError:
+            # Re-raise display update errors as-is
+            raise
         except Exception as e:
-            print(f"Error displaying text: {e}")
-            print(f"Message: {title} - {message}")
+            # Wrap other errors (like text rendering errors) in DisplayUpdateError
+            raise chain_exception(
+                DisplayUpdateError(
+                    "Failed to display text on e-paper display",
+                    {"title": title, "message": message, "error": str(e)}
+                ),
+                e
+            ) from None
 
     def update_battery_status(self, battery_status: BatteryStatus) -> None:
         """Update battery status for threshold management.
@@ -237,12 +286,23 @@ class EPaperDisplay:
         self.battery_threshold_manager.update_battery_status(battery_status)
 
     def sleep(self) -> None:
-        """Put the display into deep sleep mode."""
+        """Put the display into deep sleep mode.
+        
+        Raises:
+            DisplayError: If putting display to sleep fails
+        """
         if self._initialized and self._display and hasattr(self._display, "epd"):
             try:
                 self._display.epd.sleep()
-            except AttributeError:
-                pass
+            except Exception as e:
+                if not isinstance(e, AttributeError):
+                    raise chain_exception(
+                        DisplayError(
+                            "Failed to put display to sleep",
+                            {"error": str(e)}
+                        ),
+                        e
+                    ) from None
 
     def close(self) -> None:
         """Close and clean up display resources."""

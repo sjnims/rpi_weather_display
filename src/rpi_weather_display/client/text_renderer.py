@@ -22,6 +22,7 @@ from rpi_weather_display.constants import (
     TITLE_FONT_SIZE_MAX,
     TITLE_Y_POSITION_FACTOR,
 )
+from rpi_weather_display.exceptions import ImageRenderingError, chain_exception
 
 if TYPE_CHECKING:
     from rpi_weather_display.models.config import DisplayConfig
@@ -57,50 +58,102 @@ class TextRenderer:
             
         Returns:
             PIL Image with rendered text
+            
+        Raises:
+            ImageRenderingError: If text rendering fails
         """
-        # Create blank white image
-        image = Image.new("L", (self.config.width, self.config.height), 255)
-        draw = ImageDraw.Draw(image)
-        
-        # Load fonts
-        title_font = self._load_title_font()
-        message_font = self._load_message_font()
-        
-        # Render title
-        self._render_title(draw, title, title_font)
-        
-        # Render message
-        self._render_message(draw, message, message_font)
-        
-        return image
+        try:
+            # Create blank white image
+            image = Image.new("L", (self.config.width, self.config.height), 255)
+            draw = ImageDraw.Draw(image)
+            
+            # Load fonts
+            title_font = self._load_title_font()
+            message_font = self._load_message_font()
+            
+            # Render title
+            self._render_title(draw, title, title_font)
+            
+            # Render message
+            self._render_message(draw, message, message_font)
+            
+            return image
+            
+        except Exception as e:
+            raise chain_exception(
+                ImageRenderingError(
+                    "Failed to render text image",
+                    {
+                        "title": title,
+                        "message": message,
+                        "display_size": (self.config.width, self.config.height),
+                        "error": str(e)
+                    }
+                ),
+                e
+            ) from None
         
     def _load_title_font(self) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
         """Load font for title text.
         
         Returns:
             Font object for title rendering
+            
+        Raises:
+            ImageRenderingError: If font loading fails completely
         """
         title_font_size = self._calculate_title_font_size()
         
         try:
             return ImageFont.truetype(DEFAULT_TITLE_FONT, title_font_size)
-        except OSError:
-            # Fall back to default font
-            return ImageFont.load_default()
+        except OSError as e:
+            # Try to fall back to default font
+            try:
+                return ImageFont.load_default()
+            except Exception as fallback_error:
+                raise chain_exception(
+                    ImageRenderingError(
+                        "Failed to load title font",
+                        {
+                            "font_path": DEFAULT_TITLE_FONT,
+                            "font_size": title_font_size,
+                            "original_error": str(e),
+                            "fallback_error": str(fallback_error)
+                        }
+                    ),
+                    fallback_error
+                ) from None
             
     def _load_message_font(self) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
         """Load font for message text.
         
         Returns:
             Font object for message rendering
+            
+        Raises:
+            ImageRenderingError: If font loading fails completely
         """
         message_font_size = self._calculate_message_font_size()
         
         try:
             return ImageFont.truetype(DEFAULT_MESSAGE_FONT, message_font_size)
-        except OSError:
-            # Fall back to default font
-            return ImageFont.load_default()
+        except OSError as e:
+            # Try to fall back to default font
+            try:
+                return ImageFont.load_default()
+            except Exception as fallback_error:
+                raise chain_exception(
+                    ImageRenderingError(
+                        "Failed to load message font",
+                        {
+                            "font_path": DEFAULT_MESSAGE_FONT,
+                            "font_size": message_font_size,
+                            "original_error": str(e),
+                            "fallback_error": str(fallback_error)
+                        }
+                    ),
+                    fallback_error
+                ) from None
             
     def _calculate_title_font_size(self) -> int:
         """Calculate appropriate title font size.

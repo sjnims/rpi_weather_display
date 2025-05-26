@@ -433,6 +433,14 @@ def main() -> None:
     Parses command line arguments, initializes the server with the
     specified configuration, and starts it running.
     """
+    import sys
+
+    from rpi_weather_display.exceptions import (
+        ConfigFileNotFoundError,
+        InvalidConfigError,
+        MissingConfigError,
+    )
+    
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="Weather Display Server")
     parser.add_argument(
@@ -447,12 +455,28 @@ def main() -> None:
     parser.add_argument("--port", type=int, help="Port to bind to (default: 8000 or config value)")
     args = parser.parse_args()
 
-    # Validate and resolve the config path
-    config_path = validate_config_path(args.config)
+    try:
+        # Validate and resolve the config path
+        config_path = validate_config_path(args.config)
 
-    # Create and run server
-    server = WeatherDisplayServer(config_path)
-    server.run(host=args.host, port=args.port)
+        # Create and run server
+        server = WeatherDisplayServer(config_path)
+        server.run(host=args.host, port=args.port)
+        
+    except ConfigFileNotFoundError as e:
+        print(f"Configuration Error: {e}")
+        sys.exit(1)
+    except (InvalidConfigError, MissingConfigError) as e:
+        print(f"Configuration Error: {e}")
+        if e.details:
+            print(f"Details: {e.details}")
+        sys.exit(1)
+    except KeyboardInterrupt:
+        print("\nShutdown requested by user")
+        sys.exit(0)
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

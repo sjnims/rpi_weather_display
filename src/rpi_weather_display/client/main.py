@@ -540,6 +540,14 @@ def main() -> None:
     Parses command line arguments, loads configuration, and starts the async client.
     This is the function called when the async client is invoked from the command line.
     """
+    import sys
+
+    from rpi_weather_display.exceptions import (
+        ConfigFileNotFoundError,
+        InvalidConfigError,
+        MissingConfigError,
+    )
+    
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="Async Weather Display Client")
     parser.add_argument(
@@ -550,14 +558,33 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    # Validate and resolve the config path
-    config_path = validate_config_path(args.config)
+    try:
+        # Validate and resolve the config path
+        config_path = validate_config_path(args.config)
 
-    # Create and run async client
-    client = AsyncWeatherDisplayClient(config_path)
+        # Create and run async client
+        client = AsyncWeatherDisplayClient(config_path)
 
-    # Run the async main loop
-    asyncio.run(client.run())
+        # Run the async main loop
+        asyncio.run(client.run())
+        
+    except ConfigFileNotFoundError as e:
+        print(f"Configuration Error: {e}")
+        if e.details and "searched_locations" in e.details:
+            # Details are already in the error message
+            pass
+        sys.exit(1)
+    except (InvalidConfigError, MissingConfigError) as e:
+        print(f"Configuration Error: {e}")
+        if e.details:
+            print(f"Details: {e.details}")
+        sys.exit(1)
+    except KeyboardInterrupt:
+        print("\nShutdown requested by user")
+        sys.exit(0)
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

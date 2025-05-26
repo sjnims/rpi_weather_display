@@ -8,12 +8,17 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 # No need for additional typing imports
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import httpx
 import pytest
 from httpx import Request, Response
 
+from rpi_weather_display.exceptions import (
+    InvalidAPIResponseError,
+    MissingConfigError,
+    WeatherAPIError,
+)
 from rpi_weather_display.models.config import AppConfig
 from rpi_weather_display.models.weather import WeatherData
 from rpi_weather_display.server.api import WeatherAPIClient
@@ -96,8 +101,8 @@ async def test_get_coordinates_no_location(app_config: AppConfig) -> None:
     # Create API client
     api_client = WeatherAPIClient(app_config.weather)
 
-    # Should raise ValueError
-    with pytest.raises(ValueError, match="No location coordinates or city name provided"):
+    # Should raise MissingConfigError
+    with pytest.raises(MissingConfigError, match="No location coordinates or city name provided"):
         await api_client.get_coordinates()
 
 
@@ -150,15 +155,15 @@ async def test_get_coordinates_geocoding_empty_response(
     # Create API client
     api_client = WeatherAPIClient(app_config.weather)
 
-    # Should wrap ValueError in RuntimeError
+    # Should raise InvalidAPIResponseError
     with pytest.raises(
-        RuntimeError, match="Failed to geocode location: NonexistentCity"
+        InvalidAPIResponseError, match="Could not find location for city name: NonexistentCity"
     ) as exc_info:
         await api_client.get_coordinates()
 
-    # Check that the original exception is preserved
-    assert isinstance(exc_info.value.__cause__, ValueError)
-    assert "Could not find location for city name" in str(exc_info.value.__cause__)
+    # Check exception details
+    assert exc_info.value.details["city_name"] == "NonexistentCity"
+    assert exc_info.value.status_code == 200
 
 
 @pytest.mark.asyncio()
@@ -167,7 +172,13 @@ async def test_get_coordinates_http_error(
 ) -> None:
     """Test handling of HTTP errors in geocoding."""
     # Set up the mock to raise an HTTP error
-    mock_httpx_client.get.side_effect = httpx.HTTPError("HTTP Error")
+    # Create a mock request and response for HTTPStatusError
+    mock_request = Mock(spec=httpx.Request)
+    mock_response = Mock(spec=httpx.Response)
+    mock_response.status_code = 500
+    mock_httpx_client.get.side_effect = httpx.HTTPStatusError(
+        "HTTP Error", request=mock_request, response=mock_response
+    )
 
     # Configure app to use city name
     app_config.weather.location = {}
@@ -176,9 +187,12 @@ async def test_get_coordinates_http_error(
     # Create API client
     api_client = WeatherAPIClient(app_config.weather)
 
-    # Should propagate the HTTP error
-    with pytest.raises(httpx.HTTPError):
+    # Should re-raise as WeatherAPIError
+    with pytest.raises(WeatherAPIError) as exc_info:
         await api_client.get_coordinates()
+
+    # Check that the original exception is preserved
+    assert isinstance(exc_info.value.__cause__, httpx.HTTPStatusError)
 
 
 @pytest.mark.asyncio()
@@ -269,15 +283,24 @@ async def test_get_weather_data_http_error(
 ) -> None:
     """Test handling of HTTP errors when fetching weather data."""
     # Set up the mock to raise an HTTP error
-    mock_httpx_client.get.side_effect = httpx.HTTPError("HTTP Error")
+    # Create a mock request and response for HTTPStatusError
+    mock_request = Mock(spec=httpx.Request)
+    mock_response = Mock(spec=httpx.Response)
+    mock_response.status_code = 500
+    mock_httpx_client.get.side_effect = httpx.HTTPStatusError(
+        "HTTP Error", request=mock_request, response=mock_response
+    )
 
     # Create API client with location
     app_config.weather.location = {"lat": 40.7128, "lon": -74.0060}
     api_client = WeatherAPIClient(app_config.weather)
 
-    # Call should raise without cached data
-    with pytest.raises(httpx.HTTPError):
+    # Call should re-raise as WeatherAPIError without cached data
+    with pytest.raises(WeatherAPIError) as exc_info:
         await api_client.get_weather_data(force_refresh=True)
+
+    # Check that the original exception is preserved
+    assert isinstance(exc_info.value.__cause__, httpx.HTTPStatusError)
 
 
 @pytest.mark.asyncio()
@@ -286,7 +309,13 @@ async def test_get_weather_data_http_error_with_cache(
 ) -> None:
     """Test that cached data is returned when API call fails but cache is available."""
     # Set up the mock to raise an HTTP error
-    mock_httpx_client.get.side_effect = httpx.HTTPError("HTTP Error")
+    # Create a mock request and response for HTTPStatusError
+    mock_request = Mock(spec=httpx.Request)
+    mock_response = Mock(spec=httpx.Response)
+    mock_response.status_code = 500
+    mock_httpx_client.get.side_effect = httpx.HTTPStatusError(
+        "HTTP Error", request=mock_request, response=mock_response
+    )
 
     # Create API client with location
     app_config.weather.location = {"lat": 40.7128, "lon": -74.0060}
@@ -461,8 +490,8 @@ async def test_get_coordinates_general_exception(
     # Create API client
     api_client = WeatherAPIClient(app_config.weather)
 
-    # Should wrap the general exception in RuntimeError
-    with pytest.raises(RuntimeError, match="Failed to geocode location: New York") as exc_info:
+    # Should wrap the general exception in WeatherAPIError
+    with pytest.raises(WeatherAPIError, match="Failed to geocode location: New York") as exc_info:
         await api_client.get_coordinates()
 
     # Check that the original exception is preserved
@@ -507,13 +536,9 @@ async def test_get_weather_data_general_exception(
     app_config.weather.location = {"lat": 40.7128, "lon": -74.0060}
     api_client = WeatherAPIClient(app_config.weather)
 
-    # Call should wrap exception in RuntimeError without cached data
-    with pytest.raises(RuntimeError, match="Failed to fetch weather data from API") as exc_info:
+    # Call should propagate the original exception without cached data
+    with pytest.raises(ValueError, match="Invalid data"):
         await api_client.get_weather_data(force_refresh=True)
-
-    # Check that the original exception is preserved
-    assert isinstance(exc_info.value.__cause__, ValueError)
-    assert str(exc_info.value.__cause__) == "Invalid data"
 
 
 @pytest.mark.asyncio()

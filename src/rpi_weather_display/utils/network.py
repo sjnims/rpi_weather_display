@@ -28,6 +28,11 @@ from rpi_weather_display.constants import (
     WIFI_POWER_TIMEOUT,
     WIFI_SLEEP_SCRIPT,
 )
+from rpi_weather_display.exceptions import (
+    NetworkTimeoutError,
+    NetworkUnavailableError,
+    chain_exception,
+)
 from rpi_weather_display.models.config import AppConfig, PowerConfig
 from rpi_weather_display.models.system import BatteryStatus, NetworkState, NetworkStatus
 from rpi_weather_display.utils.file_utils import file_exists
@@ -114,6 +119,7 @@ class AsyncNetworkManager:
                     return NetworkStatus(state=NetworkState.DISCONNECTED)
         except Exception as e:
             self.logger.error(f"Error getting network status: {e}")
+            # Return error status without raising - this is a status check
             return NetworkStatus(state=NetworkState.ERROR)
 
     async def _check_connectivity(self) -> bool:
@@ -123,6 +129,9 @@ class AsyncNetworkManager:
 
         Returns:
             True if connected, False otherwise.
+            
+        Raises:
+            NetworkUnavailableError: If no network interfaces are available
         """
         try:
             # Create a socket and attempt connection asynchronously
@@ -136,12 +145,28 @@ class AsyncNetworkManager:
                     result = sock.connect_ex((GOOGLE_DNS, GOOGLE_DNS_PORT))
                     sock.close()
                     return result == 0
+                except OSError as e:
+                    # Check if it's a network unreachable error
+                    if e.errno in [101, 110]:  # Network unreachable, Connection timed out
+                        raise NetworkUnavailableError(
+                            "No network connectivity available",
+                            {
+                                "error_code": e.errno,
+                                "error": str(e),
+                                "dns_server": GOOGLE_DNS,
+                                "interface": WIFI_INTERFACE_NAME
+                            }
+                        ) from None
+                    return False
                 except Exception:
                     return False
 
             # Run in thread pool to avoid blocking
             return await loop.run_in_executor(None, try_connect)
 
+        except (NetworkUnavailableError, NetworkTimeoutError):
+            # Re-raise our custom exceptions
+            raise
         except Exception as e:
             match type(e).__name__:
                 case "TimeoutError" | "OSError":
@@ -246,10 +271,20 @@ class AsyncNetworkManager:
                     stdout=stdout.decode() if stdout else "",
                     stderr=stderr.decode() if stderr else "",
                 )
-            except TimeoutError:
+            except TimeoutError as e:
                 proc.kill()
                 await proc.wait()
-                raise subprocess.TimeoutExpired(cmd, self.config.wifi_timeout_seconds) from None
+                raise chain_exception(
+                    NetworkTimeoutError(
+                        f"Subprocess command timed out after {self.config.wifi_timeout_seconds}s",
+                        {
+                            "command": " ".join(cmd),
+                            "timeout": self.config.wifi_timeout_seconds,
+                            "operation": "subprocess_exec"
+                        }
+                    ),
+                    e
+                ) from None
 
     async def _get_ssid(self) -> str | None:
         """Get the current SSID asynchronously.
@@ -377,17 +412,29 @@ class AsyncNetworkManager:
             True if connected, False otherwise.
 
         Raises:
-            ConnectionError: If connection cannot be established within the timeout period.
+            NetworkTimeoutError: If connection attempt times out.
         """
         # Wait for connection with async sleep
         start_time = time.time()
         while time.time() - start_time < self.config.wifi_timeout_seconds:
-            if await self._check_connectivity():
-                return True
+            try:
+                if await self._check_connectivity():
+                    return True
+            except NetworkUnavailableError:
+                # Network is unavailable, but we'll keep trying until timeout
+                pass
             await asyncio.sleep(NETWORK_RETRY_DELAY)
 
-        # If we reach here, connection failed
-        raise ConnectionError("Failed to establish network connection")
+        # If we reach here, connection timed out
+        raise NetworkTimeoutError(
+            "Connection attempt timed out",
+            {
+                "interface": WIFI_INTERFACE_NAME,
+                "timeout": self.config.wifi_timeout_seconds,
+                "elapsed": time.time() - start_time,
+                "retry_delay": NETWORK_RETRY_DELAY
+            }
+        )
 
     async def _enable_wifi(self) -> None:
         """Enable WiFi asynchronously."""

@@ -7,11 +7,11 @@ used throughout the application.
 """
 
 import os
-import sys
 import tempfile
 from pathlib import Path
 
 from rpi_weather_display.constants import CLIENT_CACHE_DIR_NAME
+from rpi_weather_display.exceptions import ConfigFileNotFoundError
 
 
 class PathResolver:
@@ -317,20 +317,28 @@ def validate_config_path(config_path: str | Path | None = None) -> Path:
     
     # Check if config file exists
     if not resolved_path.exists():
-        print(f"Error: Configuration file not found at {resolved_path}")
+        # Prepare search locations for error message
+        search_locations = []
         if config_path is None:
-            print("Searched in the following locations:")
-            print(f"  - Current directory: {Path.cwd() / 'config.yaml'}")
-            print(f"  - User config: {path_resolver.user_config_dir / 'config.yaml'}")
-            print(f"  - System config: {path_resolver.system_config_dir / 'config.yaml'}")
-            print(f"  - Project root: {path_resolver.project_root / 'config.yaml'}")
+            search_locations = [
+                str(Path.cwd() / 'config.yaml'),
+                str(path_resolver.user_config_dir / 'config.yaml'),
+                str(path_resolver.system_config_dir / 'config.yaml'),
+                str(path_resolver.project_root / 'config.yaml')
+            ]
         
-        # Check if we're running in a test environment
-        import inspect
-        stack = inspect.stack()
-        in_test = any('pytest' in frame.filename for frame in stack)
+        # Raise appropriate exception
+        error_details = {
+            "path": str(resolved_path),
+            "cwd": str(Path.cwd()),
+            "searched_locations": search_locations if search_locations else None
+        }
         
-        if not in_test:
-            sys.exit(1)
+        error_msg = f"Configuration file not found: {resolved_path}"
+        if search_locations:
+            error_msg += "\n\nSearched in the following locations:\n"
+            error_msg += "\n".join(f"  - {loc}" for loc in search_locations)
+        
+        raise ConfigFileNotFoundError(error_msg, error_details)
     
     return resolved_path

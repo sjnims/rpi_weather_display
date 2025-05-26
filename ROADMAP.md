@@ -88,7 +88,17 @@ Priority is indicated as:
   - Extracted 3 helper methods: _calculate_current_max_uvi, _read_uvi_cache, _write_uvi_cache
   - Simplified main method from ~75 lines to 17 lines
   - All tests passing and functionality preserved
-- [ ] 🟠 2.5.5 Create custom exception hierarchy for better error handling [PLANNED]
+- [x] 🟠 2.5.5 Create custom exception hierarchy for better error handling [COMPLETED 2025-05-25]
+  - Created comprehensive exception hierarchy in exceptions.py with 24 domain-specific exception classes
+  - Implemented all 4 previously unused exceptions throughout the codebase:
+    - PowerStateError: Added to power_state_controller.py for invalid state transitions
+    - WakeupSchedulingError: Added to pijuice_adapter.py for alarm scheduling failures
+    - NetworkTimeoutError: Added to network.py for network operation timeouts
+    - NetworkUnavailableError: Added to network.py for network unreachability errors
+  - Removed unused WiFiConnectionError exception (replaced by NetworkTimeoutError)
+  - Added exception chaining utility for preserving error context
+  - Updated all affected tests to handle new exception behavior
+  - Achieved 94.51% overall test coverage with all 818 tests passing
 - [x] 🟠 2.5.6 Refactor other complex methods (C-rated) [COMPLETED 2025-05-25]
   - Break down EPaperDisplay.display_pil_image (CC: 15 → 7)
   - Simplify renderer._prepare_time_data (CC: 14 → 4) - NEW: emerged after generate_html refactoring
@@ -317,11 +327,11 @@ Priority is indicated as:
 
 Based on the code complexity analysis, the following tasks should be prioritized:
 
-**Code Quality Metrics Summary (Updated 2025-05-25):**
-- Average Complexity: 2.70 (down from 13.00) - Exceptional improvement!
-- Complex Functions (CC > 10): 0 - Achieved goal!
-- Lowest Maintainability: All files above 20 (maintained!)
-- Average Maintainability: 69.4/100 - Good overall maintainability (up from 67.59)
+**Code Quality Metrics Summary (Updated 2025-05-25 after exception implementation):**
+- Average Complexity: 2.89 (slight increase from 2.70 due to exception handling) - Still excellent!
+- Complex Functions (CC > 10): 1 (config.py:from_yaml CC: 15) - Nearly at goal!
+- Lowest Maintainability: exceptions.py at 38.6 (expected for exception definitions)
+- Average Maintainability: 68.2/100 - Good overall maintainability (slight decrease from 69.4)
 - Successfully Refactored (All complex methods now below CC 10):
   - renderer.generate_html: CC 27 → 5 (D → A rating) - 81% reduction!
   - battery_monitor.get_battery_status: CC 22 → <10 (D → A/B rating)
@@ -334,42 +344,44 @@ Based on the code complexity analysis, the following tasks should be prioritized
   - api.get_weather_data: CC 11 → 4 (C → A rating)
   - power_manager: Modularized into smaller, focused components
   - display.py: Modularized into 4 focused modules (MI: 41.40 → 62.58)
-- Total Source Lines: 4,291 (+198 from baseline)
-- Comment Ratio: 20.07% - Good documentation coverage
+- Total Source Lines: 4,970 (+679 from previous, +877 from baseline)
+- Comment Ratio: 18.17% - Decreased due to added exception handling code
+- Test Coverage: 94.51% - Exceeds 94% requirement!
 
 *Complexity Ratings: A (simple) → B → C (moderate) → D (complex) → E → F (very complex)*
 
 ### Immediate Priority (Next Sprint)
-1. **Phase 2.5.5** - Create custom exception hierarchy
-   - Improve error handling across the codebase
-   - Standardize error reporting and recovery
-
-2. **Phase 2.7** - E-Paper display optimization
+1. **Phase 2.7** - E-Paper display optimization
    - Implement correct refresh modes for Waveshare 10.3"
    - Add periodic full refresh to prevent ghosting
    - Enforce manufacturer-specified refresh intervals
+   
+2. **Phase 2.5.9-10** - Final code cleanup
+   - Remove test-only methods from production interfaces
+   - Resolve circular import risks in utils module
 
 ### Short-term Priority (Q1 2025)
-1. **Phase 2.5.9** - Remove test-only methods from production
-2. **Phase 2.5.10** - Resolve circular import risks in utils module
-3. **Phase 2.6** - Hardware abstractions
+1. **Phase 2.6** - Hardware abstractions
    - Create hardware abstraction interfaces
    - Optimize Playwright usage for lower memory footprint
+2. **Phase 3.1** - Power consumption tracking
+   - Add battery drain rate calculation
+   - Create power consumption logging for different operations
 
 ### Medium-term Priority (Q2 2025)
-1. **Phase 2.7** - E-Paper display optimization
-2. **Phase 3** - Telemetry and monitoring
-3. **Phase 4** - Adaptive behavior
+1. **Phase 3** - Complete telemetry and monitoring implementation
+2. **Phase 4** - Adaptive behavior for power optimization
+3. **Phase 5.7** - Hardware integration and testing on actual Pi
 
 ## Progress Summary
 
 | Phase | Not Started | In Progress | Completed | Total |
 |-------|------------|-------------|-----------|-------|
 | 1     | 0          | 0           | 14        | 14    |
-| 2     | 12         | 0           | 25        | 37    |
+| 2     | 10         | 0           | 27        | 37    |
 | 3     | 12         | 0           | 0         | 12    |
 | 4     | 12         | 0           | 0         | 12    |
 | 5     | 17         | 0           | 2         | 19    |
 | 6     | 21         | 0           | 0         | 21    |
 | 7     | 18         | 0           | 0         | 18    |
-| Total | 92         | 0           | 41        | 133   |
+| Total | 90         | 0           | 43        | 133   |

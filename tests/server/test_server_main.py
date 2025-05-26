@@ -435,17 +435,17 @@ def test_main_function_config_not_found() -> None:
         mock_instance = MagicMock()
         mock_server.return_value = mock_instance
 
-        # Call main function
+        # Call main function and expect SystemExit
         from rpi_weather_display.server.main import main
 
-        main()
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+        
+        assert exc_info.value.code == 1
 
         # Verify error was printed
-        mock_print.assert_called_once()
-        assert "Error: Configuration file not found" in mock_print.call_args[0][0]
-
-        # In main(), we check if config exists before creating server, but since
-        # we're mocking Path.exists to always return False, no server should be created.
-        # However, the test may be failing because the mock isn't properly capturing this behavior,
+        mock_print.assert_called()
+        print_calls = [call[0][0] for call in mock_print.call_args_list]
+        assert any("Configuration Error" in str(call) for call in print_calls)
         # so we'll relax this assertion to focus on the main behavior we want to test.
         # The important part is that the error message is printed and execution continues normally.
